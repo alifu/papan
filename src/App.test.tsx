@@ -1,11 +1,30 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { installMatchMedia } from "./theme/matchMediaMock";
+import { installMemoryStorage } from "./ui/memoryStorage";
+
+vi.mock("./ipc/bindings", () => ({
+  commands: { appInfo: vi.fn().mockResolvedValue({ name: "Papan", version: "0.1.0" }) },
+}));
 
 describe("App", () => {
-  it("renders the main content", () => {
+  beforeEach(() => {
+    installMemoryStorage();
+    installMatchMedia(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the application shell", async () => {
     render(<App />);
 
-    expect(screen.getByText("Main Content")).toBeVisible();
+    expect(screen.getByRole("menubar")).toBeVisible();
+    expect(screen.getByRole("toolbar", { name: "Main" })).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "Navigation" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Welcome" })).toBeVisible();
+    expect(await screen.findByText("Papan 0.1.0")).toBeVisible();
   });
 });

@@ -1,18 +1,9 @@
-import "./css/App.css";
-import Layout from "./Layout";
-import Box from "./Box";
+import { AppShell } from "./shell/AppShell";
+import { useApplyTheme } from "./theme/useApplyTheme";
 
 function App() {
-
-  return (
-    <main className="container">
-      <Layout>
-        <Box>
-          <h1>Main Content</h1>
-        </Box>
-      </Layout>
-    </main>
-  );
+  useApplyTheme();
+  return <AppShell />;
 }
 
 export default App;

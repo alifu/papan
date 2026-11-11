@@ -1,0 +1,59 @@
+import { Button } from "../ui/Button";
+import { Icon } from "../ui/icons";
+import { NAV_SECTIONS, useLayoutStore } from "./layoutStore";
+import { NAV_SECTION_META } from "./navSections";
+
+export function Sidebar() {
+  const collapsed = useLayoutStore((s) => s.sidebarCollapsed);
+  const activeSection = useLayoutStore((s) => s.activeSection);
+  const setActiveSection = useLayoutStore((s) => s.setActiveSection);
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+
+  if (collapsed) {
+    return (
+      <nav aria-label="Navigation" className="sidebar sidebar-rail">
+        <Button icon="chevron-right" aria-label="Expand sidebar" onClick={toggleSidebar} />
+      </nav>
+    );
+  }
+
+  return (
+    <nav aria-label="Navigation" className="sidebar">
+      {NAV_SECTIONS.map((section, index) => {
+        const meta = NAV_SECTION_META[section];
+        const expanded = section === activeSection;
+        return (
+          <section key={section} className={expanded ? "accordion accordion-open" : "accordion"}>
+            <div className="accordion-header">
+              <h2>
+                <button
+                  type="button"
+                  id={`nav-${section}-header`}
+                  aria-expanded={expanded}
+                  aria-controls={`nav-${section}-panel`}
+                  onClick={() => setActiveSection(section)}
+                >
+                  <Icon name={meta.icon} />
+                  <span>{meta.label}</span>
+                </button>
+              </h2>
+              {index === 0 ? (
+                <Button icon="chevron-left" aria-label="Collapse sidebar" onClick={toggleSidebar} />
+              ) : null}
+            </div>
+            {expanded ? (
+              <div
+                role="region"
+                id={`nav-${section}-panel`}
+                aria-labelledby={`nav-${section}-header`}
+                className="accordion-panel"
+              >
+                <p className="empty-text">{meta.emptyText}</p>
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
+    </nav>
+  );
+}

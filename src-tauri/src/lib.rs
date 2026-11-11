@@ -10,6 +10,8 @@ pub mod interop;
 pub mod ipc;
 pub mod journey;
 pub mod logging;
+#[cfg(target_os = "macos")]
+mod menu;
 pub mod mock;
 pub mod script;
 pub mod store;
@@ -26,7 +28,11 @@ struct LogGuard(#[allow(dead_code)] WorkerGuard);
 pub fn run() {
     let ipc_builder = ipc::builder();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(menu::build).on_menu_event(menu::handle_event);
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(ipc_builder.invoke_handler())
         .setup(move |app| {

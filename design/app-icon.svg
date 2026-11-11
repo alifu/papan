@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Papan app icon master. Render with: node scripts/render-icon.mjs -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3A8BF0"/>
+      <stop offset="1" stop-color="#1458C8"/>
+    </linearGradient>
+    <linearGradient id="strip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A5DB0"/>
+      <stop offset="1" stop-color="#0A246A"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect x="100" y="100" width="824" height="824" rx="184" ry="184"/>
+    </clipPath>
+    <filter id="tileShadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0A246A" flood-opacity="0.35"/>
+    </filter>
+    <filter id="arrowShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="6" flood-color="#0A246A" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Tile with soft drop shadow inside the margin -->
+  <rect x="100" y="100" width="824" height="824" rx="184" ry="184" fill="url(#body)" filter="url(#tileShadow)"/>
+
+  <g clip-path="url(#tile)">
+    <!-- Title strip: top 22% of the tile -->
+    <rect x="100" y="100" width="824" height="182" fill="url(#strip)"/>
+    <!-- Light edge under the strip so it separates from the body -->
+    <rect x="100" y="282" width="824" height="10" fill="#FFFFFF" fill-opacity="0.35"/>
+    <!-- Gloss over the upper half -->
+    <rect x="100" y="100" width="824" height="412" fill="url(#gloss)"/>
+  </g>
+
+  <!-- Inner highlight stroke -->
+  <rect x="104" y="104" width="816" height="816" rx="180" ry="180" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="8"/>
+
+  <!-- Request arrow pointing right, centred in the body -->
+  <path filter="url(#arrowShadow)" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="28" stroke-linejoin="round"
+        d="M 286 547 L 536 547 L 536 458 L 738 607 L 536 756 L 536 667 L 286 667 Z"/>
+</svg>
