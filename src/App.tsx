@@ -1,10 +1,16 @@
-import "./App.css";
+import "./css/App.css";
+import Layout from "./Layout";
+import Box from "./Box";
 
 function App() {
 
   return (
     <main className="container">
-      <h1>Hello World</h1>
+      <Layout>
+        <Box>
+          <h1>Main Content</h1>
+        </Box>
+      </Layout>
     </main>
   );
 }

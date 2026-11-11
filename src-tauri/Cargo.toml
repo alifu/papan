@@ -22,4 +22,14 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+# The specta family is still pre-release: pin exactly and upgrade the three together.
+specta = { version = "=2.0.0-rc.28", features = ["derive"] }
+specta-typescript = "=0.0.15"
+tauri-specta = { version = "=2.0.0-rc.28", features = ["derive", "typescript"] }
 
+[dev-dependencies]
+tempfile = "3"
