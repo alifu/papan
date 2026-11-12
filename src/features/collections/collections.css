@@ -1,0 +1,107 @@
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding-right: 2px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.tree-row:hover {
+  background: var(--button-hover-bg);
+}
+
+.tree-row:focus-visible {
+  outline: 1px dotted var(--color-focus);
+  outline-offset: -1px;
+}
+
+.tree-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-method {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.tree-invalid .tree-label,
+.tree-missing .tree-label {
+  color: var(--color-error-text);
+  font-style: italic;
+}
+
+.tree-menu .menu-trigger {
+  height: 16px;
+  padding: 0 2px;
+  color: var(--color-text);
+}
+
+.tree-menu {
+  opacity: 0;
+}
+
+.tree-row:hover .tree-menu,
+.tree-row:focus-within .tree-menu,
+.tree-menu:has([aria-expanded="true"]) {
+  opacity: 1;
+}
+
+.form-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-error {
+  margin: 4px 0 0;
+  color: var(--color-error-text);
+}
+
+.dialog-message {
+  margin: 0;
+}
+
+.scratch-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.request-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.request-line {
+  display: flex;
+  gap: 4px;
+}
+
+.request-line input {
+  flex: 1;
+}

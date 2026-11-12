@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Commented
+url: https://example.com/commented

@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Broken
+url: [https://example.com/broken

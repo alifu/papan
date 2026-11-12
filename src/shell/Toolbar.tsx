@@ -10,7 +10,7 @@ export function Toolbar() {
 
   return (
     <div role="toolbar" aria-label="Main" className="toolbar">
-      <Button icon="plus" label="New Tab" onClick={newTab} />
+      <Button icon="plus" label="New Tab" onClick={() => void newTab()} />
       <Button
         icon={collapsed ? "chevron-right" : "chevron-left"}
         aria-label="Toggle sidebar"

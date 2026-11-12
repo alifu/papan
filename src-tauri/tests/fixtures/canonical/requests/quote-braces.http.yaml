@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: "{{base}} status"
+url: "{{base}}/status"

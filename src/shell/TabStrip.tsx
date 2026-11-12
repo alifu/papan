@@ -50,7 +50,7 @@ export function TabStrip() {
           );
         })}
       </div>
-      <Button icon="plus" aria-label="New tab" onClick={newTab} />
+      <Button icon="plus" aria-label="New tab" onClick={() => void newTab()} />
     </div>
   );
 }

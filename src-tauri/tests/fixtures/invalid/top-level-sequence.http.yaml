@@ -1,0 +1,4 @@
+- kind: http
+  method: GET
+  name: Sequence
+  url: https://example.com/seq

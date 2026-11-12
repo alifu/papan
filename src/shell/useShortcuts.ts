@@ -4,7 +4,7 @@ import { useLayoutStore } from "./layoutStore";
 import { useTabsStore } from "./tabsStore";
 
 const ACTIONS: Readonly<Record<string, () => void>> = {
-  n: () => useTabsStore.getState().newTab(),
+  n: () => void useTabsStore.getState().newTab(),
   w: () => {
     const { activeTabId, closeTab } = useTabsStore.getState();
     if (activeTabId) closeTab(activeTabId);

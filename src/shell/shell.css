@@ -180,3 +180,21 @@
 .statusbar-error {
   color: var(--color-error-text);
 }
+
+.scratch-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0 0 4px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: default;
+}
+
+.scratch-list .tree-row {
+  padding-left: 0;
+}

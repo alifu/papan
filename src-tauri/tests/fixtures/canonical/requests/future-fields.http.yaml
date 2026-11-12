@@ -1,0 +1,18 @@
+auth:
+  mode: bearer
+  token: "{{api_token}}"
+body: |
+  {
+    "name": "papan",
+    "tags": ["a", "b"]
+  }
+headers:
+  - name: Accept
+    value: application/json
+  - name: X-Trace
+    value: abc
+kind: http
+method: POST
+name: Future fields
+url: https://api.example.com/items
+x-trace-id: 7f3a

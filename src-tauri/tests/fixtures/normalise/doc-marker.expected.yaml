@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Doc marker
+url: https://example.com/doc

@@ -94,3 +94,86 @@
 .icon {
   flex: none;
 }
+
+.toast-host {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--color-content-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-control-border);
+  border-radius: 3px;
+  box-shadow: 2px 2px 4px rgb(0 0 0 / 30%);
+}
+
+.toast-error {
+  border-color: var(--color-error-text);
+  color: var(--color-error-text);
+}
+
+.toast-message {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: default;
+  line-height: 1;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 35%);
+}
+
+.dialog {
+  min-width: 300px;
+  max-width: 480px;
+  background: var(--color-panel-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-control-border);
+  border-radius: 3px;
+  box-shadow: 3px 3px 8px rgb(0 0 0 / 40%);
+}
+
+.dialog:focus {
+  outline: none;
+}
+
+.dialog-title {
+  padding: 4px 8px;
+  background: var(--header-strong-bg);
+  color: var(--color-header-strong-text);
+  font-weight: bold;
+}
+
+.dialog-body {
+  padding: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 12px 12px;
+}

@@ -6,6 +6,10 @@ import { useLayoutStore } from "./layoutStore";
 import { MenuBar } from "./MenuBar";
 import { useTabsStore } from "./tabsStore";
 
+vi.mock("../features/scratch/api", () => ({
+  createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
+}));
+
 describe("MenuBar", () => {
   beforeEach(() => {
     installMemoryStorage();
@@ -21,7 +25,7 @@ describe("MenuBar", () => {
     render(<MenuBar />);
     await userEvent.click(screen.getByRole("menuitem", { name: "File" }));
     await userEvent.click(screen.getByRole("menuitem", { name: /New Tab/ }));
-    expect(useTabsStore.getState().tabs).toHaveLength(2);
+    await vi.waitFor(() => expect(useTabsStore.getState().tabs).toHaveLength(2));
   });
 
   it("File > Close Tab closes the active tab and is a no-op with none", async () => {

@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: No final newline
+url: https://example.com/eof

@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Double quoted
+url: https://example.com/?q=a

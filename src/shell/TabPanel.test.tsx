@@ -1,8 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TabPanel } from "./TabPanel";
 import { useTabsStore } from "./tabsStore";
+
+vi.mock("../features/scratch/api", () => ({
+  createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
+}));
+vi.mock("../features/collections/api", () => ({
+  readRequest: vi.fn().mockResolvedValue({ name: "Untitled", method: "GET", url: "" }),
+  writeRequest: vi.fn(),
+  subscribeCollectionChanged: vi.fn(),
+}));
 
 describe("TabPanel", () => {
   beforeEach(() => {
@@ -15,10 +24,10 @@ describe("TabPanel", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 
-  it("shows placeholder content for a blank tab", () => {
-    useTabsStore.getState().newTab();
+  it("renders the request editor for a request tab", async () => {
+    useTabsStore.getState().openRequest({ scope: "scratch", id: "s1" }, "Untitled");
     render(<TabPanel />);
-    expect(screen.getByText("Nothing to show yet.")).toBeVisible();
+    expect(await screen.findByLabelText("URL")).toBeVisible();
     expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "tab-button-tab-1");
   });
 
@@ -28,6 +37,6 @@ describe("TabPanel", () => {
     expect(screen.getByText("No open tabs.")).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "New Tab" }));
-    expect(useTabsStore.getState().tabs).toHaveLength(1);
+    await vi.waitFor(() => expect(useTabsStore.getState().tabs).toHaveLength(1));
   });
 });

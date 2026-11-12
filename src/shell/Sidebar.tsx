@@ -1,7 +1,15 @@
+import { CollectionsPanel } from "../features/collections/CollectionsPanel";
+import { ScratchPanel } from "../features/scratch/ScratchPanel";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/icons";
-import { NAV_SECTIONS, useLayoutStore } from "./layoutStore";
+import { NAV_SECTIONS, useLayoutStore, type NavSection } from "./layoutStore";
 import { NAV_SECTION_META } from "./navSections";
+
+function renderSection(section: NavSection, emptyText: string) {
+  if (section === "collections") return <CollectionsPanel />;
+  if (section === "scratch") return <ScratchPanel />;
+  return <p className="empty-text">{emptyText}</p>;
+}
 
 export function Sidebar() {
   const collapsed = useLayoutStore((s) => s.sidebarCollapsed);
@@ -48,7 +56,7 @@ export function Sidebar() {
                 aria-labelledby={`nav-${section}-header`}
                 className="accordion-panel"
               >
-                <p className="empty-text">{meta.emptyText}</p>
+                {renderSection(section, meta.emptyText)}
               </div>
             ) : null}
           </section>

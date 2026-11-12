@@ -5,7 +5,12 @@ import { installMatchMedia } from "./theme/matchMediaMock";
 import { installMemoryStorage } from "./ui/memoryStorage";
 
 vi.mock("./ipc/bindings", () => ({
-  commands: { appInfo: vi.fn().mockResolvedValue({ name: "Papan", version: "0.1.0" }) },
+  commands: {
+    appInfo: vi.fn().mockResolvedValue({ name: "Papan", version: "0.1.0" }),
+    listCollections: vi.fn().mockResolvedValue([]),
+    listScratch: vi.fn().mockResolvedValue([]),
+  },
+  events: { collectionChanged: { listen: vi.fn().mockResolvedValue(() => {}) } },
 }));
 
 describe("App", () => {

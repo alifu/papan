@@ -85,4 +85,20 @@ describe("Menu", () => {
     await userEvent.click(trigger);
     expect(screen.queryByRole("menu")).toBeNull();
   });
+
+  it("supports an icon trigger named by its label and disabled items", async () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <Menu label="Actions" icon="chevron-down" className="extra"
+        items={[{ label: "Off", disabled: true, onSelect }, { label: "On", onSelect }]} />,
+    );
+    const trigger = screen.getByRole("menuitem", { name: "Actions" });
+    expect(trigger.querySelector("svg")).not.toBeNull();
+    expect(container.firstChild).toHaveClass("menu", "extra");
+
+    await userEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Off" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Off" }));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });

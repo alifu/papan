@@ -1,0 +1,4 @@
+kind: http
+method: HEAD
+name: Ping
+url: https://api.example.com/ping

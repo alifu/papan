@@ -1,0 +1,6 @@
+# A request saved by hand
+kind: http   # the kind
+method: GET
+# name below
+name: Commented
+url: https://example.com/commented   # trailing comment

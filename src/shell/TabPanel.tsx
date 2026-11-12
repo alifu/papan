@@ -1,3 +1,4 @@
+import { RequestPlaceholder } from "../features/request/RequestPlaceholder";
 import { Button } from "../ui/Button";
 import { shortcutLabel } from "../ui/platform";
 import { TAB_PANEL_ID, tabButtonId } from "./TabStrip";
@@ -18,7 +19,8 @@ function Welcome() {
 }
 
 function renderTab(tab: Tab) {
-  return tab.kind === "welcome" ? <Welcome /> : <p className="empty-text">Nothing to show yet.</p>;
+  if (tab.kind === "welcome" || !tab.location) return <Welcome />;
+  return <RequestPlaceholder key={tab.id} location={tab.location} />;
 }
 
 export function TabPanel() {
@@ -31,7 +33,7 @@ export function TabPanel() {
     return (
       <div role="tabpanel" id={TAB_PANEL_ID} aria-label="No open tabs" className="tabpanel">
         <p className="empty-text">No open tabs.</p>
-        <Button icon="plus" label="New Tab" onClick={newTab} />
+        <Button icon="plus" label="New Tab" onClick={() => void newTab()} />
       </div>
     );
   }

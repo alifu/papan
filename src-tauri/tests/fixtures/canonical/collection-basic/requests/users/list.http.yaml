@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: List users
+url: https://api.example.com/users

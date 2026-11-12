@@ -1,8 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { scratchLocation } from "../features/locations";
 import { TabStrip } from "./TabStrip";
 import { useTabsStore } from "./tabsStore";
+
+vi.mock("../features/scratch/api", () => ({
+  createScratch: vi.fn().mockResolvedValue({ id: "s2", name: "Untitled 1", method: "GET" }),
+}));
+
+const openUntitled = () => useTabsStore.getState().openRequest(scratchLocation("s1"), "Untitled 1");
 
 describe("TabStrip", () => {
   beforeEach(() => {
@@ -10,7 +17,7 @@ describe("TabStrip", () => {
   });
 
   it("renders tabs with aria-selected", () => {
-    useTabsStore.getState().newTab();
+    openUntitled();
     render(<TabStrip />);
 
     expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute("aria-selected", "false");
@@ -18,14 +25,14 @@ describe("TabStrip", () => {
   });
 
   it("activates on click", async () => {
-    useTabsStore.getState().newTab();
+    openUntitled();
     render(<TabStrip />);
     await userEvent.click(screen.getByRole("tab", { name: "Welcome" }));
     expect(useTabsStore.getState().activeTabId).toBe("welcome");
   });
 
   it("activates neighbours with arrow keys, wrapping", async () => {
-    useTabsStore.getState().newTab();
+    openUntitled();
     render(<TabStrip />);
     screen.getByRole("tab", { name: "Untitled 1" }).focus();
 
@@ -47,6 +54,6 @@ describe("TabStrip", () => {
   it("adds a tab with the new tab button", async () => {
     render(<TabStrip />);
     await userEvent.click(screen.getByRole("button", { name: "New tab" }));
-    expect(screen.getByRole("tab", { name: "Untitled 1" })).toBeVisible();
+    expect(await screen.findByRole("tab", { name: "Untitled 1" })).toBeVisible();
   });
 });

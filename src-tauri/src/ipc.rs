@@ -9,10 +9,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use specta_typescript::Typescript;
-use tauri_specta::{collect_commands, Builder};
+use tauri_specta::{collect_commands, collect_events, Builder};
 
 use crate::commands;
 use crate::error::AppError;
+use crate::store::commands as store;
+use crate::store::types::CollectionChanged;
 
 /// Result of [`sync_bindings`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,7 +29,27 @@ pub enum BindingsSync {
 /// (otherwise `skip_serializing_if` splits a type into `_Serialize`/`_Deserialize`).
 pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
-        .commands(collect_commands![commands::app_info])
+        .commands(collect_commands![
+            commands::app_info,
+            store::list_collections,
+            store::create_collection,
+            store::open_collection,
+            store::close_collection,
+            store::read_tree,
+            store::create_folder,
+            store::create_request,
+            store::rename_node,
+            store::delete_node,
+            store::move_node,
+            store::read_request,
+            store::write_request,
+            store::list_scratch,
+            store::create_scratch,
+            store::rename_scratch,
+            store::delete_scratch,
+            store::move_scratch_to_collection,
+        ])
+        .events(collect_events![CollectionChanged])
         .typ::<AppError>()
         .disable_serde_phases()
 }
@@ -110,6 +132,40 @@ mod tests {
         assert!(rendered.contains("appInfo"));
         assert!(rendered.contains("AppError"));
         assert!(rendered.contains("\"invalid_input\""));
+    }
+
+    #[test]
+    fn bindings_expose_store_commands_and_collection_changed_event() {
+        let rendered = render_bindings(&builder()).unwrap();
+        let expected = [
+            "listCollections",
+            "createCollection",
+            "openCollection",
+            "closeCollection",
+            "readTree",
+            "createFolder",
+            "createRequest",
+            "renameNode",
+            "deleteNode",
+            "moveNode",
+            "readRequest",
+            "writeRequest",
+            "listScratch",
+            "createScratch",
+            "renameScratch",
+            "deleteScratch",
+            "moveScratchToCollection",
+            "collectionChanged",
+        ];
+
+        let missing: Vec<&str> = expected
+            .into_iter()
+            .filter(|name| {
+                !rendered.contains(&format!("{name}(")) && !rendered.contains(&format!("{name}:"))
+            })
+            .collect();
+
+        assert!(missing.is_empty(), "bindings are missing {missing:?}");
     }
 
     #[test]

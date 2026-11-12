@@ -1,0 +1,5 @@
+order:
+  - ping.http.yaml
+  - auth
+  - health.http.yaml
+  - users

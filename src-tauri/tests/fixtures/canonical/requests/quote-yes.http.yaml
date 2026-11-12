@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: "yes"
+url: https://api.example.com/yes

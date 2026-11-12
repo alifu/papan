@@ -1,3 +1,7 @@
+import { useEffect } from "react";
+import { useCollectionsStore } from "../features/collections/collectionsStore";
+import { useScratchStore } from "../features/scratch/scratchStore";
+import { ToastHost } from "../ui/Toast";
 import { MenuBar } from "./MenuBar";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -15,6 +19,14 @@ import { Splitter } from "../ui/Splitter";
 
 export function AppShell() {
   useShortcuts();
+  useEffect(() => {
+    void useCollectionsStore.getState().load();
+    void useScratchStore.getState().load();
+    const unlisten = useCollectionsStore.getState().subscribe();
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
   const width = useLayoutStore((s) => s.sidebarWidth);
   const collapsed = useLayoutStore((s) => s.sidebarCollapsed);
   const setWidth = useLayoutStore((s) => s.setSidebarWidth);
@@ -47,6 +59,7 @@ export function AppShell() {
         </main>
       </div>
       <StatusBar />
+      <ToastHost />
     </div>
   );
 }

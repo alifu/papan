@@ -1,0 +1,4 @@
+kind: http
+method: POST
+name: Login
+url: https://api.example.com/login

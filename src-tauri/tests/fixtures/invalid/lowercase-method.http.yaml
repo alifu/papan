@@ -1,0 +1,4 @@
+kind: http
+method: get
+name: Lowercase method
+url: https://example.com/lower

@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Icon, type IconName } from "./icons";
 
 export interface MenuItem {
   readonly label: string;
   readonly shortcut?: string;
   readonly onSelect: () => void;
+  readonly disabled?: boolean;
 }
 
 export interface MenuProps {
   readonly label: string;
   readonly items: readonly MenuItem[];
+  /** Shows an icon-only trigger; `label` stays its accessible name. */
+  readonly icon?: IconName;
+  readonly className?: string;
 }
 
 /** Menu-bar dropdown with roving focus. */
-export function Menu({ label, items }: MenuProps) {
+export function Menu({ label, items, icon, className }: MenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -37,6 +42,7 @@ export function Menu({ label, items }: MenuProps) {
   };
 
   const select = (item: MenuItem) => {
+    if (item.disabled) return;
     setOpen(false);
     triggerRef.current?.focus();
     item.onSelect();
@@ -60,7 +66,7 @@ export function Menu({ label, items }: MenuProps) {
   };
 
   return (
-    <div className="menu" role="none" ref={rootRef}>
+    <div className={className ? `menu ${className}` : "menu"} role="none" ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
@@ -68,9 +74,10 @@ export function Menu({ label, items }: MenuProps) {
         className="menu-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={icon ? label : undefined}
         onClick={() => setOpen((current) => !current)}
       >
-        {label}
+        {icon ? <Icon name={icon} /> : label}
       </button>
       {open ? (
         <div role="menu" aria-label={label} className="menu-popup">
@@ -83,6 +90,7 @@ export function Menu({ label, items }: MenuProps) {
               type="button"
               role="menuitem"
               className="menu-item"
+              disabled={item.disabled}
               onKeyDown={(event) => handleKeyDown(event, index)}
               onClick={() => select(item)}
             >
