@@ -16,14 +16,16 @@ type EngineResult<T> = Result<T, AppError>;
 
 const DEFAULT_SAVE_NAME: &str = "response.bin";
 
-fn logged<T>(result: EngineResult<T>) -> EngineResult<T> {
+pub(super) fn logged<T>(result: EngineResult<T>) -> EngineResult<T> {
     if let Err(error) = &result {
         tracing::warn!(code = ?error.code, detail = ?error.detail, "{error}");
     }
     result
 }
 
-fn picked_path(picked: tauri_plugin_dialog::FilePath) -> EngineResult<std::path::PathBuf> {
+pub(super) fn picked_path(
+    picked: tauri_plugin_dialog::FilePath,
+) -> EngineResult<std::path::PathBuf> {
     picked.into_path().map_err(|source| {
         AppError::invalid_input("That file cannot be used.").with_detail(source.to_string())
     })
@@ -72,7 +74,9 @@ pub async fn read_response_body(
 }
 
 /// Runs a blocking native dialog off the async runtime.
-async fn dialog<T: Send + 'static>(show: impl FnOnce() -> T + Send + 'static) -> EngineResult<T> {
+pub(super) async fn dialog<T: Send + 'static>(
+    show: impl FnOnce() -> T + Send + 'static,
+) -> EngineResult<T> {
     tauri::async_runtime::spawn_blocking(show)
         .await
         .map_err(|source| {

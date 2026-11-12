@@ -2,4 +2,7 @@
 
 #![allow(dead_code)]
 
+pub mod digest;
+pub mod mtls;
+pub mod proxy;
 pub mod server;

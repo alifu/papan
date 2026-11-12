@@ -1,7 +1,12 @@
 import type { KeyValue, RequestContent, Settings } from "../../ipc/bindings";
 import type { KeyValueRow } from "./KeyValueTable";
 
-export const DEFAULT_SETTINGS: Settings = { follow_redirects: true, timeout_ms: 30000, verify_tls: true };
+export const DEFAULT_SETTINGS: Settings = {
+  follow_redirects: true,
+  timeout_ms: 30000,
+  verify_tls: true,
+  http_version: "auto",
+};
 
 export function emptyContent(): RequestContent {
   return {

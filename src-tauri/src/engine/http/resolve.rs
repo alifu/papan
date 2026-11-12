@@ -157,6 +157,29 @@ impl Resolver<'_> {
                 value: self.text(value),
                 placement: *placement,
             },
+            Auth::Digest { username, password } => Auth::Digest {
+                username: self.text(username),
+                password: self.text(password),
+            },
+            Auth::Oauth2 {
+                grant,
+                auth_url,
+                token_url,
+                client_id,
+                client_secret,
+                scope,
+                client_auth,
+                redirect_port,
+            } => Auth::Oauth2 {
+                grant: *grant,
+                auth_url: self.text(auth_url),
+                token_url: self.text(token_url),
+                client_id: self.text(client_id),
+                client_secret: self.text(client_secret),
+                scope: self.text(scope),
+                client_auth: *client_auth,
+                redirect_port: *redirect_port,
+            },
             Auth::None | Auth::Unsupported => auth.clone(),
         }
     }

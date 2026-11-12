@@ -113,6 +113,33 @@ pub enum ApiKeyPlacement {
     Query,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthGrant {
+    #[default]
+    ClientCredentials,
+    AuthorizationCode,
+}
+
+/// How the OAuth 2 client authenticates to the token endpoint.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ClientAuth {
+    #[default]
+    Basic,
+    Body,
+}
+
+/// `Http2` is `h2` by ALPN over TLS and prior knowledge over cleartext (plan 03b §6.2).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum HttpVersion {
+    #[default]
+    Auto,
+    Http1,
+    Http2,
+}
+
 /// `Unsupported` is an auth type made by a newer Papan: kept on disk, never sent.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -131,6 +158,21 @@ pub enum Auth {
         value: String,
         placement: ApiKeyPlacement,
     },
+    Digest {
+        username: String,
+        password: String,
+    },
+    /// `auth_url` is used by `AuthorizationCode` only; `redirect_port` 0 means any free port.
+    Oauth2 {
+        grant: OAuthGrant,
+        auth_url: String,
+        token_url: String,
+        client_id: String,
+        client_secret: String,
+        scope: String,
+        client_auth: ClientAuth,
+        redirect_port: u16,
+    },
     Unsupported,
 }
 
@@ -140,6 +182,7 @@ pub struct Settings {
     pub follow_redirects: bool,
     pub timeout_ms: u32,
     pub verify_tls: bool,
+    pub http_version: HttpVersion,
 }
 
 pub const DEFAULT_TIMEOUT_MS: u32 = 30_000;
@@ -150,6 +193,7 @@ impl Default for Settings {
             follow_redirects: true,
             timeout_ms: DEFAULT_TIMEOUT_MS,
             verify_tls: true,
+            http_version: HttpVersion::Auto,
         }
     }
 }

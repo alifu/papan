@@ -1,0 +1,10 @@
+auth:
+  auth_url: "{{idp}}/authorize"
+  client_id: papan-desktop
+  grant: authorization_code
+  token_url: "{{idp}}/token"
+  type: oauth2
+kind: http
+method: GET
+name: OAuth 2 authorization code
+url: https://api.example.com/me

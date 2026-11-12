@@ -58,6 +58,31 @@ export const commands = {
 	previewTemplate: (location: RequestLocation, text: string) => __TAURI_INVOKE<TemplatePreview>("preview_template", { location, text }),
 	secretStorageStatus: () => __TAURI_INVOKE<SecretStorageStatus>("secret_storage_status"),
 	resetSecretStorage: () => __TAURI_INVOKE<SecretStorageStatus>("reset_secret_storage"),
+	/**  Proxy and client certificates as stored on this machine, with the vault's mode. */
+	readNetworkSettings: () => __TAURI_INVOKE<NetworkSettings>("read_network_settings"),
+	/**
+	 *  Command 51: the proxy mode only, read from `network.json` without opening the vault,
+	 *  so the startup "Proxy" badge never triggers a keychain prompt.
+	 */
+	readProxyMode: () => __TAURI_INVOKE<ProxyMode>("read_proxy_mode"),
+	/**  Replaces the proxy settings; the password follows `SecretEdit`. */
+	writeProxySettings: (proxy: ProxyInput) => __TAURI_INVOKE<NetworkSettings>("write_proxy_settings", { proxy }),
+	/**
+	 *  Imports a PEM certificate and key for `host` (and `port`) through native dialogs;
+	 *  `None` when a dialog is cancelled.
+	 */
+	addClientCertificate: (host: string, port: number | null) => __TAURI_INVOKE<NetworkSettings | null>("add_client_certificate", { host, port }),
+	removeClientCertificate: (id: string) => __TAURI_INVOKE<NetworkSettings>("remove_client_certificate", { id }),
+	/**  The unexpired cookies of the jar `location` uses, sorted by domain, path, name. */
+	listCookies: (location: RequestLocation) => __TAURI_INVOKE<StoredCookie[]>("list_cookies", { location }),
+	/**  Adds or replaces one cookie; returns the jar's new list. */
+	setCookie: (location: RequestLocation, cookie: CookieInput) => __TAURI_INVOKE<StoredCookie[]>("set_cookie", { location, cookie }),
+	/**  Deletes the cookies `filter` names; returns the jar's new list. */
+	deleteCookies: (location: RequestLocation, filter: CookieFilter) => __TAURI_INVOKE<StoredCookie[]>("delete_cookies", { location, filter }),
+	/**  The draft as a POSIX cURL command; secret variables stay as `{{name}}`. */
+	exportCurl: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<string>("export_curl", { location, content }),
+	/**  Parses a cURL command without executing or reading anything. */
+	importCurl: (text: string) => __TAURI_INVOKE<CurlImport>("import_curl", { text }),
 };
 
 /** Events */
@@ -81,12 +106,31 @@ export type AppInfo = {
 };
 
 /**  `Unsupported` is an auth type made by a newer Papan: kept on disk, never sent. */
-export type Auth = { type: "none" } | { type: "basic"; username: string; password: string } | { type: "bearer"; token: string } | { type: "api_key"; name: string; value: string; placement: ApiKeyPlacement } | { type: "unsupported" };
+export type Auth = { type: "none" } | { type: "basic"; username: string; password: string } | { type: "bearer"; token: string } | { type: "api_key"; name: string; value: string; placement: ApiKeyPlacement } | { type: "digest"; username: string; password: string } | 
+/**  `auth_url` is used by `AuthorizationCode` only; `redirect_port` 0 means any free port. */
+{ type: "oauth2"; grant: OAuthGrant; auth_url: string; token_url: string; client_id: string; client_secret: string; scope: string; client_auth: ClientAuth; redirect_port: number } | { type: "unsupported" };
 
 /**  `Unsupported` is a body type made by a newer Papan: kept on disk, never sent. */
 export type Body = { type: "none" } | { type: "json"; text: string } | { type: "xml"; text: string } | { type: "text"; text: string } | { type: "form"; fields: KeyValue[] } | { type: "multipart"; parts: Part[] } | { type: "binary"; file: string | null } | { type: "unsupported" };
 
 export type BodyEncoding = "text" | "base64" | "none";
+
+/**  How the OAuth 2 client authenticates to the token endpoint. */
+export type ClientAuth = "basic" | "body";
+
+/**
+ *  An imported client certificate; the PEM bundle lives in the vault only.
+ *  `port` `None` matches any port; `missing` means the vault no longer holds it.
+ */
+export type ClientCertificate = {
+	id: string,
+	host: string,
+	port: number | null,
+	cert_name: string,
+	key_name: string,
+	added_at_ms: number | null,
+	missing: boolean,
+};
 
 /**  Emitted when a collection changed on disk outside the app. TS: `events.collectionChanged`. */
 export type CollectionChanged = {
@@ -105,6 +149,30 @@ export type CollectionSummary = {
 export type CollectionTree = {
 	collection: CollectionSummary,
 	children: TreeNode[],
+};
+
+/**  Deletes every cookie of `domain`, or the one cookie named by domain + path + name. */
+export type CookieFilter = {
+	domain: string,
+	path: string | null,
+	name: string | null,
+};
+
+/**  A cookie added or replaced by the cookie manager; `expires_at_ms` `None` is a session cookie. */
+export type CookieInput = {
+	name: string,
+	value: string,
+	domain: string,
+	path: string,
+	expires_at_ms: number | null,
+	http_only: boolean,
+	secure: boolean,
+};
+
+/**  A parsed cURL command and what was ignored in it. */
+export type CurlImport = {
+	content: RequestContent,
+	warnings: string[],
 };
 
 /**  A variable after layering. `value` is "" when secret; dynamic names are listed too. */
@@ -166,6 +234,9 @@ export type HistoryEntry = {
 	size_bytes: number,
 };
 
+/**  `Http2` is `h2` by ALPN over TLS and prior knowledge over cleartext (plan 03b §6.2). */
+export type HttpVersion = "auto" | "http1" | "http2";
+
 /**  A header, form field or other name/value row that can be switched off. */
 export type KeyValue = {
 	name: string,
@@ -173,7 +244,15 @@ export type KeyValue = {
 	enabled: boolean,
 };
 
+export type NetworkSettings = {
+	proxy: ProxySettings,
+	certificates: ClientCertificate[],
+	storage: SecretStorageStatus,
+};
+
 export type NodeKind = "folder" | "request" | "invalid";
+
+export type OAuthGrant = "client_credentials" | "authorization_code";
 
 /**  A query parameter switched off in the params table (plan 03 §3.1). */
 export type Pair = {
@@ -194,6 +273,27 @@ export type PickedFile = {
 	path: string,
 	name: string,
 	size_bytes: number,
+};
+
+/**  The proxy as written by Network settings; the password is write-only. */
+export type ProxyInput = {
+	mode: ProxyMode,
+	url: string,
+	username: string,
+	password: SecretEdit,
+	bypass: string[],
+};
+
+/**  Machine-local proxy choice (plan 03b §4.1). `System` is the OS proxy configuration. */
+export type ProxyMode = "system" | "none" | "custom";
+
+/**  The proxy as shown in Network settings; the password itself is never returned. */
+export type ProxySettings = {
+	mode: ProxyMode,
+	url: string,
+	username: string,
+	has_password: boolean,
+	bypass: string[],
 };
 
 /**  Everything about a request except its name. Enabled query parameters live only in `url`. */
@@ -247,6 +347,7 @@ export type ResponseMeta = {
 	truncated: boolean,
 	ttfb_ms: number,
 	total_ms: number,
+	timing: Timing,
 	tls_verified: boolean,
 	/**  Variable names that were sent as typed because they did not resolve. */
 	unresolved: string[],
@@ -274,12 +375,36 @@ export type Settings = {
 	follow_redirects: boolean,
 	timeout_ms: number,
 	verify_tls: boolean,
+	http_version: HttpVersion,
+};
+
+/**  A cookie in a jar, as listed by the cookie manager. */
+export type StoredCookie = {
+	name: string,
+	value: string,
+	domain: string,
+	path: string,
+	expires_at_ms: number | null,
+	http_only: boolean,
+	secure: boolean,
 };
 
 /**  A template resolved for display: secrets as "•••••", dynamics left as typed. */
 export type TemplatePreview = {
 	text: string,
 	unresolved: string[],
+};
+
+/**
+ *  Where the time of a send went (plan 03b §6.4). `connect_ms` is TCP + TLS (+ proxy
+ *  `CONNECT`); `reused` means no new connection was opened. Redirect hops are summed.
+ */
+export type Timing = {
+	dns_ms: number,
+	connect_ms: number,
+	wait_ms: number,
+	download_ms: number,
+	reused: boolean,
 };
 
 /**  Result of a mutation: the new tree and the node's new path (`None` after delete). */

@@ -68,6 +68,29 @@ fn redact_auth(auth: &Auth) -> Auth {
             value: blank(value),
             placement: *placement,
         },
+        Auth::Digest { username, password } => Auth::Digest {
+            username: username.clone(),
+            password: blank(password),
+        },
+        Auth::Oauth2 {
+            grant,
+            auth_url,
+            token_url,
+            client_id,
+            client_secret,
+            scope,
+            client_auth,
+            redirect_port,
+        } => Auth::Oauth2 {
+            grant: *grant,
+            auth_url: auth_url.clone(),
+            token_url: token_url.clone(),
+            client_id: client_id.clone(),
+            client_secret: blank(client_secret),
+            scope: scope.clone(),
+            client_auth: *client_auth,
+            redirect_port: *redirect_port,
+        },
         Auth::None | Auth::Unsupported => auth.clone(),
     }
 }
@@ -115,7 +138,7 @@ impl SessionSecrets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::types::ApiKeyPlacement;
+    use crate::store::types::{ApiKeyPlacement, ClientAuth, OAuthGrant};
 
     fn header(name: &str, value: &str) -> KeyValue {
         KeyValue {
@@ -129,6 +152,19 @@ mod tests {
         RequestContent {
             auth,
             ..RequestContent::new("GET", "https://x")
+        }
+    }
+
+    fn oauth2(client_secret: &str, client_id: &str) -> Auth {
+        Auth::Oauth2 {
+            grant: OAuthGrant::AuthorizationCode,
+            auth_url: "https://idp/authorize".into(),
+            token_url: "https://idp/token".into(),
+            client_id: client_id.into(),
+            client_secret: client_secret.into(),
+            scope: "read".into(),
+            client_auth: ClientAuth::Body,
+            redirect_port: 8765,
         }
     }
 
@@ -171,6 +207,18 @@ mod tests {
                     placement: ApiKeyPlacement::Query,
                 },
             ),
+            (
+                Auth::Digest {
+                    username: "u".into(),
+                    password: "p".into(),
+                },
+                Auth::Digest {
+                    username: "u".into(),
+                    password: String::new(),
+                },
+            ),
+            (oauth2("cs", "{{id}}"), oauth2("", "{{id}}")),
+            (oauth2("{{secret}}", "id"), oauth2("{{secret}}", "id")),
             (Auth::Unsupported, Auth::Unsupported),
         ];
         for (auth, expected) in cases {

@@ -40,7 +40,16 @@ tempfile = "3"
 # TLS is rustls + aws-lc-rs + the OS trust store (plan 03 §2).
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "system-proxy", "cookies", "gzip", "brotli", "deflate", "zstd", "multipart", "stream"] }
 reqwest_cookie_store = "0.10"
-tokio = { version = "1", features = ["rt", "macros", "fs", "io-util", "time", "sync"] }
+# reqwest's own proxy matcher, to tell which proxy a hop goes through (plan 03b §4.3).
+hyper-util = { version = "0.1.21", default-features = false, features = ["client-proxy", "client-proxy-system"] }
+http = "1"
+cookie_store = { version = "0.22", default-features = false }
+tokio = { version = "1", features = ["rt", "macros", "fs", "io-util", "time", "sync", "net"] }
+# Connect timing through `ClientBuilder::connector_layer` (plan 03b §6.4).
+tower-layer = "0.3"
+tower-service = "0.3"
+# Digest MD5 / MD5-sess; aws-lc-rs has no MD5 (plan 03b §2).
+md-5 = "0.10"
 url = "2"
 base64 = "0.23"
 encoding_rs = "0.8"
@@ -56,6 +65,7 @@ time = { version = "0.3", features = ["formatting"] }
 axum = { version = "0.8", features = ["multipart"] }
 axum-server = { version = "0.9", features = ["tls-rustls"] }
 rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 flate2 = "1"
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "net"] }

@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+pub mod auth_model;
 pub mod collection;
 pub mod commands;
 pub mod env_model;

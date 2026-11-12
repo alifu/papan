@@ -1,0 +1,457 @@
+[
+  {
+    "name": "get-plain",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "method-and-headers",
+    "content": {
+      "method": "PUT",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Accept",
+          "value": "application/json",
+          "enabled": true
+        },
+        {
+          "name": "X-Trace",
+          "value": "1",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X PUT \\\n  -H 'Accept: application/json' \\\n  -H 'X-Trace: 1' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "single-quote-in-value",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "X-Note",
+          "value": "it's",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -H 'X-Note: it'\\''s' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "newline-in-text-body",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "text",
+        "text": "line1\nline2"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X POST \\\n  -H 'Content-Type: text/plain; charset=utf-8' \\\n  --data-raw 'line1\nline2' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "non-ascii-header",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "X-Name",
+          "value": "café",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -H 'X-Name: café' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "basic-auth",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "basic",
+        "username": "alice",
+        "password": "s3cret"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -u 'alice:s3cret' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "digest-auth",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "digest",
+        "username": "alice",
+        "password": "s3cret"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  --digest -u 'alice:s3cret' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "bearer-auth",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "bearer",
+        "token": "abc123"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -H 'Authorization: Bearer abc123' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "api-key-header",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "api_key",
+        "name": "X-Api-Key",
+        "value": "key-123",
+        "placement": "header"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -H 'X-Api-Key: key-123' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "api-key-query",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/me",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "api_key",
+        "name": "api_key",
+        "value": "key-123",
+        "placement": "query"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  'https://api.example.com/me?api_key=key-123'"
+  },
+  {
+    "name": "json-body",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "json",
+        "text": "{\"a\":1}"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X POST \\\n  -H 'Content-Type: application/json' \\\n  --data-raw '{\"a\":1}' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "xml-body",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "xml",
+        "text": "<a><b/></a>"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X POST \\\n  -H 'Content-Type: application/xml' \\\n  --data-raw '<a><b/></a>' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "form-body",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "form",
+        "fields": [
+          {
+            "name": "a",
+            "value": "b c",
+            "enabled": true
+          }
+        ]
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X POST \\\n  --data-urlencode 'a=b c' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "multipart-body",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "multipart",
+        "parts": [
+          {
+            "name": "name",
+            "value": "papan",
+            "file": null,
+            "enabled": true
+          },
+          {
+            "name": "avatar",
+            "value": "",
+            "file": "pic.png",
+            "enabled": true
+          }
+        ]
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X POST \\\n  --form-string 'name=papan' \\\n  -F 'avatar=@pic.png' \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "binary-body-path",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "binary",
+        "file": "payload.bin"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X POST \\\n  -H 'Content-Type:' \\\n  --data-binary @payload.bin \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "settings-all-non-default",
+    "content": {
+      "method": "GET",
+      "url": "https://self-signed.example.com/",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": true,
+        "timeout_ms": 5000,
+        "verify_tls": false,
+        "http_version": "http2"
+      }
+    },
+    "expected": "curl -X GET \\\n  -L \\\n  -k \\\n  -m 5 \\\n  --http2 \\\n  'https://self-signed.example.com/'"
+  },
+  {
+    "name": "timeout-zero-means-none",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 0,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -m 0 \\\n  'https://api.example.com/items'"
+  },
+  {
+    "name": "globbing-when-braces",
+    "content": {
+      "method": "GET",
+      "url": "https://example.com/a{1,2}",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      }
+    },
+    "expected": "curl -X GET \\\n  -g \\\n  'https://example.com/a{1,2}'"
+  }
+]

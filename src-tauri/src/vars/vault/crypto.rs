@@ -29,9 +29,14 @@ pub enum CryptoError {
     Failed,
 }
 
+#[cfg(test)]
 fn header() -> [u8; HEADER_LEN] {
+    header_of(MAGIC)
+}
+
+fn header_of(magic: &[u8; 8]) -> [u8; HEADER_LEN] {
     let mut header = [0u8; HEADER_LEN];
-    header[..MAGIC.len()].copy_from_slice(MAGIC);
+    header[..MAGIC.len()].copy_from_slice(magic);
     header[MAGIC.len()] = VERSION;
     header
 }
@@ -56,8 +61,14 @@ pub fn generate_key() -> Result<Zeroizing<Vec<u8>>, CryptoError> {
 
 /// Encrypts `plaintext` into a complete vault file, under a fresh random nonce.
 pub fn seal(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
+    seal_with(MAGIC, key, plaintext)
+}
+
+/// `seal` for another kind of file: `magic` replaces the vault's and is authenticated
+/// with the version, so files of different kinds never open as one another.
+pub fn seal_with(magic: &[u8; 8], key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
     let cipher = cipher(key)?;
-    let header = header();
+    let header = header_of(magic);
     let mut nonce = [0u8; NONCE_LEN];
     SystemRandom::new()
         .fill(&mut nonce)
@@ -89,8 +100,17 @@ pub fn seal(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
 
 /// Decrypts a complete vault file. Any change to header, nonce, ciphertext or tag fails.
 pub fn open(key: &[u8], file: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
+    open_with(MAGIC, key, file)
+}
+
+/// `open` for a file sealed by `seal_with` under the same `magic`.
+pub fn open_with(
+    magic: &[u8; 8],
+    key: &[u8],
+    file: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
     let cipher = cipher(key)?;
-    let header = header();
+    let header = header_of(magic);
     if file.len() < OVERHEAD || file[..HEADER_LEN] != header {
         return Err(CryptoError::BadFormat);
     }

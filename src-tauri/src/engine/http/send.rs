@@ -5,26 +5,30 @@ use std::error::Error as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, LOCATION};
-use reqwest::multipart::{Form, Part};
-use reqwest::{Client, RequestBuilder, Response, Version};
+use reqwest::header::CONTENT_TYPE;
+use reqwest::{Response, Version};
 use tokio::io::AsyncWriteExt;
 
-use super::build::{loggable_url, PartValue, Prepared, PreparedBody};
-use super::redirect::{next_hop, MAX_REDIRECTS};
-use super::types::{Header, ResponseCookie, ResponseMeta};
+use super::build::{loggable_url, Prepared};
+use super::client::ClientSelector;
+use super::follow::{follow, Followed};
+use super::types::{Header, ResponseCookie, ResponseMeta, Timing};
 use crate::error::{AppError, ErrorCode};
+use crate::store::types::HttpVersion;
 
 /// Everything one send needs; owned so it can run as its own task.
 #[derive(Debug)]
 pub struct Exchange {
     pub request_id: String,
-    pub client: Client,
+    /// Chooses the client of each hop (plan 03b §4.2).
+    pub selector: ClientSelector,
     pub prepared: Prepared,
     /// `None` = no timeout.
     pub timeout: Option<Duration>,
     pub follow_redirects: bool,
     pub verify_tls: bool,
+    /// The version `client` was built for; names the error when HTTP/2 is refused.
+    pub http_version: HttpVersion,
     pub body_file: PathBuf,
     pub max_body_bytes: u64,
 }
@@ -50,9 +54,17 @@ fn millis(elapsed: Duration) -> u32 {
 pub async fn execute(exchange: Exchange) -> Result<ResponseMeta, AppError> {
     let started = Instant::now();
     let deadline = exchange.timeout.map(|timeout| started + timeout);
-    let (response, url) = follow(&exchange, deadline).await?;
+    let Followed {
+        response,
+        url,
+        note,
+    } = follow(&exchange, deadline).await?;
     let ttfb_ms = millis(started.elapsed());
     let meta = head(&exchange, &response, ttfb_ms);
+    let status_text = match note {
+        Some(note) => format!("{} ({note})", meta.status_text),
+        None => meta.status_text,
+    };
     let mut partial = PartialFile {
         path: exchange.body_file.clone(),
         complete: false,
@@ -61,137 +73,19 @@ pub async fn execute(exchange: Exchange) -> Result<ResponseMeta, AppError> {
         .await
         .map_err(|error| error.with_url(&url))?;
     partial.complete = true;
+    let total_ms = millis(started.elapsed());
     Ok(ResponseMeta {
         size_bytes: u32::try_from(size).unwrap_or(u32::MAX),
         truncated,
-        total_ms: millis(started.elapsed()),
+        total_ms,
+        timing: exchange.selector.timing(started, ttfb_ms, total_ms),
+        status_text,
         ..meta
     })
 }
 
-fn timed_out() -> AppError {
+pub(super) fn timed_out() -> AppError {
     AppError::new(ErrorCode::Timeout, "The request timed out.")
-}
-
-/// Sends the request and, when allowed, follows up to [`MAX_REDIRECTS`] redirects.
-/// Returns the final response and the URL it came from.
-async fn follow(
-    exchange: &Exchange,
-    deadline: Option<Instant>,
-) -> Result<(Response, url::Url), AppError> {
-    let mut current = exchange.prepared.clone();
-    let mut redirects = 0;
-    loop {
-        let remaining = match deadline {
-            Some(deadline) => Some(
-                deadline
-                    .checked_duration_since(Instant::now())
-                    .filter(|left| !left.is_zero())
-                    .ok_or_else(timed_out)?,
-            ),
-            None => None,
-        };
-        let builder = with_body(request(&exchange.client, &current, remaining), &current).await?;
-        let response = builder
-            .send()
-            .await
-            .map_err(|error| map_error(error, &current.url))?;
-        let next = exchange
-            .follow_redirects
-            .then(|| {
-                next_hop(
-                    &current,
-                    response.status(),
-                    response.headers().get(LOCATION),
-                )
-            })
-            .flatten();
-        let Some(next) = next else {
-            return Ok((response, current.url));
-        };
-        if redirects == MAX_REDIRECTS {
-            return Err(
-                AppError::new(ErrorCode::Network, "The server redirected too many times.")
-                    .with_detail(loggable_url(&current.url)),
-            );
-        }
-        redirects += 1;
-        current = next;
-    }
-}
-
-fn request(client: &Client, prepared: &Prepared, timeout: Option<Duration>) -> RequestBuilder {
-    let builder = prepared.headers.iter().fold(
-        client.request(prepared.method.clone(), prepared.url.clone()),
-        |builder, (name, value)| builder.header(name, value),
-    );
-    match timeout {
-        Some(timeout) => builder.timeout(timeout),
-        None => builder,
-    }
-}
-
-fn file_error(path: &Path, source: &std::io::Error) -> AppError {
-    let name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    AppError::invalid_input(format!("Could not read the file to upload: {name}"))
-        .with_detail(source.to_string())
-}
-
-async fn open(path: &Path) -> Result<(tokio::fs::File, u64), AppError> {
-    let file = tokio::fs::File::open(path)
-        .await
-        .map_err(|source| file_error(path, &source))?;
-    let length = file
-        .metadata()
-        .await
-        .map_err(|source| file_error(path, &source))?
-        .len();
-    Ok((file, length))
-}
-
-async fn with_body(
-    builder: RequestBuilder,
-    prepared: &Prepared,
-) -> Result<RequestBuilder, AppError> {
-    Ok(match &prepared.body {
-        PreparedBody::None => builder,
-        PreparedBody::Bytes(bytes) => builder.body(bytes.clone()),
-        PreparedBody::File(path) => {
-            let (file, length) = open(path).await?;
-            let has_length = prepared
-                .headers
-                .iter()
-                .any(|(name, _)| name == CONTENT_LENGTH);
-            let builder = if has_length {
-                builder
-            } else {
-                builder.header(CONTENT_LENGTH, length)
-            };
-            builder.body(reqwest::Body::from(file))
-        }
-        PreparedBody::Multipart(parts) => {
-            let mut form = Form::new();
-            for part in parts {
-                form = match &part.value {
-                    PartValue::Text(text) => form.text(part.name.clone(), text.clone()),
-                    PartValue::File(path) => {
-                        let (file, length) = open(path).await?;
-                        let name = path
-                            .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_default();
-                        let body = Part::stream_with_length(reqwest::Body::from(file), length)
-                            .file_name(name);
-                        form.part(part.name.clone(), body)
-                    }
-                };
-            }
-            builder.multipart(form)
-        }
-    })
 }
 
 fn version_text(version: Version) -> String {
@@ -243,6 +137,8 @@ fn head(exchange: &Exchange, response: &Response, ttfb_ms: u32) -> ResponseMeta 
         truncated: false,
         ttfb_ms,
         total_ms: ttfb_ms,
+        // Measured once the body is read (plan 03b §6.4).
+        timing: Timing::default(),
         tls_verified: exchange.verify_tls && response.url().scheme() == "https",
         unresolved: Vec::new(),
     }

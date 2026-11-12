@@ -1,0 +1,14 @@
+auth:
+  auth_url: "{{idp}}/authorize"
+  client_auth: body
+  client_id: papan-desktop
+  client_secret: "{{client_secret}}"
+  grant: authorization_code
+  redirect_port: 8765
+  scope: read write
+  token_url: "{{idp}}/token"
+  type: oauth2
+kind: http
+method: GET
+name: OAuth 2 authorization code, all fields
+url: https://api.example.com/me

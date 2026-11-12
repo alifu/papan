@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { z } from "zod";
-import type { Settings } from "../../ipc/bindings";
+import type { HttpVersion, Settings } from "../../ipc/bindings";
 
 export interface SettingsEditorProps {
   readonly settings: Settings;
@@ -43,6 +43,18 @@ export function SettingsEditor({ settings, onChange }: SettingsEditorProps) {
           onChange={(e) => onChange({ ...settings, verify_tls: e.target.checked })}
         />
         Verify TLS certificates
+      </label>
+      <label>
+        HTTP version
+        <select
+          aria-label="HTTP version"
+          value={settings.http_version}
+          onChange={(e) => onChange({ ...settings, http_version: e.target.value as HttpVersion })}
+        >
+          <option value="auto">Automatic</option>
+          <option value="http1">HTTP/1.1</option>
+          <option value="http2">HTTP/2</option>
+        </select>
       </label>
       <label>
         Timeout (ms, 0 = none)

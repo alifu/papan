@@ -2,8 +2,10 @@ import { useEffect } from "react";
 import { useCollectionsStore } from "../features/collections/collectionsStore";
 import { useEnvStore } from "../features/environments/envStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
+import { useNetworkStore } from "../features/network/networkStore";
 import { ToastHost } from "../ui/Toast";
 import { MenuBar } from "./MenuBar";
+import { ShellDialogs } from "./ShellDialogs";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { TabPanel } from "./TabPanel";
@@ -23,6 +25,7 @@ export function AppShell() {
   useEffect(() => {
     void useCollectionsStore.getState().load();
     void useScratchStore.getState().load();
+    void useNetworkStore.getState().loadProxyMode();
     const unlisten = useCollectionsStore.getState().subscribe();
     const unlistenEnv = useEnvStore.getState().subscribe();
     return () => {
@@ -62,6 +65,7 @@ export function AppShell() {
         </main>
       </div>
       <StatusBar />
+      <ShellDialogs />
       <ToastHost />
     </div>
   );

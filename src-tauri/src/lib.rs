@@ -40,15 +40,27 @@ pub fn run() {
             start_logging(app.handle());
             ipc_builder.mount_events(app);
             app.manage(store::StoreState::new(open_store(app.handle())?));
-            app.manage(open_http_engine(app.handle())?);
-            app.manage(open_vars(app.handle())?);
+            let vault = open_vault(app.handle())?;
+            app.manage(open_http_engine(
+                app.handle(),
+                std::sync::Arc::clone(&vault),
+            )?);
+            app.manage(vars::commands::VarsState::new(vault));
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Cookie saves are debounced; write any pending ones before the process ends.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(engine) = app.try_state::<engine::http::HttpEngine>() {
+                    tauri::async_runtime::block_on(engine.cookies().flush());
+                }
+            }
+        });
 }
 
 /// Logging is not essential to using the app, so a failure here is reported on stderr
@@ -81,7 +93,10 @@ fn open_store(app: &tauri::AppHandle) -> Result<store::Store, error::AppError> {
 }
 
 /// Sending requests is essential too; its cache dir is emptied at startup.
-fn open_http_engine(app: &tauri::AppHandle) -> Result<engine::http::HttpEngine, error::AppError> {
+fn open_http_engine(
+    app: &tauri::AppHandle,
+    vault: std::sync::Arc<dyn vars::vault::SecretStore>,
+) -> Result<engine::http::HttpEngine, error::AppError> {
     let locate = |found: Result<std::path::PathBuf, tauri::Error>| {
         found.map_err(|source| {
             error::AppError::internal("Could not locate the app directories.")
@@ -91,13 +106,18 @@ fn open_http_engine(app: &tauri::AppHandle) -> Result<engine::http::HttpEngine, 
     let cache_dir = locate(app.path().app_cache_dir())?;
     let app_data = locate(app.path().app_data_dir())?;
     let version = app.package_info().version.to_string();
-    engine::http::HttpEngine::new(&cache_dir, &app_data, &version)
+    Ok(
+        engine::http::HttpEngine::new(&cache_dir, &app_data, &version)?
+            .with_vault(&app_data, vault),
+    )
 }
 
 /// Secrets: an encrypted vault whose key is in the OS keychain. Nothing is opened here
 /// (the first secret access does it). Debug builds honour `PAPAN_SECRET_STORE=memory`
-/// so `tauri dev` does not prompt on every rebuild.
-fn open_vars(app: &tauri::AppHandle) -> Result<vars::commands::VarsState, error::AppError> {
+/// so `tauri dev` does not prompt on every rebuild. Variables and network settings share it.
+fn open_vault(
+    app: &tauri::AppHandle,
+) -> Result<std::sync::Arc<dyn vars::vault::SecretStore>, error::AppError> {
     use std::sync::Arc;
     use vars::vault::{FileVault, OsKeys, SecretStore};
 
@@ -105,7 +125,7 @@ fn open_vars(app: &tauri::AppHandle) -> Result<vars::commands::VarsState, error:
     if std::env::var("PAPAN_SECRET_STORE").as_deref() == Ok("memory") {
         tracing::info!("secrets are kept in memory (PAPAN_SECRET_STORE=memory)");
         let vault = vars::vault::MemoryVault::new(vars::types::SecretStorageMode::SessionOnly);
-        return Ok(vars::commands::VarsState::new(Arc::new(vault)));
+        return Ok(Arc::new(vault));
     }
     let app_data = app.path().app_data_dir().map_err(|source| {
         error::AppError::internal("Could not locate the app data directory.")
@@ -115,7 +135,7 @@ fn open_vars(app: &tauri::AppHandle) -> Result<vars::commands::VarsState, error:
         app_data.join("secrets.vault"),
         OsKeys::new(),
     ));
-    Ok(vars::commands::VarsState::new(vault))
+    Ok(vault)
 }
 
 /// Keeps `src/ipc/bindings.ts` in step with the Rust commands during development.

@@ -49,6 +49,10 @@
   --syntax-var-ok: #0A4F7A;
   --syntax-var-secret: #7A4B00;
   --syntax-var-dynamic: #6B2E9E;
+  --timing-dns: #0B4F9E;
+  --timing-connect: #7A2E8E;
+  --timing-wait: #9A3D00;
+  --timing-download: #0F6B2F;
 }
 
 :root[data-theme="dark"] {
@@ -87,4 +91,8 @@
   --syntax-var-ok: #6FC3FF;
   --syntax-var-secret: #FFD166;
   --syntax-var-dynamic: #D8A0F0;
+  --timing-dns: #7CB7FF;
+  --timing-connect: #D8A0F0;
+  --timing-wait: #FFB070;
+  --timing-download: #8FD98F;
 }

@@ -13,6 +13,7 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 
 use crate::commands;
 use crate::engine::http::commands as http;
+use crate::engine::http::net_commands as net;
 use crate::error::AppError;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
@@ -70,6 +71,16 @@ pub fn builder() -> Builder<tauri::Wry> {
             vars::preview_template,
             vars::secret_storage_status,
             vars::reset_secret_storage,
+            net::read_network_settings,
+            net::read_proxy_mode,
+            net::write_proxy_settings,
+            net::add_client_certificate,
+            net::remove_client_certificate,
+            net::list_cookies,
+            net::set_cookie,
+            net::delete_cookies,
+            net::export_curl,
+            net::import_curl,
         ])
         .events(collect_events![CollectionChanged])
         .typ::<AppError>()
@@ -201,6 +212,16 @@ mod tests {
             "previewTemplate",
             "secretStorageStatus",
             "resetSecretStorage",
+            "readNetworkSettings",
+            "readProxyMode",
+            "writeProxySettings",
+            "addClientCertificate",
+            "removeClientCertificate",
+            "listCookies",
+            "setCookie",
+            "deleteCookies",
+            "exportCurl",
+            "importCurl",
         ];
 
         let missing: Vec<&str> = expected

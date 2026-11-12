@@ -48,6 +48,8 @@ const SYNTAX_TOKENS = [
   "--syntax-var-dynamic",
 ] as const;
 
+const TIMING_TOKENS = ["--timing-dns", "--timing-connect", "--timing-wait", "--timing-download"] as const;
+
 const PAIRS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["--color-text", ["--color-panel-bg", "--color-content-bg", "--color-status-bg", "--toolbar-bg", "--button-bg", "--button-hover-bg", "--button-active-bg"]],
   ["--color-text-muted", ["--color-panel-bg", "--color-content-bg"]],
@@ -56,6 +58,7 @@ const PAIRS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["--color-selected-text", ["--color-selected-bg"]],
   ["--color-error-text", ["--color-status-bg", "--color-content-bg"]],
   ...SYNTAX_TOKENS.map((token) => [token, ["--color-content-bg"]] as const),
+  ...TIMING_TOKENS.map((token) => [token, ["--color-content-bg", "--color-panel-bg"]] as const),
 ];
 
 const themes: ReadonlyArray<readonly [string, TokenMap]> = [

@@ -5,6 +5,7 @@ mod crypto;
 mod file_vault;
 mod keys;
 mod os_keys;
+pub mod sealed;
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};

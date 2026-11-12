@@ -1,15 +1,19 @@
 //! `HttpEngine`: the plain-Rust API behind the HTTP commands (plan 03 §6). Managed by
 //! Tauri as the engine state; tests drive it directly against a local server.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::header::HeaderName;
 
 use super::build::{build, PartValue, Prepared, PreparedBody, PreparedPart, INVALID_URL_MESSAGE};
-use super::client::{jar_key, Clients};
+use super::client::{jar_key, ClientSelector, Clients};
+use super::cookie_jars::{CookieJars, Persisted};
 use super::grants::{grant_scope, Grants};
 use super::inflight::Inflight;
+use super::network::{NetConfig, Network};
 use super::resolve::Resolved;
 use super::responses::{validate_id, Responses, MAX_BODY_BYTES};
 use super::send::{execute, Exchange};
@@ -17,9 +21,10 @@ use super::types::{PickedFile, ResponseBody, ResponseMeta};
 use crate::error::{AppError, ErrorCode};
 use crate::store::history::{Outcome, Sent};
 use crate::store::request_model::validate_content;
-use crate::store::types::{RequestContent, RequestLocation};
+use crate::store::types::{Auth, RequestContent, RequestLocation};
 use crate::store::StoreState;
 use crate::vars::template;
+use crate::vars::vault::{MemoryVault, SecretStore};
 
 const CONTENT_LABEL: &str = "Request";
 const UNNAMED: &str = "Untitled";
@@ -27,7 +32,9 @@ const UNNAMED: &str = "Untitled";
 #[derive(Debug)]
 pub struct HttpEngine {
     version: String,
-    clients: Clients,
+    clients: Arc<Clients>,
+    cookies: Arc<CookieJars>,
+    network: Arc<Network>,
     responses: Responses,
     inflight: Inflight,
     grants: Grants,
@@ -35,16 +42,44 @@ pub struct HttpEngine {
 }
 
 impl HttpEngine {
-    /// Response bodies go under `cache_dir`; file grants live in `app_data`.
+    /// Response bodies go under `cache_dir`; file grants and network settings live in
+    /// `app_data`. Secrets are kept in memory until [`HttpEngine::with_vault`].
     pub fn new(cache_dir: &Path, app_data: &Path, version: &str) -> Result<Self, AppError> {
+        let clients = Arc::new(Clients::default());
         Ok(Self {
             version: version.to_string(),
-            clients: Clients::default(),
+            cookies: Arc::new(CookieJars::new(Arc::clone(&clients), None)),
+            clients,
+            network: Arc::new(Network::load(app_data, Arc::new(MemoryVault::default()))),
             responses: Responses::new(cache_dir)?,
             inflight: Inflight::default(),
             grants: Grants::load(app_data),
             max_body_bytes: MAX_BODY_BYTES,
         })
+    }
+
+    /// Network secrets and the cookie key are read from `vault`; jars persist under `cookies`.
+    #[must_use]
+    pub fn with_vault(self, app_data: &Path, vault: Arc<dyn SecretStore>) -> Self {
+        let persisted = Persisted {
+            dir: app_data.join("cookies"),
+            vault: Arc::clone(&vault),
+        };
+        Self {
+            cookies: Arc::new(CookieJars::new(Arc::clone(&self.clients), Some(persisted))),
+            network: Arc::new(Network::load(app_data, vault)),
+            ..self
+        }
+    }
+
+    /// The machine-local network settings.
+    pub fn network(&self) -> Arc<Network> {
+        Arc::clone(&self.network)
+    }
+
+    /// The cookie jars (the cookie manager, plan 03b §6.5).
+    pub fn cookies(&self) -> Arc<CookieJars> {
+        Arc::clone(&self.cookies)
     }
 
     /// Test-only: a lower body cap.
@@ -78,7 +113,13 @@ impl HttpEngine {
         if let Some(error) = undefined_in_host(resolved) {
             return Err(error);
         }
-        match self.send_inner(request_id, location, resolved).await {
+        let config = self.network_config().await?;
+        let resolved = with_secret(&with_digest_secret(resolved), config.password()).into_owned();
+        let resolved = &resolved;
+        match self
+            .send_inner(request_id, location, resolved, config)
+            .await
+        {
             Ok(meta) => Ok(ResponseMeta {
                 url: resolved.redact(&meta.url),
                 unresolved: resolved.unresolved.clone(),
@@ -93,6 +134,7 @@ impl HttpEngine {
         request_id: &str,
         location: &RequestLocation,
         resolved: &Resolved,
+        config: Arc<NetConfig>,
     ) -> Result<ResponseMeta, AppError> {
         let content = &resolved.content;
         let id = validate_id(request_id)?;
@@ -105,6 +147,8 @@ impl HttpEngine {
         let built = build(content, &self.version)?;
         let prepared = self.authorize(location, with_secret_headers(built, resolved))?;
         let settings = content.settings;
+        let jar = jar_key(location);
+        self.cookies.open(&jar).await?;
         tracing::info!(
             method = %prepared.method,
             url = %resolved.loggable_url(),
@@ -112,20 +156,42 @@ impl HttpEngine {
         );
         let exchange = Exchange {
             request_id: id.clone(),
-            client: self
-                .clients
-                .client(&jar_key(location), settings.verify_tls)?,
+            selector: ClientSelector::new(
+                Arc::clone(&self.clients),
+                self.network.vault(),
+                config,
+                Some(&jar),
+                settings.verify_tls,
+                settings.http_version,
+            ),
             prepared,
             timeout: (settings.timeout_ms > 0)
                 .then(|| Duration::from_millis(settings.timeout_ms.into())),
             follow_redirects: settings.follow_redirects,
             verify_tls: settings.verify_tls,
+            http_version: settings.http_version,
             body_file: self.responses.path(&id)?,
             max_body_bytes: self.max_body_bytes,
         };
-        let meta = self.inflight.run(&id, execute(exchange)).await?;
+        let sent = self.inflight.run(&id, execute(exchange)).await;
+        if settings.verify_tls {
+            self.cookies.changed(&jar);
+        }
+        let meta = sent?;
         self.responses.keep(&id, meta.content_type.clone());
         Ok(meta)
+    }
+
+    /// The network settings for one send, read off the async runtime (the first read
+    /// may open the vault).
+    async fn network_config(&self) -> Result<Arc<NetConfig>, AppError> {
+        let network = Arc::clone(&self.network);
+        tokio::task::spawn_blocking(move || network.current())
+            .await
+            .map_err(|source| {
+                AppError::internal("Could not read the network settings.")
+                    .with_detail(source.to_string())
+            })?
     }
 
     /// Every file to upload must be granted; paths are replaced by their canonical form.
@@ -177,7 +243,7 @@ impl HttpEngine {
     }
 
     pub fn clear_cookies(&self, location: &RequestLocation) {
-        self.clients.clear(&jar_key(location));
+        self.cookies.clear(&jar_key(location));
     }
 
     /// Grants a file picked in the native dialog to the request at `location`.
@@ -192,6 +258,35 @@ impl HttpEngine {
         to: &RequestLocation,
     ) -> Result<(), AppError> {
         self.grants.carry(&grant_scope(from), &grant_scope(to))
+    }
+}
+
+/// The Digest password is masked like a secret value (plan 03b §6.3).
+fn with_digest_secret(resolved: &Resolved) -> Cow<'_, Resolved> {
+    match &resolved.content.auth {
+        Auth::Digest { password, .. } => with_secret(resolved, Some(password)),
+        _ => Cow::Borrowed(resolved),
+    }
+}
+
+/// `resolved` with `secret` added to the values masked in the URL and errors; the proxy
+/// password goes through here for every send (§15.2).
+fn with_secret<'a>(resolved: &'a Resolved, secret: Option<&str>) -> Cow<'a, Resolved> {
+    match secret {
+        Some(secret)
+            if !secret.is_empty() && !resolved.secret_values.iter().any(|s| s == secret) =>
+        {
+            Cow::Owned(Resolved {
+                secret_values: resolved
+                    .secret_values
+                    .iter()
+                    .cloned()
+                    .chain([secret.to_string()])
+                    .collect(),
+                ..resolved.clone()
+            })
+        }
+        _ => Cow::Borrowed(resolved),
     }
 }
 

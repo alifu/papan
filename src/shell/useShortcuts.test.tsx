@@ -2,6 +2,7 @@ import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../ui/memoryStorage";
 import { useLayoutStore } from "./layoutStore";
+import { copyAsCurl } from "../features/curl/copyAsCurl";
 import { useShortcuts } from "./useShortcuts";
 import { useTabsStore } from "./tabsStore";
 
@@ -16,6 +17,7 @@ function press(init: KeyboardEventInit): boolean {
   return event.defaultPrevented;
 }
 
+vi.mock("../features/curl/copyAsCurl", () => ({ copyAsCurl: vi.fn() }));
 vi.mock("../features/scratch/api", () => ({
   createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
 }));
@@ -54,6 +56,12 @@ describe("useShortcuts", () => {
     it("Mod+B toggles the sidebar", () => {
       expect(press({ key: "b", ...mod })).toBe(true);
       expect(useLayoutStore.getState().sidebarCollapsed).toBe(true);
+    });
+
+    it("Mod+Shift+C copies as cURL", () => {
+      expect(press({ key: "C", shiftKey: true, ...mod })).toBe(true);
+      expect(copyAsCurl).toHaveBeenCalled();
+      expect(press({ key: "C", shiftKey: true, ...wrongMod })).toBe(false);
     });
 
     it("ignores Shift, Alt, the wrong modifier and other keys", () => {

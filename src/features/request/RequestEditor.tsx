@@ -4,6 +4,9 @@ import { Splitter } from "../../ui/Splitter";
 import { Tabs } from "../../ui/Tabs";
 import { subscribeCollectionChanged } from "../collections/api";
 import "../collections/collections.css";
+import { reportError, showToast } from "../../ui/toastStore";
+import { importCurl } from "../curl/api";
+import { useNetworkStore } from "../network/networkStore";
 import { useEffectiveVariables } from "../environments/useEffectiveVariables";
 import { ResponseViewer } from "../response/ResponseViewer";
 import { AuthEditor } from "./AuthEditor";
@@ -34,6 +37,18 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   const tab = useRequestStore((s) => s.byTab[tabId]);
   const { load, edit, editUrl, editParams, save, send, cancel } = useRequestStore.getState();
   const variables = useEffectiveVariables(location);
+  const proxyActive = useNetworkStore((s) => s.proxyMode === "custom");
+
+  const applyCurl = async (text: string) => {
+    try {
+      const imported = await importCurl(text);
+      edit(tabId, (c) => ({ ...c, ...imported.content }));
+      editUrl(tabId, imported.content.url);
+      if (imported.warnings.length > 0) showToast({ kind: "info", message: imported.warnings.join(" ") });
+    } catch (err) {
+      reportError(err);
+    }
+  };
   const [section, setSection] = useState("params");
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT);
   const resize = (h: number) => setEditorHeight(Math.min(EDITOR_MAX_HEIGHT, Math.max(EDITOR_MIN_HEIGHT, h)));
@@ -81,6 +96,8 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         sending={tab.sending}
         dirty={tab.draft !== null}
         tlsVerified={content.settings.verify_tls}
+        proxyActive={proxyActive}
+        onImportCurl={(text) => void applyCurl(text)}
         onMethod={(method) => edit(tabId, (c) => ({ ...c, method }))}
         onUrl={(url) => editUrl(tabId, url)}
         onSend={() => void send(tabId, location)}

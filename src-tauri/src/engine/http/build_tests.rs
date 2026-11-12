@@ -200,6 +200,22 @@ fn bearer_auth_sets_the_authorization_header() {
 }
 
 #[test]
+fn digest_auth_sends_no_authorization_until_challenged() {
+    let prepared = with_auth(Auth::Digest {
+        username: "u".into(),
+        password: "p".into(),
+    });
+
+    assert_eq!(header_of(&prepared, "authorization"), None);
+    assert_eq!(
+        prepared
+            .digest
+            .map(|digest| (digest.username, digest.password)),
+        Some(("u".into(), "p".into()))
+    );
+}
+
+#[test]
 fn bodies_set_their_content_type() {
     let cases = [
         (

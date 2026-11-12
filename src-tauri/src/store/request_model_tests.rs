@@ -3,6 +3,7 @@ use serde_json::json;
 use super::*;
 use crate::error::ErrorCode;
 use crate::store::request_emit::{canonical_extra, merge};
+use crate::store::types::{ApiKeyPlacement, Auth};
 
 fn extra(value: Value) -> Extra {
     value
@@ -34,7 +35,7 @@ fn absent_sections_parse_to_defaults() {
 
 #[test]
 fn unknown_auth_and_body_types_parse_to_unsupported() {
-    let raw = extra(json!({"auth": {"type": "oauth2"}, "body": {"type": "graphql"}}));
+    let raw = extra(json!({"auth": {"type": "hawk"}, "body": {"type": "graphql"}}));
 
     let content = parse_sections("r", &raw).unwrap();
 
@@ -203,7 +204,7 @@ fn merge_keeps_unchanged_sections_and_rewrites_changed_ones() {
     let raw = extra(json!({
         "headers": [{"name": "A", "value": "1", "trace": true}],
         "settings": {"timeout_ms": 5000, "retries": 3},
-        "auth": {"type": "oauth2", "flows": {}},
+        "auth": {"type": "hawk", "flows": {}},
     }));
     let disk = parse_sections("r", &raw).unwrap();
     let edited = RequestContent {

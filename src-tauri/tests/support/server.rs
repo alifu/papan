@@ -12,8 +12,11 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use axum::{Json, Router};
+use axum_server::tls_rustls::RustlsConfig;
 use base64::Engine as _;
 use serde_json::{json, Value};
+
+use super::digest;
 
 const DRIP_INTERVAL: Duration = Duration::from_millis(100);
 const CHUNK_BYTES: usize = 64 * 1024;
@@ -56,12 +59,34 @@ pub async fn spawn() -> TestServer {
 /// The same router over HTTPS with a self-signed certificate for `127.0.0.1`.
 pub async fn spawn_tls() -> TestServer {
     let certified = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
-    let config = axum_server::tls_rustls::RustlsConfig::from_pem(
+    let config = RustlsConfig::from_pem(
         certified.cert.pem().into_bytes(),
         certified.signing_key.serialize_pem().into_bytes(),
     )
     .await
     .unwrap();
+    serve_tls(config)
+}
+
+/// HTTPS that offers only `http/1.1` by ALPN: a forced HTTP/2 cannot connect.
+pub async fn spawn_tls_http1() -> TestServer {
+    use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+    let certified = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+        certified.signing_key.serialize_der(),
+    ));
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    let mut config = rustls::ServerConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(vec![certified.cert.der().clone()], key)
+        .unwrap();
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    serve_tls(RustlsConfig::from_config(Arc::new(config)))
+}
+
+pub fn serve_tls(config: RustlsConfig) -> TestServer {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let server = axum_server::from_tcp_rustls(listener, config).unwrap();
@@ -92,6 +117,8 @@ fn router(hits: Arc<AtomicUsize>) -> Router {
         .route("/cookies", get(cookies))
         .route("/gzip", get(gzip))
         .route("/fixture/{name}", get(fixture))
+        .route("/digest/{algorithm}/{qop}", any(digest::digest))
+        .route("/basic", any(digest::basic))
         .layer(axum::middleware::from_fn(count))
 }
 
@@ -104,6 +131,7 @@ fn header_list(headers: &HeaderMap) -> Vec<Value> {
 
 async fn echo(request: Request) -> Json<Value> {
     let method = request.method().to_string();
+    let version = format!("{:?}", request.version());
     let query = request.uri().query().unwrap_or_default().to_string();
     let headers = header_list(request.headers());
     let is_multipart = request
@@ -122,6 +150,7 @@ async fn echo(request: Request) -> Json<Value> {
     };
     Json(json!({
         "method": method,
+        "version": version,
         "query": query,
         "headers": headers,
         "body": base64::engine::general_purpose::STANDARD.encode(body),

@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::error::ErrorCode;
+use crate::store::types::RequestContent;
+use crate::vars::types::{SecretEdit, SecretStorageStatus};
 
 /// A response header; non-UTF-8 values are decoded lossily.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -40,9 +42,21 @@ pub struct ResponseMeta {
     pub truncated: bool,
     pub ttfb_ms: u32,
     pub total_ms: u32,
+    pub timing: Timing,
     pub tls_verified: bool,
     /// Variable names that were sent as typed because they did not resolve.
     pub unresolved: Vec<String>,
+}
+
+/// Where the time of a send went (plan 03b §6.4). `connect_ms` is TCP + TLS (+ proxy
+/// `CONNECT`); `reused` means no new connection was opened. Redirect hops are summed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct Timing {
+    pub dns_ms: u32,
+    pub connect_ms: u32,
+    pub wait_ms: u32,
+    pub download_ms: u32,
+    pub reused: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -81,4 +95,108 @@ pub struct HistoryEntry {
     pub error_code: Option<ErrorCode>,
     pub total_ms: u32,
     pub size_bytes: u32,
+}
+
+/// Machine-local proxy choice (plan 03b §4.1). `System` is the OS proxy configuration.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyMode {
+    #[default]
+    System,
+    None,
+    Custom,
+}
+
+/// The proxy as shown in Network settings; the password itself is never returned.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProxySettings {
+    pub mode: ProxyMode,
+    pub url: String,
+    pub username: String,
+    pub has_password: bool,
+    pub bypass: Vec<String>,
+}
+
+/// The proxy as written by Network settings; the password is write-only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProxyInput {
+    pub mode: ProxyMode,
+    pub url: String,
+    pub username: String,
+    pub password: SecretEdit,
+    pub bypass: Vec<String>,
+}
+
+/// An imported client certificate; the PEM bundle lives in the vault only.
+/// `port` `None` matches any port; `missing` means the vault no longer holds it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct ClientCertificate {
+    pub id: String,
+    pub host: String,
+    pub port: Option<u16>,
+    pub cert_name: String,
+    pub key_name: String,
+    pub added_at_ms: f64,
+    pub missing: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct NetworkSettings {
+    pub proxy: ProxySettings,
+    pub certificates: Vec<ClientCertificate>,
+    pub storage: SecretStorageStatus,
+}
+
+/// A cookie in a jar, as listed by the cookie manager.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct StoredCookie {
+    pub name: String,
+    pub value: String,
+    pub domain: String,
+    pub path: String,
+    pub expires_at_ms: Option<f64>,
+    pub http_only: bool,
+    pub secure: bool,
+}
+
+/// A cookie added or replaced by the cookie manager; `expires_at_ms` `None` is a session cookie.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct CookieInput {
+    pub name: String,
+    pub value: String,
+    pub domain: String,
+    pub path: String,
+    pub expires_at_ms: Option<f64>,
+    pub http_only: bool,
+    pub secure: bool,
+}
+
+/// Deletes every cookie of `domain`, or the one cookie named by domain + path + name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CookieFilter {
+    pub domain: String,
+    pub path: Option<String>,
+    pub name: Option<String>,
+}
+
+/// A parsed cURL command and what was ignored in it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CurlImport {
+    pub content: RequestContent,
+    pub warnings: Vec<String>,
+}
+
+/// OAuth 2 token state for one configuration (phase B, commands 47–50; not registered yet).
+/// No field ever holds a token.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct OAuthStatus {
+    pub config_key: String,
+    pub has_token: bool,
+    pub expires_at_ms: Option<f64>,
+    pub can_refresh: bool,
+    pub scope: String,
+    pub auth_host: Option<String>,
+    pub token_host: String,
+    pub plaintext: bool,
+    pub redirect_uri: Option<String>,
 }

@@ -76,12 +76,15 @@ pub fn next_hop(
             current.body.clone()
         },
         secret_headers: current.secret_headers.clone(),
+        // The Digest password is a secret like any other: never offered to a new origin.
+        digest: current.digest.clone().filter(|_| !cross_origin),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::http::digest::DigestCredentials;
 
     fn prepared(method: Method, url: &str) -> Prepared {
         let header = |name: &'static str, value: &'static str| {
@@ -103,6 +106,10 @@ mod tests {
             ],
             body: PreparedBody::Bytes(b"{}".to_vec()),
             secret_headers: vec![HeaderName::from_static("x-custom-key")],
+            digest: Some(DigestCredentials {
+                username: "u".into(),
+                password: "p".into(),
+            }),
         }
     }
 
@@ -133,6 +140,7 @@ mod tests {
         ] {
             let next = hop(&current, 307, location).unwrap();
             assert_eq!(names(&next), ["content-type", "accept"], "{location}");
+            assert_eq!(next.digest, None, "{location}");
         }
     }
 
@@ -144,6 +152,7 @@ mod tests {
 
         assert_eq!(next.url.as_str(), "https://a.test/x/z?q=1");
         assert_eq!(next.headers.len(), 6);
+        assert_eq!(next.digest, current.digest);
         assert_eq!((next.method, next.body), (Method::PUT, current.body));
     }
 

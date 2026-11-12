@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::types::{ApiKeyPlacement, Pair};
+use crate::store::types::{ApiKeyPlacement, ClientAuth, OAuthGrant, Pair};
 use crate::vars::dynamic::FixedDynamics;
 use crate::vars::scopes::{Layer, Value};
 use crate::vars::types::VarSource;
@@ -139,6 +139,46 @@ fn bodies_and_auth_kinds_resolve() {
             token: "S E".into()
         }
     );
+}
+
+#[test]
+fn digest_and_oauth2_text_fields_resolve_and_choices_do_not() {
+    let dynamics = FixedDynamics::default();
+    let oauth2 = |text: &str, secret: &str| Auth::Oauth2 {
+        grant: OAuthGrant::AuthorizationCode,
+        auth_url: format!("https://{text}/a"),
+        token_url: format!("https://{text}/t"),
+        client_id: text.into(),
+        client_secret: secret.into(),
+        scope: text.into(),
+        client_auth: ClientAuth::Body,
+        redirect_port: 8765,
+    };
+    let digest = RequestContent {
+        auth: Auth::Digest {
+            username: "{{v}}".into(),
+            password: "{{s}}".into(),
+        },
+        ..RequestContent::default()
+    };
+    let oauth = RequestContent {
+        auth: oauth2("{{v}}", "{{s}}"),
+        ..RequestContent::default()
+    };
+
+    let digest_out = resolve_content(&digest, &scopes(), &dynamics);
+    let oauth_out = resolve_content(&oauth, &scopes(), &dynamics);
+
+    assert_eq!(
+        digest_out.content.auth,
+        Auth::Digest {
+            username: "V".into(),
+            password: "S E".into()
+        }
+    );
+    assert_eq!(digest_out.secret_values, ["S E"]);
+    assert_eq!(oauth_out.content.auth, oauth2("V", "S E"));
+    assert_eq!(oauth_out.secret_values, ["S E"]);
 }
 
 #[test]

@@ -149,7 +149,7 @@ fn io_error(path: &Path, source: std::io::Error) -> AppError {
 
 /// Replaces `target` through a temp file in the same directory and a rename. The file is
 /// readable by its owner only.
-fn write_private(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
+pub(super) fn write_private(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
     let parent = target
         .parent()
         .ok_or_else(|| AppError::internal("A file operation failed.").with_detail("no parent"))?;

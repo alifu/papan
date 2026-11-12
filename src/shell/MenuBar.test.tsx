@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../ui/memoryStorage";
+import { useDialogsStore } from "./dialogsStore";
 import { useLayoutStore } from "./layoutStore";
 import { MenuBar } from "./MenuBar";
 import { useTabsStore } from "./tabsStore";
@@ -42,5 +43,17 @@ describe("MenuBar", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "View" }));
     await userEvent.click(screen.getByRole("menuitem", { name: /Toggle Sidebar/ }));
     expect(useLayoutStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it.each([
+    ["File", /Import cURL/, "import-curl"],
+    ["Edit", /Network settings/, "network"],
+    ["Request", /Manage cookies/, "cookies"],
+  ])("%s menu opens the %s dialog", async (menu, item, dialog) => {
+    useDialogsStore.setState({ open: null });
+    render(<MenuBar />);
+    await userEvent.click(screen.getByRole("menuitem", { name: menu }));
+    await userEvent.click(screen.getByRole("menuitem", { name: item }));
+    expect(useDialogsStore.getState().open).toBe(dialog);
   });
 });

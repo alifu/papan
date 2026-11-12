@@ -1,0 +1,8 @@
+auth:
+  client_id: papan-desktop
+  grant: client_credentials
+  type: oauth2
+kind: http
+method: GET
+name: Missing token URL
+url: https://api.example.com/me

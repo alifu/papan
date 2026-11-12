@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResponseMeta } from "../../ipc/bindings";
+import { useDialogsStore } from "../../shell/dialogsStore";
 import * as api from "./api";
 import { ResponseViewer } from "./ResponseViewer";
 
@@ -20,6 +21,7 @@ const meta: ResponseMeta = {
   truncated: false,
   ttfb_ms: 5,
   total_ms: 12,
+  timing: { dns_ms: 0, connect_ms: 0, wait_ms: 0, download_ms: 0, reused: false },
   tls_verified: true,
   unresolved: [],
 };
@@ -111,5 +113,20 @@ describe("ResponseViewer", () => {
     vi.mocked(api.readResponseBody).mockRejectedValue({ code: "not_found", message: "gone" });
     render(<ResponseViewer response={meta} error={null} sending={false} />);
     expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
+  });
+
+  it("opens the timing popover from the time", async () => {
+    render(<ResponseViewer response={{ ...meta, timing: { dns_ms: 1, connect_ms: 2, wait_ms: 3, download_ms: 4, reused: true } }} error={null} sending={false} />);
+    await userEvent.click(screen.getByRole("button", { name: "12 ms" }));
+    expect(screen.getByRole("dialog", { name: "Timing" })).toHaveTextContent("Connection reused");
+    await userEvent.click(screen.getByRole("button", { name: "12 ms" }));
+    expect(screen.queryByRole("dialog", { name: "Timing" })).toBeNull();
+  });
+
+  it("opens the cookie manager from the Cookies tab", async () => {
+    render(<ResponseViewer response={meta} error={null} sending={false} />);
+    await userEvent.click(screen.getByRole("tab", { name: /cookies/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Manage cookies…" }));
+    expect(useDialogsStore.getState().open).toBe("cookies");
   });
 });

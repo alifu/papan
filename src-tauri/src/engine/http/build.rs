@@ -9,6 +9,7 @@ use reqwest::header::{HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE, USER
 use reqwest::Method;
 use url::Url;
 
+use super::digest::DigestCredentials;
 use crate::error::AppError;
 use crate::store::types::{ApiKeyPlacement, Auth, Body, KeyValue, Part, RequestContent};
 
@@ -50,6 +51,8 @@ pub struct Prepared {
     /// Headers carrying a secret beyond the well-known sensitive names (the API key
     /// header): dropped on a cross-origin redirect.
     pub secret_headers: Vec<HeaderName>,
+    /// Answered by `follow` on a Digest `401`; dropped on a cross-origin redirect.
+    pub digest: Option<DigestCredentials>,
 }
 
 impl Prepared {
@@ -100,7 +103,18 @@ pub fn build(content: &RequestContent, version: &str) -> Result<Prepared, AppErr
         headers: headers.into_iter().chain(missing).collect(),
         body,
         secret_headers,
+        digest: digest_credentials(&content.auth),
     })
+}
+
+fn digest_credentials(auth: &Auth) -> Option<DigestCredentials> {
+    match auth {
+        Auth::Digest { username, password } => Some(DigestCredentials {
+            username: username.clone(),
+            password: password.clone(),
+        }),
+        _ => None,
+    }
 }
 
 /// Scheme, host, port and path: never the query string, which may carry a key.
@@ -216,7 +230,12 @@ fn authorization(auth: &Auth) -> Result<Option<HeaderValue>, AppError> {
         }
         Auth::Bearer { token } => format!("Bearer {token}"),
         Auth::Unsupported => return Err(newer_papan("authentication")),
-        Auth::None | Auth::ApiKey { .. } => return Ok(None),
+        Auth::Oauth2 { .. } => {
+            return Err(AppError::invalid_input(
+                "OAuth 2 arrives in the next update.",
+            ))
+        }
+        Auth::None | Auth::ApiKey { .. } | Auth::Digest { .. } => return Ok(None),
     };
     header_value(&text).map(Some)
 }

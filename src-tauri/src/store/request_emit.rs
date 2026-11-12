@@ -4,21 +4,38 @@
 
 use serde_json::Value;
 
+use super::auth_model;
 use super::request_model::{self, Extra, Fields, AUTH, BODY, DISABLED_PARAMS, HEADERS, SECTIONS};
-use super::types::{ApiKeyPlacement, Auth, Body, KeyValue, Pair, Part, RequestContent, Settings};
+use super::types::{
+    ApiKeyPlacement, Auth, Body, ClientAuth, HttpVersion, KeyValue, OAuthGrant, Pair, Part,
+    RequestContent, Settings,
+};
 use crate::error::AppError;
 
 const ENTRY_KEYS: [&str; 4] = ["enabled", "file", "name", "value"];
 const BODY_KEYS: [&str; 4] = ["fields", "file", "parts", "text"];
-const AUTH_KEYS: [&str; 6] = [
+const AUTH_KEYS: [&str; 14] = [
+    "auth_url",
+    "client_auth",
+    "client_id",
+    "client_secret",
+    "grant",
     "name",
     "password",
     "placement",
+    "redirect_port",
+    "scope",
     "token",
+    "token_url",
     "username",
     "value",
 ];
-const SETTINGS_KEYS: [&str; 3] = ["follow_redirects", "timeout_ms", "verify_tls"];
+const SETTINGS_KEYS: [&str; 4] = [
+    "follow_redirects",
+    "http_version",
+    "timeout_ms",
+    "verify_tls",
+];
 const TYPE_KEY: &str = "type";
 
 /// `extra` with its five sections in canonical form (the rest untouched).
@@ -205,13 +222,9 @@ fn emit_auth(auth: &Auth, raw: Option<&Value>) -> Option<Value> {
     let canonical = match auth {
         Auth::None => return None,
         Auth::Unsupported => return raw.cloned(),
-        Auth::Basic { username, password } => typed(
-            "basic",
-            fields([
-                ("username", non_empty(username)),
-                ("password", non_empty(password)),
-            ]),
-        ),
+        Auth::Basic { username, password } => typed("basic", credentials(username, password)),
+        Auth::Digest { username, password } => typed("digest", credentials(username, password)),
+        oauth2 @ Auth::Oauth2 { .. } => typed("oauth2", oauth2_fields(oauth2)),
         Auth::Bearer { token } => typed("bearer", fields([("token", non_empty(token))])),
         Auth::ApiKey {
             name,
@@ -232,6 +245,58 @@ fn emit_auth(auth: &Auth, raw: Option<&Value>) -> Option<Value> {
     Some(Value::Object(overlay(canonical, raw, &AUTH_KEYS)))
 }
 
+fn credentials(username: &str, password: &str) -> Fields {
+    fields([
+        ("username", non_empty(username)),
+        ("password", non_empty(password)),
+    ])
+}
+
+/// `grant` and `token_url` are always written, `auth_url` for `authorization_code` only.
+fn oauth2_fields(auth: &Auth) -> Fields {
+    let Auth::Oauth2 {
+        grant,
+        auth_url,
+        token_url,
+        client_id,
+        client_secret,
+        scope,
+        client_auth,
+        redirect_port,
+    } = auth
+    else {
+        return Fields::new();
+    };
+    let (grant_name, auth_url) = match grant {
+        OAuthGrant::ClientCredentials => ("client_credentials", None),
+        OAuthGrant::AuthorizationCode => ("authorization_code", Some(text(auth_url))),
+    };
+    fields([
+        ("grant", Some(text(grant_name))),
+        ("auth_url", auth_url),
+        ("token_url", Some(text(token_url))),
+        ("client_id", non_empty(client_id)),
+        ("client_secret", non_empty(client_secret)),
+        ("scope", non_empty(scope)),
+        (
+            "client_auth",
+            (*client_auth == ClientAuth::Body).then(|| text("body")),
+        ),
+        (
+            "redirect_port",
+            (*redirect_port != 0).then(|| Value::Number((*redirect_port).into())),
+        ),
+    ])
+}
+
+fn http_version_name(version: HttpVersion) -> Option<Value> {
+    match version {
+        HttpVersion::Auto => None,
+        HttpVersion::Http1 => Some(text("http1")),
+        HttpVersion::Http2 => Some(text("http2")),
+    }
+}
+
 fn emit_settings(settings: &Settings, raw: Option<&Value>) -> Option<Value> {
     let default = Settings::default();
     let canonical = fields([
@@ -249,12 +314,14 @@ fn emit_settings(settings: &Settings, raw: Option<&Value>) -> Option<Value> {
             "verify_tls",
             (settings.verify_tls != default.verify_tls).then_some(Value::Bool(settings.verify_tls)),
         ),
+        ("http_version", http_version_name(settings.http_version)),
     ]);
     let all = overlay(canonical, raw, &SETTINGS_KEYS);
     (!all.is_empty()).then_some(Value::Object(all))
 }
 
-/// `content` as it reads back after a write: unnamed entries and empty file paths dropped.
+/// `content` as it reads back after a write: unnamed entries, empty file paths and the
+/// `auth_url` of a client-credentials grant dropped.
 pub fn normalise(content: &RequestContent) -> RequestContent {
     let named_kv = |entries: &[KeyValue]| -> Vec<KeyValue> {
         entries
@@ -290,6 +357,7 @@ pub fn normalise(content: &RequestContent) -> RequestContent {
             .collect(),
         headers: named_kv(&content.headers),
         body,
+        auth: auth_model::normalise_auth(&content.auth),
         ..content.clone()
     }
 }

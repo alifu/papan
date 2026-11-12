@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: HTTP/3
+settings:
+  http_version: h3
+url: https://example.com/h3

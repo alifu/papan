@@ -1,9 +1,12 @@
 import { useState } from "react";
 import type { AppError, ResponseMeta } from "../../ipc/bindings";
 import { toUserMessage } from "../../ipc/errors";
+import { useDialogsStore } from "../../shell/dialogsStore";
+import { Button } from "../../ui/Button";
 import { Tabs } from "../../ui/Tabs";
 import { BodyView } from "./BodyView";
 import { formatSize } from "./size";
+import { TimingBar } from "./TimingBar";
 import "./viewer.css";
 
 export interface ResponseViewerProps {
@@ -38,6 +41,8 @@ function PairTable({ label, rows }: { readonly label: string; readonly rows: rea
 
 function Loaded({ response }: { readonly response: ResponseMeta }) {
   const [pane, setPane] = useState<PaneId>("body");
+  const [showTiming, setShowTiming] = useState(false);
+  const manageCookies = () => useDialogsStore.getState().show("cookies");
   const redirected = response.url !== "";
   return (
     <>
@@ -45,7 +50,23 @@ function Loaded({ response }: { readonly response: ResponseMeta }) {
         <strong className={statusClass(response.status)}>
           {response.status} {response.status_text}
         </strong>
-        <span title={`Time to first byte: ${response.ttfb_ms} ms`}>{response.total_ms} ms</span>
+        <span className="timing-anchor">
+          <button
+            type="button"
+            className="timing-trigger"
+            aria-expanded={showTiming}
+            title={`Time to first byte: ${response.ttfb_ms} ms`}
+            onClick={() => setShowTiming((v) => !v)}
+            onKeyDown={(e) => e.key === "Escape" && setShowTiming(false)}
+          >
+            {response.total_ms} ms
+          </button>
+          {showTiming ? (
+            <div className="timing-popover" role="dialog" aria-label="Timing">
+              <TimingBar timing={response.timing} />
+            </div>
+          ) : null}
+        </span>
         <span>{formatSize(response.size_bytes)}</span>
         <span>{response.http_version}</span>
         {redirected ? <span title="Final URL">{response.url}</span> : null}
@@ -74,10 +95,13 @@ function Loaded({ response }: { readonly response: ResponseMeta }) {
           <PairTable label="Response headers" rows={response.headers.map((h) => [h.name, h.value] as const)} />
         ) : null}
         {pane === "cookies" ? (
-          <PairTable
-            label="Response cookies"
-            rows={response.cookies.map((c) => [c.name, cookieDetail(c)] as const)}
-          />
+          <>
+            <Button label="Manage cookies…" onClick={manageCookies} />
+            <PairTable
+              label="Response cookies"
+              rows={response.cookies.map((c) => [c.name, cookieDetail(c)] as const)}
+            />
+          </>
         ) : null}
       </Tabs>
     </>

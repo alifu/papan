@@ -6,9 +6,10 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
+use super::auth_model::{parse_auth, validate_auth};
 use super::model;
 use super::types::{
-    ApiKeyPlacement, Auth, Body, KeyValue, Pair, Part, RequestContent, Settings, DEFAULT_TIMEOUT_MS,
+    Body, HttpVersion, KeyValue, Pair, Part, RequestContent, Settings, DEFAULT_TIMEOUT_MS,
 };
 use super::yaml;
 use crate::error::AppError;
@@ -63,11 +64,15 @@ pub fn validate_content(label: &str, content: &RequestContent) -> Result<(), App
     validate_sections(label, content)
 }
 
-fn present(value: Option<&Value>) -> Option<&Value> {
+pub(super) fn present(value: Option<&Value>) -> Option<&Value> {
     value.filter(|value| !value.is_null())
 }
 
-fn as_map<'a>(label: &str, value: &'a Value, field: &str) -> Result<&'a Fields, AppError> {
+pub(super) fn as_map<'a>(
+    label: &str,
+    value: &'a Value,
+    field: &str,
+) -> Result<&'a Fields, AppError> {
     value
         .as_object()
         .ok_or_else(|| invalid(label, field, "must be a mapping."))
@@ -93,7 +98,7 @@ fn parse_list<T>(
         .collect()
 }
 
-fn opt_text(
+pub(super) fn opt_text(
     label: &str,
     fields: &Fields,
     prefix: &str,
@@ -108,12 +113,17 @@ fn opt_text(
     }
 }
 
-fn req_text(label: &str, fields: &Fields, prefix: &str, key: &str) -> Result<String, AppError> {
+pub(super) fn req_text(
+    label: &str,
+    fields: &Fields,
+    prefix: &str,
+    key: &str,
+) -> Result<String, AppError> {
     opt_text(label, fields, prefix, key)?
         .ok_or_else(|| invalid(label, &format!("{prefix}.{key}"), "is missing."))
 }
 
-fn text_or_empty(
+pub(super) fn text_or_empty(
     label: &str,
     fields: &Fields,
     prefix: &str,
@@ -191,42 +201,6 @@ fn parse_body(label: &str, value: Option<&Value>) -> Result<Body, AppError> {
     })
 }
 
-fn parse_auth(label: &str, value: Option<&Value>) -> Result<Auth, AppError> {
-    let Some(value) = present(value) else {
-        return Ok(Auth::None);
-    };
-    let fields = as_map(label, value, AUTH)?;
-    let text = |key| text_or_empty(label, fields, AUTH, key);
-    Ok(match req_text(label, fields, AUTH, "type")?.as_str() {
-        "none" => Auth::None,
-        "basic" => Auth::Basic {
-            username: text("username")?,
-            password: text("password")?,
-        },
-        "bearer" => Auth::Bearer {
-            token: text("token")?,
-        },
-        "api_key" => Auth::ApiKey {
-            name: text("name")?,
-            value: text("value")?,
-            placement: parse_placement(label, fields)?,
-        },
-        _ => Auth::Unsupported,
-    })
-}
-
-fn parse_placement(label: &str, fields: &Fields) -> Result<ApiKeyPlacement, AppError> {
-    match opt_text(label, fields, AUTH, "placement")?.as_deref() {
-        None | Some("header") => Ok(ApiKeyPlacement::Header),
-        Some("query") => Ok(ApiKeyPlacement::Query),
-        Some(_) => Err(invalid(
-            label,
-            "auth.placement",
-            "must be `header` or `query`.",
-        )),
-    }
-}
-
 fn parse_settings(label: &str, value: Option<&Value>) -> Result<Settings, AppError> {
     let Some(value) = present(value) else {
         return Ok(Settings::default());
@@ -243,7 +217,21 @@ fn parse_settings(label: &str, value: Option<&Value>) -> Result<Settings, AppErr
         follow_redirects: opt_bool(label, fields, SETTINGS, "follow_redirects")?.unwrap_or(true),
         timeout_ms,
         verify_tls: opt_bool(label, fields, SETTINGS, "verify_tls")?.unwrap_or(true),
+        http_version: parse_http_version(label, fields)?,
     })
+}
+
+fn parse_http_version(label: &str, fields: &Fields) -> Result<HttpVersion, AppError> {
+    match opt_text(label, fields, SETTINGS, "http_version")?.as_deref() {
+        None | Some("auto") => Ok(HttpVersion::Auto),
+        Some("http1") => Ok(HttpVersion::Http1),
+        Some("http2") => Ok(HttpVersion::Http2),
+        Some(_) => Err(invalid(
+            label,
+            "settings.http_version",
+            "must be `auto`, `http1` or `http2`.",
+        )),
+    }
 }
 
 fn timeout_error(label: &str) -> AppError {
@@ -306,20 +294,6 @@ fn validate_body(label: &str, body: &Body) -> Result<(), AppError> {
     }
 }
 
-fn validate_auth(label: &str, auth: &Auth) -> Result<(), AppError> {
-    let fields: Vec<(&str, &str)> = match auth {
-        Auth::Basic { username, password } => {
-            vec![("auth.username", username), ("auth.password", password)]
-        }
-        Auth::Bearer { token } => vec![("auth.token", token)],
-        Auth::ApiKey { name, value, .. } => vec![("auth.name", name), ("auth.value", value)],
-        Auth::None | Auth::Unsupported => Vec::new(),
-    };
-    fields
-        .into_iter()
-        .try_for_each(|(field, text)| check_text(label, field, text, MAX_ENTRY_VALUE_CHARS))
-}
-
 fn check_entries<'a>(
     label: &str,
     field: &str,
@@ -340,7 +314,12 @@ fn check_entries<'a>(
     })
 }
 
-fn check_text(label: &str, field: &str, text: &str, max_chars: usize) -> Result<(), AppError> {
+pub(super) fn check_text(
+    label: &str,
+    field: &str,
+    text: &str,
+    max_chars: usize,
+) -> Result<(), AppError> {
     if text.chars().count() > max_chars {
         return Err(invalid(
             label,
