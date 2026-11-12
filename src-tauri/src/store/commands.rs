@@ -12,6 +12,8 @@ use super::types::{
     TreeChange,
 };
 use super::{model, watcher, Store, StoreState};
+use crate::engine::http::types::HistoryEntry;
+use crate::engine::http::HttpEngine;
 use crate::error::AppError;
 
 type StoreResult<T> = Result<T, AppError>;
@@ -244,11 +246,42 @@ pub fn delete_scratch(state: State<'_, StoreState>, id: String) -> StoreResult<V
 #[specta::specta]
 pub fn move_scratch_to_collection(
     state: State<'_, StoreState>,
+    engine: State<'_, HttpEngine>,
     id: String,
     collection_id: String,
     target_folder: String,
 ) -> StoreResult<TreeChange> {
-    with_store(&state, |store| {
+    let change = with_store(&state, |store| {
         store.move_scratch_to_collection(&id, &collection_id, &target_folder)
-    })
+    })?;
+    // Upload grants follow the request; failing to carry them only means a new pick.
+    let from = RequestLocation::Scratch { id };
+    let to = RequestLocation::Collection {
+        collection_id,
+        path: change.path.clone().unwrap_or_default(),
+    };
+    if let Err(error) = engine.carry_grants(&from, &to) {
+        tracing::warn!(detail = ?error.detail, "{error}");
+    }
+    Ok(change)
+}
+
+/// Newest first.
+#[tauri::command]
+#[specta::specta]
+pub fn list_history(state: State<'_, StoreState>) -> StoreResult<Vec<HistoryEntry>> {
+    with_store(&state, |store| Ok(store.list_history()))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_history(state: State<'_, StoreState>) -> StoreResult<()> {
+    with_store(&state, |store| store.clear_history())
+}
+
+/// Creates a scratch request from a history snapshot.
+#[tauri::command]
+#[specta::specta]
+pub fn restore_history_entry(state: State<'_, StoreState>, id: String) -> StoreResult<ScratchItem> {
+    with_store(&state, |store| store.restore_history_entry(&id))
 }

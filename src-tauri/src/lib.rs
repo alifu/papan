@@ -40,6 +40,7 @@ pub fn run() {
             start_logging(app.handle());
             ipc_builder.mount_events(app);
             app.manage(store::StoreState::new(open_store(app.handle())?));
+            app.manage(open_http_engine(app.handle())?);
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");
@@ -76,6 +77,20 @@ fn open_store(app: &tauri::AppHandle) -> Result<store::Store, error::AppError> {
             .with_detail(source.to_string())
     })?;
     store::Store::new(&app_data)
+}
+
+/// Sending requests is essential too; its cache dir is emptied at startup.
+fn open_http_engine(app: &tauri::AppHandle) -> Result<engine::http::HttpEngine, error::AppError> {
+    let locate = |found: Result<std::path::PathBuf, tauri::Error>| {
+        found.map_err(|source| {
+            error::AppError::internal("Could not locate the app directories.")
+                .with_detail(source.to_string())
+        })
+    };
+    let cache_dir = locate(app.path().app_cache_dir())?;
+    let app_data = locate(app.path().app_data_dir())?;
+    let version = app.package_info().version.to_string();
+    engine::http::HttpEngine::new(&cache_dir, &app_data, &version)
 }
 
 /// Keeps `src/ipc/bindings.ts` in step with the Rust commands during development.

@@ -8,7 +8,7 @@ const EXPECTED_NAMES: readonly IconName[] = [
   "folder", "folder-open", "request-http", "request-graphql", "request-grpc", "request-soap",
   "request-ws", "webhook", "environment", "git", "mock", "journey", "play", "stop", "plus",
   "close", "settings", "sun", "moon", "monitor", "chevron-left", "chevron-right", "chevron-down",
-  "search",
+  "search", "history",
 ];
 
 const DEFAULT_SIZE = "16";
@@ -24,7 +24,7 @@ function renderSvg(name: IconName, extra: { size?: 16 | 24; title?: string; clas
 }
 
 describe("icon names", () => {
-  it("lists exactly the 24 contract names", () => {
+  it("lists exactly the 25 contract names", () => {
     expect([...ICON_NAMES]).toEqual(EXPECTED_NAMES);
   });
 

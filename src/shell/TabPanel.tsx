@@ -1,6 +1,7 @@
-import { RequestPlaceholder } from "../features/request/RequestPlaceholder";
+import { RequestEditor } from "../features/request/RequestEditor";
 import { Button } from "../ui/Button";
 import { shortcutLabel } from "../ui/platform";
+import { DiscardDialog } from "./DiscardDialog";
 import { TAB_PANEL_ID, tabButtonId } from "./TabStrip";
 import { useTabsStore, type Tab } from "./tabsStore";
 
@@ -13,6 +14,8 @@ function Welcome() {
         <li>{shortcutLabel("N")} New tab</li>
         <li>{shortcutLabel("W")} Close tab</li>
         <li>{shortcutLabel("B")} Toggle sidebar</li>
+        <li>{shortcutLabel("S")} Save request</li>
+        <li>{shortcutLabel("Enter")} Send request</li>
       </ul>
     </div>
   );
@@ -20,7 +23,7 @@ function Welcome() {
 
 function renderTab(tab: Tab) {
   if (tab.kind === "welcome" || !tab.location) return <Welcome />;
-  return <RequestPlaceholder key={tab.id} location={tab.location} />;
+  return <RequestEditor key={tab.id} tabId={tab.id} location={tab.location} />;
 }
 
 export function TabPanel() {
@@ -41,6 +44,7 @@ export function TabPanel() {
   return (
     <div role="tabpanel" id={TAB_PANEL_ID} aria-labelledby={tabButtonId(active.id)} className="tabpanel">
       {renderTab(active)}
+      <DiscardDialog />
     </div>
   );
 }

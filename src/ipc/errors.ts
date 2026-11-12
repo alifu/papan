@@ -10,6 +10,9 @@ const FALLBACK_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   not_found: "The requested item could not be found.",
   io: "A file operation failed.",
   internal: GENERIC_MESSAGE,
+  network: "The server could not be reached.",
+  timeout: "The request timed out.",
+  cancelled: "The request was cancelled.",
 };
 
 function isErrorCode(value: unknown): value is ErrorCode {

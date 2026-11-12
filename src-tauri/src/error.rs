@@ -5,11 +5,12 @@
 //! - `message` is safe and meaningful to show to the user.
 //! - `detail` is technical context for logs. Never put secrets in it.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 
 /// Stable machine-readable error codes. Renaming a variant is a breaking IPC change.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+// `Deserialize` because history entries store the code of a failed send.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     /// The caller supplied something invalid (bad file, bad field, bad argument).
@@ -20,6 +21,12 @@ pub enum ErrorCode {
     Io,
     /// An unexpected failure inside the app.
     Internal,
+    /// A request could not reach the server (DNS, connect, TLS).
+    Network,
+    /// A request took longer than its timeout.
+    Timeout,
+    /// A request was cancelled by the user.
+    Cancelled,
 }
 
 /// Error returned by every fallible command: `Result<T, AppError>`.
@@ -109,6 +116,9 @@ mod tests {
             (ErrorCode::NotFound, "not_found"),
             (ErrorCode::Io, "io"),
             (ErrorCode::Internal, "internal"),
+            (ErrorCode::Network, "network"),
+            (ErrorCode::Timeout, "timeout"),
+            (ErrorCode::Cancelled, "cancelled"),
         ];
 
         for (code, expected) in cases {

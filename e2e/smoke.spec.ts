@@ -11,7 +11,7 @@ test.describe("shell", () => {
 
     await expect(page.getByRole("menubar")).toBeVisible();
     const nav = page.getByRole("navigation", { name: "Navigation" });
-    for (const name of ["Collections", "Scratch", "Mocks", "Journeys"]) {
+    for (const name of ["Collections", "Scratch", "Mocks", "Journeys", "History"]) {
       await expect(nav.getByRole("button", { name })).toBeVisible();
     }
     await expect(page.getByRole("tab", { name: "Welcome" })).toBeVisible();

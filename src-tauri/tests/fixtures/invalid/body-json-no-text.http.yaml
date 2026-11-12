@@ -1,0 +1,6 @@
+body:
+  type: json
+kind: http
+method: POST
+name: JSON without text
+url: https://example.com/json

@@ -1,4 +1,10 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
+
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const fixture = (name: string, encoding: "utf8" | "base64"): string => readFileSync(join(FIXTURE_DIR, name), encoding);
 
 declare global {
   interface Window {
@@ -9,15 +15,23 @@ declare global {
 
 /**
  * The browser has no Tauri runtime. This installs an in-memory fake of the backend
- * commands (app_info plus the 17 storage commands), seeded with one collection and one
+ * commands (app_info, the 17 storage commands and send/cancel/history). `send_request` answers by URL path:
+ * `/json`, `/xml`, `/html`, `/image`, `/error` (network error) and `/slow` (pending until cancelled), seeded with one collection and one
  * scratch request, and stubs for the event plugin.
  */
 export async function mockTauri(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+  const bodies = {
+    json: fixture("small.json", "utf8"),
+    xml: fixture("feed.xml", "utf8"),
+    html: fixture("hostile.html", "utf8"),
+    png: fixture("pixel.png", "base64"),
+  };
+  await page.addInitScript((bodies) => {
     type Args = Record<string, unknown>;
-    interface FakeNode { path: string; kind: "folder" | "request"; name: string; method: string; url: string }
+    interface FakeContent { method: string; url: string; [key: string]: unknown }
+    interface FakeNode { path: string; kind: "folder" | "request"; name: string; method: string; url: string; content?: FakeContent }
     interface FakeCollection { id: string; name: string; nodes: FakeNode[] }
-    interface FakeScratch { id: string; name: string; method: string; url: string }
+    interface FakeScratch { id: string; name: string; method: string; url: string; content?: FakeContent }
 
     const request = (path: string, name: string, method: string, url: string): FakeNode =>
       ({ path, kind: "request", name, method, url });
@@ -97,6 +111,59 @@ export async function mockTauri(page: Page): Promise<void> {
       const at = before ? c.nodes.indexOf(before) : c.nodes.length;
       c.nodes.splice(at, 0, ...rebased);
     };
+    const emptyContent = (method: string, url: string): FakeContent => ({
+      method,
+      url,
+      disabled_params: [],
+      headers: [],
+      body: { type: "none" },
+      auth: { type: "none" },
+      settings: { follow_redirects: true, timeout_ms: 30000, verify_tls: true },
+    });
+    interface Sent { id: string; sent_at_ms: number; name: string; method: string; url: string; status: number | null; error_code: string | null; content: FakeContent }
+    let history: Sent[] = [];
+    const responseBodies = new Map<string, { encoding: string; data: string }>();
+    const pending = new Map<string, (err: unknown) => void>();
+    const canned: Record<string, { type: string; encoding: string; data: string }> = {
+      "/json": { type: "application/json", encoding: "text", data: bodies.json },
+      "/xml": { type: "application/xml", encoding: "text", data: bodies.xml },
+      "/html": { type: "text/html", encoding: "text", data: bodies.html },
+      "/image": { type: "image/png", encoding: "base64", data: bodies.png },
+    };
+    const record = (a: Args, status: number | null, errorCode: string | null) => {
+      const content = a.content as FakeContent;
+      history = [{ id: `h${++counter}`, sent_at_ms: Date.now(), name: "Request", method: content.method, url: content.url, status, error_code: errorCode, content }, ...history];
+    };
+    const sendRequest = (a: Args): Promise<unknown> => {
+      const content = a.content as FakeContent;
+      const requestId = String(a.requestId);
+      const path = new URL(content.url, "http://localhost").pathname;
+      if (path === "/slow") {
+        return new Promise((_, reject) => pending.set(requestId, reject));
+      }
+      if (path === "/error") {
+        record(a, null, "network");
+        return Promise.reject(appError("network", "Could not connect to localhost."));
+      }
+      const body = canned[path] ?? canned["/json"];
+      responseBodies.set(requestId, body);
+      record(a, 200, null);
+      return Promise.resolve({
+        request_id: requestId,
+        status: 200,
+        status_text: "OK",
+        http_version: "HTTP/1.1",
+        url: content.url,
+        headers: [{ name: "content-type", value: body.type }, { name: "x-demo", value: "1" }],
+        cookies: [],
+        content_type: body.type,
+        size_bytes: body.data.length,
+        truncated: false,
+        ttfb_ms: 5,
+        total_ms: 12,
+        tls_verified: true,
+      });
+    };
     const scratchList = () => scratch.map(({ id, name, method }) => ({ id, name, method }));
 
     const handlers: Record<string, (a: Args) => unknown> = {
@@ -152,11 +219,12 @@ export async function mockTauri(page: Page): Promise<void> {
       },
       read_request: (a) => {
         const t = target(a.location as never);
-        return { name: t.name, method: t.method, url: t.url };
+        return { name: t.name, content: t.content ?? emptyContent(t.method, t.url) };
       },
       write_request: (a) => {
         const t = target(a.location as never);
-        const content = a.content as { method: string; url: string };
+        const content = a.content as FakeContent;
+        t.content = content;
         t.method = content.method;
         t.url = content.url;
         return null;
@@ -174,6 +242,32 @@ export async function mockTauri(page: Page): Promise<void> {
       delete_scratch: (a) => {
         scratch = scratch.filter((s) => s.id !== a.id);
         return scratchList();
+      },
+      send_request: sendRequest as never,
+      cancel_request: (a) => {
+        pending.get(String(a.requestId))?.(appError("cancelled", "Cancelled"));
+        pending.delete(String(a.requestId));
+        return null;
+      },
+      read_response_body: (a) => {
+        const body = responseBodies.get(String(a.requestId));
+        if (!body) throw appError("not_found", "The response is no longer available.");
+        return { ...body, truncated: false };
+      },
+      save_response_body: () => null,
+      pick_body_file: () => null,
+      clear_cookies: () => null,
+      list_history: () => history.map((h) => ({ id: h.id, sent_at_ms: h.sent_at_ms, name: h.name, method: h.method, url: h.url, status: h.status, error_code: h.error_code, total_ms: 12, size_bytes: 0 })),
+      clear_history: () => {
+        history = [];
+        return null;
+      },
+      restore_history_entry: (a) => {
+        const entry = history.find((h) => h.id === a.id);
+        if (!entry) throw appError("not_found", "That history entry no longer exists.");
+        const item = { id: `s${++counter}`, name: entry.name, method: entry.method, url: entry.url, content: entry.content };
+        scratch.push(item);
+        return { id: item.id, name: item.name, method: item.method };
       },
       move_scratch_to_collection: (a) => {
         const c = find(a.collectionId);
@@ -208,5 +302,5 @@ export async function mockTauri(page: Page): Promise<void> {
     (window as unknown as Record<string, unknown>).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
       unregisterListener: () => {},
     };
-  });
+  }, bodies);
 }

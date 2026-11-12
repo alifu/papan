@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: Negative timeout
+settings:
+  timeout_ms: -1
+url: https://example.com/timeout

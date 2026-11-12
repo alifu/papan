@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use super::fsio::{self, DirEntry, EntryKind};
 use super::model::{self, CollectionFile, FolderFile, RequestFile};
 use super::paths::{self, FOLDER_FILE, REQUEST_SUFFIX};
+use super::request_model;
+use super::types::RequestContent;
 use crate::error::{AppError, ErrorCode};
 
 pub const COLLECTION_FILE: &str = "papan.collection.yaml";
@@ -127,12 +129,11 @@ impl Collection {
         read_request_file(&abs)
     }
 
-    pub fn write_request(&self, rel: &str, method: &str, url: &str) -> Result<(), AppError> {
-        model::check_method("Request", method)?;
-        model::check_url("Request", url)?;
+    pub fn write_request(&self, rel: &str, content: &RequestContent) -> Result<(), AppError> {
+        request_model::validate_content("Request", content)?;
         let current = self.read_request(rel)?;
         let abs = paths::resolve(&self.requests_root(), rel)?;
-        let updated = current.with_content(method, url);
+        let updated = current.with_content(content)?;
         fsio::write_atomic(&abs, updated.to_yaml()?.as_bytes())?;
         Ok(())
     }

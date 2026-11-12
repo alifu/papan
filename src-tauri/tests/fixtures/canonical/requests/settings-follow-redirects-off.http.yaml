@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: No redirects
+settings:
+  follow_redirects: false
+url: https://example.com/redirect

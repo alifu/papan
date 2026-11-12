@@ -7,7 +7,7 @@ use std::time::{Duration, Instant, SystemTime};
 use papan_lib::error::ErrorCode;
 use papan_lib::store::collection::Collection;
 use papan_lib::store::model::RequestFile;
-use papan_lib::store::types::{NodeKind, TreeNode};
+use papan_lib::store::types::{NodeKind, RequestContent, TreeNode};
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -77,7 +77,7 @@ fn normalise_inputs_become_their_expected_form() {
 fn invalid_files_name_the_file_and_the_field() {
     let dir = fixtures().join("invalid");
     let files = files_in(&dir, ".http.yaml");
-    assert_eq!(files.len(), 9, "fixtures missing");
+    assert!(files.len() >= 18, "fixtures missing");
 
     for path in files {
         let name = file_name(&path);
@@ -171,7 +171,7 @@ fn collection_basic_opens_in_order_and_rewrites_byte_identically() {
     for path in request_paths(&tree) {
         let file = collection.read_request(&path).unwrap();
         collection
-            .write_request(&path, &file.method, &file.url)
+            .write_request(&path, &file.content().unwrap())
             .unwrap();
     }
 
@@ -205,8 +205,7 @@ fn writing_keeps_unknown_fields_of_a_newer_papan() {
     collection
         .write_request(
             "future-fields.http.yaml",
-            "PATCH",
-            "https://api.example.com/items",
+            &RequestContent::new("PATCH", "https://api.example.com/items"),
         )
         .unwrap();
 
@@ -214,4 +213,32 @@ fn writing_keeps_unknown_fields_of_a_newer_papan() {
         .unwrap()
         .replace("method: POST", "method: PATCH");
     assert_eq!(fs::read_to_string(&target).unwrap(), expected);
+}
+
+#[test]
+fn rewriting_with_an_edited_url_keeps_unknown_and_unsupported_sections() {
+    for fixture in ["unsupported-auth", "unknown-nested"] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("c");
+        fs::create_dir_all(root.join("requests")).unwrap();
+        fs::write(root.join("papan.collection.yaml"), "name: C\nversion: 1\n").unwrap();
+        let name = format!("{fixture}.http.yaml");
+        let source = fixtures().join("canonical/requests").join(&name);
+        let target = root.join("requests").join(&name);
+        fs::copy(&source, &target).unwrap();
+        let collection = Collection::open(&root).unwrap();
+        let content = collection.read_request(&name).unwrap().content().unwrap();
+        let edited = RequestContent {
+            url: "https://api.example.com/edited".into(),
+            ..content.clone()
+        };
+
+        collection.write_request(&name, &edited).unwrap();
+
+        let expected = fs::read_to_string(&source).unwrap().replace(
+            &format!("url: {}", content.url),
+            "url: https://api.example.com/edited",
+        );
+        assert_eq!(fs::read_to_string(&target).unwrap(), expected, "{fixture}");
+    }
 }

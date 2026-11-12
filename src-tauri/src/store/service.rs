@@ -6,13 +6,17 @@ use std::path::{Path, PathBuf};
 
 use super::collection::Collection;
 use super::fsio;
+use super::history::{History, HistoryRecord, Sent};
 use super::model::RequestFile;
 use super::registry::{Registry, RegistryEntry};
+use super::request_emit::normalise;
 use super::scratch::Scratch;
+use super::secrets::{redact, SessionSecrets};
 use super::types::{
     CollectionSummary, CollectionTree, RequestContent, RequestDoc, RequestLocation, ScratchItem,
     TreeChange,
 };
+use crate::engine::http::types::HistoryEntry;
 use crate::error::AppError;
 
 #[derive(Debug)]
@@ -20,6 +24,8 @@ pub struct Store {
     registry: Registry,
     scratch: Scratch,
     fingerprints: HashMap<String, u64>,
+    secrets: SessionSecrets,
+    history: History,
 }
 
 fn summary(entry: &RegistryEntry, collection: Option<&Collection>) -> CollectionSummary {
@@ -58,12 +64,11 @@ fn open_registered(entry: &RegistryEntry) -> Result<Collection, AppError> {
     Collection::open(&canonical)
 }
 
-fn doc(file: RequestFile) -> RequestDoc {
-    RequestDoc {
+fn doc(file: RequestFile) -> Result<RequestDoc, AppError> {
+    Ok(RequestDoc {
+        content: file.content()?,
         name: file.name,
-        method: file.method,
-        url: file.url,
-    }
+    })
 }
 
 impl Store {
@@ -74,6 +79,8 @@ impl Store {
             registry: Registry::load(app_data),
             scratch: Scratch::new(app_data)?,
             fingerprints: HashMap::new(),
+            secrets: SessionSecrets::default(),
+            history: History::new(app_data),
         })
     }
 
@@ -216,15 +223,21 @@ impl Store {
         self.mutate(id, |c| c.move_node(path, target_folder, index).map(Some))
     }
 
-    pub fn read_request(&self, location: &RequestLocation) -> Result<RequestDoc, AppError> {
-        let file = match location {
-            RequestLocation::Scratch { id } => self.scratch.read(id)?,
+    /// A collection request comes back with the secrets typed this session (plan 03 §4).
+    pub fn read_request(&mut self, location: &RequestLocation) -> Result<RequestDoc, AppError> {
+        match location {
+            RequestLocation::Scratch { id } => doc(self.scratch.read(id)?),
             RequestLocation::Collection {
                 collection_id,
                 path,
-            } => self.open_entry(collection_id)?.1.read_request(path)?,
-        };
-        Ok(doc(file))
+            } => {
+                let disk = doc(self.open_entry(collection_id)?.1.read_request(path)?)?;
+                Ok(RequestDoc {
+                    content: self.secrets.recall(location, disk.content),
+                    name: disk.name,
+                })
+            }
+        }
     }
 
     pub fn write_request(
@@ -233,18 +246,18 @@ impl Store {
         content: &RequestContent,
     ) -> Result<(), AppError> {
         match location {
-            RequestLocation::Scratch { id } => {
-                self.scratch.write(id, &content.method, &content.url)
-            }
+            RequestLocation::Scratch { id } => self.scratch.write(id, content),
             RequestLocation::Collection {
                 collection_id,
                 path,
-            } => self
-                .mutate(collection_id, |c| {
-                    c.write_request(path, &content.method, &content.url)
-                        .map(|()| None)
-                })
-                .map(|_| ()),
+            } => {
+                let redacted = redact(content);
+                self.mutate(collection_id, |c| {
+                    c.write_request(path, &redacted).map(|()| None)
+                })?;
+                self.secrets.remember(location, normalise(content));
+                Ok(())
+            }
         }
     }
 
@@ -272,11 +285,44 @@ impl Store {
         target_folder: &str,
     ) -> Result<TreeChange, AppError> {
         let file = self.scratch.read(id)?;
+        let full = file.content()?;
+        let redacted = file.with_content(&redact(&full))?;
         let change = self.mutate(collection_id, |c| {
-            c.add_request(target_folder, &file).map(Some)
+            c.add_request(target_folder, &redacted).map(Some)
         })?;
         self.scratch.delete(id)?;
+        if let Some(path) = &change.path {
+            let location = RequestLocation::Collection {
+                collection_id: collection_id.to_string(),
+                path: path.clone(),
+            };
+            self.secrets.remember(&location, normalise(&full));
+        }
         Ok(change)
+    }
+
+    /// The display name of the request at `location`, for history labels.
+    pub fn request_name(&mut self, location: &RequestLocation) -> Option<String> {
+        self.read_request(location).ok().map(|doc| doc.name)
+    }
+
+    pub fn append_history(&self, sent: &Sent<'_>) -> Result<(), AppError> {
+        self.history.append(HistoryRecord::new(sent))
+    }
+
+    pub fn list_history(&self) -> Vec<HistoryEntry> {
+        self.history.list()
+    }
+
+    pub fn clear_history(&self) -> Result<(), AppError> {
+        self.history.clear()
+    }
+
+    /// A new scratch request from a history snapshot; collections are never touched.
+    pub fn restore_history_entry(&self, id: &str) -> Result<ScratchItem, AppError> {
+        let record = self.history.find(id)?;
+        self.scratch
+            .create_from(&record.entry.name, &record.content)
     }
 
     /// Recomputes the fingerprint; true when it differs from the stored one (an outside change).

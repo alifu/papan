@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use super::fsio::{self, EntryKind};
 use super::model::{self, RequestFile};
 use super::paths::REQUEST_SUFFIX;
-use super::types::ScratchItem;
+use super::types::{RequestContent, ScratchItem};
 use crate::error::AppError;
 
 pub const SCRATCH_DIR: &str = "scratch";
@@ -68,6 +68,19 @@ impl Scratch {
         Ok(item(id, &file))
     }
 
+    /// A new scratch request holding `content` (used to restore a history entry).
+    pub fn create_from(
+        &self,
+        name: &str,
+        content: &RequestContent,
+    ) -> Result<ScratchItem, AppError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let name = model::clean_name(name).unwrap_or_else(|_| DEFAULT_NAME.to_string());
+        let file = RequestFile::new(name, DEFAULT_METHOD).with_content(content)?;
+        self.save(&id, &file)?;
+        Ok(item(id, &file))
+    }
+
     pub fn read(&self, id: &str) -> Result<RequestFile, AppError> {
         let path = self.path_of(id)?;
         let bytes = fsio::read_bounded(&path)
@@ -75,10 +88,8 @@ impl Scratch {
         RequestFile::parse(&format!("{id}{REQUEST_SUFFIX}"), &bytes)
     }
 
-    pub fn write(&self, id: &str, method: &str, url: &str) -> Result<(), AppError> {
-        model::check_method("Request", method)?;
-        model::check_url("Request", url)?;
-        let updated = self.read(id)?.with_content(method, url);
+    pub fn write(&self, id: &str, content: &RequestContent) -> Result<(), AppError> {
+        let updated = self.read(id)?.with_content(content)?;
         self.save(id, &updated)
     }
 
@@ -128,7 +139,9 @@ mod tests {
 
         let created = scratch.create().unwrap();
         let renamed = scratch.rename(&created.id, " Users ").unwrap();
-        scratch.write(&created.id, "POST", "https://x").unwrap();
+        scratch
+            .write(&created.id, &RequestContent::new("POST", "https://x"))
+            .unwrap();
         let read = scratch.read(&created.id).unwrap();
         let after_delete = scratch.delete(&created.id).unwrap();
 

@@ -1,0 +1,20 @@
+auth:
+  token: "{{api_token}}"
+  type: bearer
+body:
+  text: |
+    {"id": "{{item_id}}"}
+  type: json
+disabled_params:
+  - name: "{{param_name}}"
+    value: "{{param_value}}"
+headers:
+  - enabled: false
+    name: "{{header_name}}"
+    value: "{{header_value}}"
+kind: http
+method: POST
+name: Variables everywhere
+settings:
+  timeout_ms: 5000
+url: https://{{host}}/items/{{id}}?q={{term}}

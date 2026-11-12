@@ -24,6 +24,26 @@ export const commands = {
 	renameScratch: (id: string, name: string) => __TAURI_INVOKE<ScratchItem[]>("rename_scratch", { id, name }),
 	deleteScratch: (id: string) => __TAURI_INVOKE<ScratchItem[]>("delete_scratch", { id }),
 	moveScratchToCollection: (id: string, collectionId: string, targetFolder: string) => __TAURI_INVOKE<TreeChange>("move_scratch_to_collection", { id, collectionId, targetFolder }),
+	/**  Sends the draft `content`; `location` picks the cookie jar and labels history. */
+	sendRequest: (requestId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<ResponseMeta>("send_request", { requestId, location, content }),
+	/**  Aborts an in-flight send. An unknown id is a no-op. */
+	cancelRequest: (requestId: string) => __TAURI_INVOKE<null>("cancel_request", { requestId }),
+	/**  The capped body preview; `not_found` once the response file is evicted. */
+	readResponseBody: (requestId: string) => __TAURI_INVOKE<ResponseBody>("read_response_body", { requestId }),
+	/**  Saves the full body through the native save dialog; `None` when cancelled. */
+	saveResponseBody: (requestId: string) => __TAURI_INVOKE<string | null>("save_response_body", { requestId }),
+	/**
+	 *  Lets the user pick a file to upload and grants it to the request at `location`;
+	 *  `None` when cancelled.
+	 */
+	pickBodyFile: (location: RequestLocation) => __TAURI_INVOKE<PickedFile | null>("pick_body_file", { location }),
+	/**  Clears the cookie jar that `location` uses. */
+	clearCookies: (location: RequestLocation) => __TAURI_INVOKE<null>("clear_cookies", { location }),
+	/**  Newest first. */
+	listHistory: () => __TAURI_INVOKE<HistoryEntry[]>("list_history"),
+	clearHistory: () => __TAURI_INVOKE<null>("clear_history"),
+	/**  Creates a scratch request from a history snapshot. */
+	restoreHistoryEntry: (id: string) => __TAURI_INVOKE<ScratchItem>("restore_history_entry", { id }),
 };
 
 /** Events */
@@ -32,6 +52,8 @@ export const events = {
 };
 
 /* Types */
+export type ApiKeyPlacement = "header" | "query";
+
 /**  Error returned by every fallible command: `Result<T, AppError>`. */
 export type AppError = {
 	code: ErrorCode,
@@ -43,6 +65,14 @@ export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+/**  `Unsupported` is an auth type made by a newer Papan: kept on disk, never sent. */
+export type Auth = { type: "none" } | { type: "basic"; username: string; password: string } | { type: "bearer"; token: string } | { type: "api_key"; name: string; value: string; placement: ApiKeyPlacement } | { type: "unsupported" };
+
+/**  `Unsupported` is a body type made by a newer Papan: kept on disk, never sent. */
+export type Body = { type: "none" } | { type: "json"; text: string } | { type: "xml"; text: string } | { type: "text"; text: string } | { type: "form"; fields: KeyValue[] } | { type: "multipart"; parts: Part[] } | { type: "binary"; file: string | null } | { type: "unsupported" };
+
+export type BodyEncoding = "text" | "base64" | "none";
 
 /**  Emitted when a collection changed on disk outside the app. TS: `events.collectionChanged`. */
 export type CollectionChanged = {
@@ -72,28 +102,128 @@ export type ErrorCode =
 /**  A filesystem or other I/O operation failed. */
 "io" | 
 /**  An unexpected failure inside the app. */
-"internal";
+"internal" | 
+/**  A request could not reach the server (DNS, connect, TLS). */
+"network" | 
+/**  A request took longer than its timeout. */
+"timeout" | 
+/**  A request was cancelled by the user. */
+"cancelled";
+
+/**  A response header; non-UTF-8 values are decoded lossily. */
+export type Header = {
+	name: string,
+	value: string,
+};
+
+/**  One sent request as listed in the History panel. */
+export type HistoryEntry = {
+	id: string,
+	sent_at_ms: number | null,
+	name: string,
+	method: string,
+	url: string,
+	status: number | null,
+	error_code: ErrorCode | null,
+	total_ms: number,
+	size_bytes: number,
+};
+
+/**  A header, form field or other name/value row that can be switched off. */
+export type KeyValue = {
+	name: string,
+	value: string,
+	enabled: boolean,
+};
 
 export type NodeKind = "folder" | "request" | "invalid";
 
+/**  A query parameter switched off in the params table (plan 03 §3.1). */
+export type Pair = {
+	name: string,
+	value: string,
+};
+
+/**  A multipart part; a non-empty `file` makes it a file part. */
+export type Part = {
+	name: string,
+	value: string,
+	file: string | null,
+	enabled: boolean,
+};
+
+/**  A file chosen in the native open dialog; `size_bytes` saturates at `u32::MAX`. */
+export type PickedFile = {
+	path: string,
+	name: string,
+	size_bytes: number,
+};
+
+/**  Everything about a request except its name. Enabled query parameters live only in `url`. */
 export type RequestContent = {
 	method: string,
 	url: string,
+	disabled_params: Pair[],
+	headers: KeyValue[],
+	body: Body,
+	auth: Auth,
+	settings: Settings,
 };
 
 export type RequestDoc = {
 	name: string,
-	method: string,
-	url: string,
+	content: RequestContent,
 };
 
 /**  Where a request lives: in the app's scratch area or inside a collection. */
 export type RequestLocation = { scope: "scratch"; id: string } | { scope: "collection"; collection_id: string; path: string };
 
+/**  A capped preview of a response body. */
+export type ResponseBody = {
+	encoding: BodyEncoding,
+	data: string,
+	truncated: boolean,
+};
+
+export type ResponseCookie = {
+	name: string,
+	value: string,
+	domain: string | null,
+	path: string | null,
+	expires: string | null,
+	http_only: boolean,
+	secure: boolean,
+};
+
+/**  Everything about a response except its body, which is read with `read_response_body`. */
+export type ResponseMeta = {
+	request_id: string,
+	status: number,
+	status_text: string,
+	http_version: string,
+	/**  Final URL after redirects. */
+	url: string,
+	headers: Header[],
+	cookies: ResponseCookie[],
+	content_type: string | null,
+	size_bytes: number,
+	truncated: boolean,
+	ttfb_ms: number,
+	total_ms: number,
+	tls_verified: boolean,
+};
+
 export type ScratchItem = {
 	id: string,
 	name: string,
 	method: string,
+};
+
+/**  Per-request send settings. `timeout_ms` 0 means no timeout. */
+export type Settings = {
+	follow_redirects: boolean,
+	timeout_ms: number,
+	verify_tls: boolean,
 };
 
 /**  Result of a mutation: the new tree and the node's new path (`None` after delete). */

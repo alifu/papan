@@ -1,0 +1,9 @@
+auth:
+  name: api_key
+  placement: query
+  type: api_key
+  value: key-123
+kind: http
+method: GET
+name: API key query
+url: https://api.example.com/me

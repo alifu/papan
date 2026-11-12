@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: Timeout too large
+settings:
+  timeout_ms: 600001
+url: https://example.com/timeout

@@ -125,6 +125,7 @@ fn read_and_write_requests_by_location() {
     let content = RequestContent {
         method: "PUT".into(),
         url: "https://x".into(),
+        ..RequestContent::default()
     };
     let in_collection = collection_location(&id, "r.http.yaml");
     let in_scratch = RequestLocation::Scratch {
@@ -137,7 +138,7 @@ fn read_and_write_requests_by_location() {
     for location in [in_collection, in_scratch] {
         let doc = f.store.read_request(&location).unwrap();
         assert_eq!(
-            (doc.method.as_str(), doc.url.as_str()),
+            (doc.content.method.as_str(), doc.content.url.as_str()),
             ("PUT", "https://x")
         );
     }

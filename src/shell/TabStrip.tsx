@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import { Button } from "../ui/Button";
+import { useRequestStore } from "../features/request/requestStore";
 import { useTabsStore } from "./tabsStore";
 
 export const TAB_PANEL_ID = "tab-panel";
@@ -11,6 +12,7 @@ export function TabStrip() {
   const activateTab = useTabsStore((s) => s.activateTab);
   const closeTab = useTabsStore((s) => s.closeTab);
   const newTab = useTabsStore((s) => s.newTab);
+  const byTab = useRequestStore((s) => s.byTab);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
@@ -38,6 +40,7 @@ export function TabStrip() {
                 onClick={() => activateTab(tab.id)}
                 onKeyDown={(event) => handleKeyDown(event, index)}
               >
+                {byTab[tab.id]?.draft != null ? "• " : ""}
                 {tab.title}
               </button>
               <Button

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { emptyContent } from "../request/content";
 import { commands, events } from "../../ipc/bindings";
 import * as api from "./api";
 import * as scratchApi from "../scratch/api";
@@ -33,7 +34,7 @@ describe("api wrappers", () => {
     await api.deleteNode("c", "p");
     await api.moveNode("c", "p", "t", 2);
     await api.readRequest(loc);
-    await api.writeRequest(loc, { method: "GET", url: "" });
+    await api.writeRequest(loc, emptyContent());
     await scratchApi.listScratch();
     await scratchApi.createScratch();
     await scratchApi.renameScratch("s", "n");
@@ -42,7 +43,7 @@ describe("api wrappers", () => {
 
     expect(commands.createCollection).toHaveBeenCalledWith("n");
     expect(commands.moveNode).toHaveBeenCalledWith("c", "p", "t", 2);
-    expect(commands.writeRequest).toHaveBeenCalledWith(loc, { method: "GET", url: "" });
+    expect(commands.writeRequest).toHaveBeenCalledWith(loc, emptyContent());
     expect(commands.moveScratchToCollection).toHaveBeenCalledWith("s", "c", "f");
     expect(commands.listScratch).toHaveBeenCalledTimes(1);
   });

@@ -6,6 +6,8 @@ export interface SplitterProps {
   readonly max: number;
   readonly step: number;
   readonly label: string;
+  /** "vertical" (default) drags along x; "horizontal" is a bar between stacked panes and drags along y. */
+  readonly orientation?: "vertical" | "horizontal";
   readonly onResize: (value: number) => void;
   readonly onToggle: () => void;
 }
@@ -16,7 +18,7 @@ interface DragStart {
 }
 
 /** Vertical splitter: pointer drag and keyboard resizing. */
-export function Splitter({ value, min, max, step, label, onResize, onToggle }: SplitterProps) {
+export function Splitter({ value, min, max, step, label, orientation = "vertical", onResize, onToggle }: SplitterProps) {
   const dragRef = useRef<DragStart | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const onResizeRef = useRef(onResize);
@@ -24,13 +26,14 @@ export function Splitter({ value, min, max, step, label, onResize, onToggle }: S
 
   useEffect(() => () => cleanupRef.current?.(), []);
 
+  const horizontal = orientation === "horizontal";
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
-    dragRef.current = { x: event.clientX, value };
+    dragRef.current = { x: horizontal ? event.clientY : event.clientX, value };
     event.currentTarget.setPointerCapture?.(event.pointerId);
     const move = (e: globalThis.PointerEvent) => {
       const start = dragRef.current;
-      if (start) onResizeRef.current(start.value + e.clientX - start.x);
+      if (start) onResizeRef.current(start.value + ((horizontal ? e.clientY : e.clientX) - start.x));
     };
     const stop = () => {
       dragRef.current = null;
@@ -47,8 +50,8 @@ export function Splitter({ value, min, max, step, label, onResize, onToggle }: S
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const next: Record<string, () => void> = {
-      ArrowLeft: () => onResize(value - step),
-      ArrowRight: () => onResize(value + step),
+      [horizontal ? "ArrowUp" : "ArrowLeft"]: () => onResize(value - step),
+      [horizontal ? "ArrowDown" : "ArrowRight"]: () => onResize(value + step),
       Home: () => onResize(min),
       End: () => onResize(max),
       Enter: onToggle,
@@ -62,13 +65,13 @@ export function Splitter({ value, min, max, step, label, onResize, onToggle }: S
   return (
     <div
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={orientation}
       aria-label={label}
       aria-valuenow={value}
       aria-valuemin={min}
       aria-valuemax={max}
       tabIndex={0}
-      className="splitter"
+      className={horizontal ? "splitter splitter-horizontal" : "splitter"}
       onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}
     />

@@ -1,0 +1,19 @@
+url: https://example.com/defaults
+settings:
+  follow_redirects: true
+  timeout_ms: 30000
+  verify_tls: true
+method: GET
+name: Explicit defaults
+kind: http
+headers:
+  - enabled: true
+    name: Accept
+    value: "*/*"
+  - name: X-Empty
+    value: ""
+disabled_params: []
+auth:
+  type: none
+body:
+  type: none

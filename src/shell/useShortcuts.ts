@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { isMac } from "../ui/platform";
 import { useLayoutStore } from "./layoutStore";
+import { saveActiveRequest, sendActiveRequest } from "./activeRequest";
 import { useTabsStore } from "./tabsStore";
 
 const ACTIONS: Readonly<Record<string, () => void>> = {
@@ -10,6 +11,8 @@ const ACTIONS: Readonly<Record<string, () => void>> = {
     if (activeTabId) closeTab(activeTabId);
   },
   b: () => useLayoutStore.getState().toggleSidebar(),
+  s: saveActiveRequest,
+  enter: sendActiveRequest,
 };
 
 function handleKeyDown(event: KeyboardEvent): void {
@@ -23,7 +26,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   action();
 }
 
-/** Mod+N new tab, Mod+W close tab, Mod+B toggle sidebar. */
+/** Mod+N new tab, Mod+W close tab, Mod+B toggle sidebar, Mod+S save, Mod+Enter send. */
 export function useShortcuts(): void {
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);

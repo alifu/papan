@@ -47,24 +47,140 @@ pub struct TreeChange {
 }
 
 /// Where a request lives: in the app's scratch area or inside a collection.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[serde(tag = "scope", rename_all = "snake_case")]
 pub enum RequestLocation {
     Scratch { id: String },
     Collection { collection_id: String, path: String },
 }
 
+/// A header, form field or other name/value row that can be switched off.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct RequestDoc {
+pub struct KeyValue {
     pub name: String,
-    pub method: String,
-    pub url: String,
+    pub value: String,
+    pub enabled: bool,
 }
 
+/// A query parameter switched off in the params table (plan 03 §3.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct Pair {
+    pub name: String,
+    pub value: String,
+}
+
+/// A multipart part; a non-empty `file` makes it a file part.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct Part {
+    pub name: String,
+    pub value: String,
+    pub file: Option<String>,
+    pub enabled: bool,
+}
+
+/// `Unsupported` is a body type made by a newer Papan: kept on disk, never sent.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Body {
+    #[default]
+    None,
+    Json {
+        text: String,
+    },
+    Xml {
+        text: String,
+    },
+    Text {
+        text: String,
+    },
+    Form {
+        fields: Vec<KeyValue>,
+    },
+    Multipart {
+        parts: Vec<Part>,
+    },
+    Binary {
+        file: Option<String>,
+    },
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiKeyPlacement {
+    #[default]
+    Header,
+    Query,
+}
+
+/// `Unsupported` is an auth type made by a newer Papan: kept on disk, never sent.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Auth {
+    #[default]
+    None,
+    Basic {
+        username: String,
+        password: String,
+    },
+    Bearer {
+        token: String,
+    },
+    ApiKey {
+        name: String,
+        value: String,
+        placement: ApiKeyPlacement,
+    },
+    Unsupported,
+}
+
+/// Per-request send settings. `timeout_ms` 0 means no timeout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct Settings {
+    pub follow_redirects: bool,
+    pub timeout_ms: u32,
+    pub verify_tls: bool,
+}
+
+pub const DEFAULT_TIMEOUT_MS: u32 = 30_000;
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            follow_redirects: true,
+            timeout_ms: DEFAULT_TIMEOUT_MS,
+            verify_tls: true,
+        }
+    }
+}
+
+/// Everything about a request except its name. Enabled query parameters live only in `url`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct RequestContent {
     pub method: String,
     pub url: String,
+    pub disabled_params: Vec<Pair>,
+    pub headers: Vec<KeyValue>,
+    pub body: Body,
+    pub auth: Auth,
+    pub settings: Settings,
+}
+
+impl RequestContent {
+    /// Content with `method` and `url` and every section at its default.
+    pub fn new(method: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            method: method.into(),
+            url: url.into(),
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RequestDoc {
+    pub name: String,
+    pub content: RequestContent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

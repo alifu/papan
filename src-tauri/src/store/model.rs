@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use super::types::RequestContent;
 use super::yaml::{self, Node};
+use super::{request_emit, request_model};
 use crate::error::AppError;
 
 pub const SUPPORTED_VERSION: u64 = 1;
@@ -13,6 +15,8 @@ const MAX_NAME_CHARS: usize = 100;
 const MAX_METHOD_CHARS: usize = 20;
 const MAX_URL_CHARS: usize = 8192;
 const REQUEST_KIND: &str = "http";
+/// Label used in messages about request content that has no file name yet.
+const CONTENT_LABEL: &str = "Request";
 
 type Extra = BTreeMap<String, serde_json::Value>;
 
@@ -133,10 +137,22 @@ impl RequestFile {
         }
         check_name(label, &self.name)?;
         check_method(label, &self.method)?;
-        check_url(label, &self.url)
+        check_url(label, &self.url)?;
+        request_model::parse_sections(label, &self.extra).map(|_| ())
+    }
+
+    /// The typed request content (plan 03 §3).
+    pub fn content(&self) -> Result<RequestContent, AppError> {
+        let sections = request_model::parse_sections(CONTENT_LABEL, &self.extra)?;
+        Ok(RequestContent {
+            method: self.method.clone(),
+            url: self.url.clone(),
+            ..sections
+        })
     }
 
     pub fn to_yaml(&self) -> Result<String, AppError> {
+        let extra = request_emit::canonical_extra(CONTENT_LABEL, &self.extra)?;
         let url = (!self.url.is_empty()).then(|| ("url", Node::String(self.url.clone())));
         let known = [
             ("kind", Node::String(self.kind.clone())),
@@ -146,17 +162,19 @@ impl RequestFile {
         .into_iter()
         .chain(url)
         .collect();
-        emit_with(&self.extra, known)
+        emit_with(&extra, known)
     }
 
-    /// Copy with a new method and url; name and unknown fields are kept.
-    #[must_use]
-    pub fn with_content(&self, method: &str, url: &str) -> Self {
-        Self {
-            method: method.to_string(),
-            url: url.to_string(),
+    /// Copy holding `content` (validated first); name and unknown fields are kept, and
+    /// so is the on-disk form of every section that `content` leaves unchanged.
+    pub fn with_content(&self, content: &RequestContent) -> Result<Self, AppError> {
+        request_model::validate_content(CONTENT_LABEL, content)?;
+        Ok(Self {
+            method: content.method.clone(),
+            url: content.url.clone(),
+            extra: request_emit::merge(CONTENT_LABEL, &self.extra, content)?,
             ..self.clone()
-        }
+        })
     }
 
     #[must_use]
@@ -259,10 +277,15 @@ mod tests {
     #[test]
     fn request_validation_names_the_field() {
         let base = RequestFile::new("Ok".into(), "GET");
+        let with = |method: &str, url: &str| RequestFile {
+            method: method.into(),
+            url: url.into(),
+            ..base.clone()
+        };
         let cases = [
-            (base.with_content("get", ""), "method"),
-            (base.with_content("ABCDEFGHIJKLMNOPQRSTU", ""), "method"),
-            (base.with_content("GET", &"u".repeat(8193)), "url"),
+            (with("get", ""), "method"),
+            (with("ABCDEFGHIJKLMNOPQRSTU", ""), "method"),
+            (with("GET", &"u".repeat(8193)), "url"),
             (base.with_name("   "), "name"),
             (base.with_name("a\u{7}"), "name"),
             (

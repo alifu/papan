@@ -32,6 +32,12 @@
   touch-action: none;
 }
 
+.splitter-horizontal {
+  cursor: row-resize;
+  height: 4px;
+  flex: none;
+}
+
 .splitter:hover {
   background: var(--color-splitter-hover);
 }
@@ -176,4 +182,40 @@
   justify-content: flex-end;
   gap: 6px;
   padding: 0 12px 12px;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.tabs-list {
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tabs-tab {
+  height: var(--tab-height);
+  padding: 0 10px;
+  background: var(--button-bg);
+  border: 1px solid var(--color-border);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  cursor: default;
+}
+
+.tabs-tab[aria-selected="true"] {
+  background: var(--color-tab-active-bg);
+  font-weight: bold;
+}
+
+.tabs-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-content-bg);
 }

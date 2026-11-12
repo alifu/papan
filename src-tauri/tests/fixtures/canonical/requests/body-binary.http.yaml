@@ -1,0 +1,7 @@
+body:
+  file: /Users/example/Downloads/upload.bin
+  type: binary
+kind: http
+method: PUT
+name: Binary body
+url: https://api.example.com/blobs

@@ -1,0 +1,16 @@
+auth:
+  scheme: custom
+  token: abc
+  type: bearer
+headers:
+  - enabled: false
+    name: X-Debug
+    trace: 1
+    value: "1"
+kind: http
+method: GET
+name: Unknown nested keys
+settings:
+  retries: 3
+  timeout_ms: 5000
+url: https://api.example.com/items

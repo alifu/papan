@@ -1,0 +1,8 @@
+auth:
+  name: X-API-Key
+  type: api_key
+  value: abc
+kind: http
+method: GET
+name: Api key header
+url: https://example.com/k

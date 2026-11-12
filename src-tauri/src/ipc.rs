@@ -12,6 +12,7 @@ use specta_typescript::Typescript;
 use tauri_specta::{collect_commands, collect_events, Builder};
 
 use crate::commands;
+use crate::engine::http::commands as http;
 use crate::error::AppError;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
@@ -48,6 +49,15 @@ pub fn builder() -> Builder<tauri::Wry> {
             store::rename_scratch,
             store::delete_scratch,
             store::move_scratch_to_collection,
+            http::send_request,
+            http::cancel_request,
+            http::read_response_body,
+            http::save_response_body,
+            http::pick_body_file,
+            http::clear_cookies,
+            store::list_history,
+            store::clear_history,
+            store::restore_history_entry,
         ])
         .events(collect_events![CollectionChanged])
         .typ::<AppError>()
@@ -132,6 +142,9 @@ mod tests {
         assert!(rendered.contains("appInfo"));
         assert!(rendered.contains("AppError"));
         assert!(rendered.contains("\"invalid_input\""));
+        for code in ["\"network\"", "\"timeout\"", "\"cancelled\""] {
+            assert!(rendered.contains(code), "bindings are missing {code}");
+        }
     }
 
     #[test]
@@ -156,6 +169,15 @@ mod tests {
             "deleteScratch",
             "moveScratchToCollection",
             "collectionChanged",
+            "sendRequest",
+            "cancelRequest",
+            "readResponseBody",
+            "saveResponseBody",
+            "pickBodyFile",
+            "clearCookies",
+            "listHistory",
+            "clearHistory",
+            "restoreHistoryEntry",
         ];
 
         let missing: Vec<&str> = expected

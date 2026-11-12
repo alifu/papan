@@ -5,6 +5,7 @@ import {
   sameLocation,
   type RequestLocation,
 } from "../features/locations";
+import { isDirty, useRequestStore } from "../features/request/requestStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 
 export type TabKind = "welcome" | "request";
@@ -29,7 +30,13 @@ export interface TabsState {
   retarget: (from: RequestLocation, to: RequestLocation, title?: string) => void;
   /** Closes tabs at `location` or below it. */
   closeByLocation: (location: RequestLocation) => void;
+  /** Closes the tab; a dirty tab first asks via `pendingCloseId`. */
   closeTab: (id: string) => void;
+  /** Tab waiting for the "Discard changes?" answer. */
+  pendingCloseId: string | null;
+  /** Closes the tab without asking. */
+  discardTab: (id: string) => void;
+  cancelClose: () => void;
   activateTab: (id: string) => void;
 }
 
@@ -48,6 +55,7 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
   tabs: [WELCOME_TAB],
   activeTabId: WELCOME_TAB.id,
   nextTabNumber: 1,
+  pendingCloseId: null,
   newTab: async () => {
     await useScratchStore.getState().create();
   },
@@ -76,14 +84,26 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     const { tabs, activeTabId } = get();
     const remaining = tabs.filter((t) => !(t.location && locationWithin(location, t.location)));
     if (remaining.length === tabs.length) return;
+    tabs.filter((t) => !remaining.includes(t)).forEach((t) => useRequestStore.getState().drop(t.id));
     set({ tabs: remaining, activeTabId: activeAfterRemoval(tabs, remaining, activeTabId) });
   },
   closeTab: (id) => {
-    const { tabs, activeTabId } = get();
-    if (!tabs.some((t) => t.id === id)) return;
-    const remaining = tabs.filter((t) => t.id !== id);
-    set({ tabs: remaining, activeTabId: activeAfterRemoval(tabs, remaining, activeTabId) });
+    if (!get().tabs.some((t) => t.id === id)) return;
+    if (isDirty(id)) set({ pendingCloseId: id });
+    else get().discardTab(id);
   },
+  discardTab: (id) => {
+    const { tabs, activeTabId, pendingCloseId } = get();
+    if (!tabs.some((t) => t.id === id)) return;
+    useRequestStore.getState().drop(id);
+    const remaining = tabs.filter((t) => t.id !== id);
+    set({
+      tabs: remaining,
+      activeTabId: activeAfterRemoval(tabs, remaining, activeTabId),
+      pendingCloseId: pendingCloseId === id ? null : pendingCloseId,
+    });
+  },
+  cancelClose: () => set({ pendingCloseId: null }),
   activateTab: (id) => {
     if (get().tabs.some((t) => t.id === id)) set({ activeTabId: id });
   },

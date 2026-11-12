@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::ErrorCode;
 use crate::store::scan::arrange;
-use crate::store::types::{NodeKind, TreeNode};
+use crate::store::types::{NodeKind, RequestContent, TreeNode};
 
 fn write(path: &Path, text: &str) {
     if let Some(parent) = path.parent() {
@@ -388,14 +388,16 @@ fn write_request_keeps_name_and_unknown_fields() {
     );
 
     collection
-        .write_request("r.http.yaml", "POST", "https://x")
+        .write_request("r.http.yaml", &RequestContent::new("POST", "https://x"))
         .unwrap();
 
     assert_eq!(
         read(&collection.requests_root().join("r.http.yaml")),
         "extra: 1\nkind: http\nmethod: POST\nname: R\nurl: https://x\n"
     );
-    assert!(collection.write_request("r.http.yaml", "post", "").is_err());
+    assert!(collection
+        .write_request("r.http.yaml", &RequestContent::new("post", ""))
+        .is_err());
 }
 
 #[test]

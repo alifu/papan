@@ -1,0 +1,8 @@
+body:
+  text: |
+    {"name": "papan"}
+  type: json
+kind: http
+method: POST
+name: JSON body
+url: https://api.example.com/items

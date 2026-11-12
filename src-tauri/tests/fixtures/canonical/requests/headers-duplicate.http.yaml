@@ -1,0 +1,11 @@
+headers:
+  - name: Accept
+    value: application/json
+  - name: Accept
+    value: text/plain
+  - name: X-Trace
+    value: "1"
+kind: http
+method: GET
+name: Duplicate headers
+url: https://api.example.com/items

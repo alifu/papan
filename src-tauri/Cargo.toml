@@ -37,3 +37,20 @@ notify = "8.2"
 notify-debouncer-mini = "0.7"
 uuid = { version = "1", features = ["v4"] }
 tempfile = "3"
+# TLS is rustls + aws-lc-rs + the OS trust store (plan 03 §2).
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "system-proxy", "cookies", "gzip", "brotli", "deflate", "zstd", "multipart", "stream"] }
+reqwest_cookie_store = "0.10"
+tokio = { version = "1", features = ["rt", "macros", "fs", "io-util", "time", "sync"] }
+url = "2"
+base64 = "0.23"
+encoding_rs = "0.8"
+mime = "0.3"
+httpdate = "1"
+
+[dev-dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+axum-server = { version = "0.9", features = ["tls-rustls"] }
+rcgen = "0.14"
+flate2 = "1"
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "net"] }

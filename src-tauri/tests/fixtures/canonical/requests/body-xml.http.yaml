@@ -1,0 +1,8 @@
+body:
+  text: |
+    <item id="1"><name>papan</name></item>
+  type: xml
+kind: http
+method: PUT
+name: XML body
+url: https://api.example.com/items/1

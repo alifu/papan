@@ -1,3 +1,4 @@
+import { useRequestStore } from "../features/request/requestStore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectionLocation, scratchLocation } from "../features/locations";
 import { useScratchStore } from "../features/scratch/scratchStore";
@@ -124,5 +125,38 @@ describe("tabsStore", () => {
     state().activateTab("nope");
     expect(state().tabs).toBe(before.tabs);
     expect(state().activeTabId).toBe("welcome");
+  });
+});
+
+describe("tabsStore dirty close", () => {
+  beforeEach(() => {
+    useTabsStore.setState(useTabsStore.getInitialState(), true);
+    useRequestStore.setState({ byTab: {} });
+  });
+
+  const dirtyTab = () => {
+    const id = useTabsStore.getState().openRequest(loc("a.http.yaml"), "A");
+    useRequestStore.setState({
+      byTab: { [id]: { ...useRequestStore.getState().byTab[id], draft: {} as never } as never },
+    });
+    return id;
+  };
+
+  it("asks before closing a dirty tab and keeps it on cancel", () => {
+    const id = dirtyTab();
+    useTabsStore.getState().closeTab(id);
+    expect(useTabsStore.getState().pendingCloseId).toBe(id);
+    expect(useTabsStore.getState().tabs.some((t) => t.id === id)).toBe(true);
+
+    useTabsStore.getState().cancelClose();
+    expect(useTabsStore.getState().pendingCloseId).toBeNull();
+  });
+
+  it("discard closes the dirty tab and drops its request state", () => {
+    const id = dirtyTab();
+    useTabsStore.getState().closeTab(id);
+    useTabsStore.getState().discardTab(id);
+    expect(useTabsStore.getState().tabs.some((t) => t.id === id)).toBe(false);
+    expect(useRequestStore.getState().byTab[id]).toBeUndefined();
   });
 });

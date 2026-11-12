@@ -2,12 +2,13 @@ import { create } from "zustand";
 import { z } from "zod";
 import { readStored, writeStored } from "../ui/safeStorage";
 
-export type NavSection = "collections" | "scratch" | "mocks" | "journeys";
+export type NavSection = "collections" | "scratch" | "mocks" | "journeys" | "history";
 export const NAV_SECTIONS: readonly NavSection[] = [
   "collections",
   "scratch",
   "mocks",
   "journeys",
+  "history",
 ];
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
@@ -36,7 +37,7 @@ const DEFAULT_LAYOUT: LayoutSnapshot = {
 const layoutSchema = z.object({
   sidebarWidth: z.number().finite(),
   sidebarCollapsed: z.boolean(),
-  activeSection: z.enum(["collections", "scratch", "mocks", "journeys"]),
+  activeSection: z.enum(["collections", "scratch", "mocks", "journeys", "history"]),
 });
 
 export function clampSidebarWidth(width: number): number {

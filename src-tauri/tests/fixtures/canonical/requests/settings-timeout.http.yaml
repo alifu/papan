@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: Custom timeout
+settings:
+  timeout_ms: 5000
+url: https://example.com/slow

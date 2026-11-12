@@ -1,0 +1,8 @@
+headers:
+  - name: Accept
+    value: "*/*"
+  - name: X-Empty
+kind: http
+method: GET
+name: Explicit defaults
+url: https://example.com/defaults

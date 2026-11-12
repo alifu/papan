@@ -1,0 +1,12 @@
+body:
+  fields:
+    - name: grant_type
+      value: password
+    - enabled: false
+      name: scope
+      value: read
+  type: form
+kind: http
+method: POST
+name: Form body
+url: https://auth.example.com/token

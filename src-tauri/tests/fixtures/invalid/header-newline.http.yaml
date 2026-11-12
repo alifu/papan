@@ -1,0 +1,7 @@
+headers:
+  - name: X-Broken
+    value: "line one\nline two"
+kind: http
+method: GET
+name: Header with newline
+url: https://example.com/newline

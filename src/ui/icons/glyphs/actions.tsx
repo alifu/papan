@@ -45,6 +45,12 @@ export const ACTION_GLYPHS = {
       <circle cx="8" cy="8" r="1.5" fill={WHITE} stroke={GREY} strokeWidth="1" />
     </g>
   ),
+  "history": (
+    <g>
+      <circle cx="8" cy="8" r="5.5" fill={WHITE} stroke={GREY} strokeWidth="1.5" />
+      <path d="M8 4.5 V8 L10.5 9.5" fill="none" stroke={GREY} strokeWidth="1.25" strokeLinecap="round" />
+    </g>
+  ),
   "search": (
     <g>
       <path d="M10 10 L14 14" fill="none" stroke={GREY} strokeWidth="1.5" strokeLinecap="round" />

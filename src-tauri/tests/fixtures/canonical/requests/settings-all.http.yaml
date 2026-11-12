@@ -1,0 +1,8 @@
+kind: http
+method: GET
+name: All settings
+settings:
+  follow_redirects: false
+  timeout_ms: 120000
+  verify_tls: false
+url: https://self-signed.example.com/

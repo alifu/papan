@@ -1,0 +1,6 @@
+disabled_params:
+  debug: "1"
+kind: http
+method: GET
+name: Disabled params mapping
+url: https://example.com/params

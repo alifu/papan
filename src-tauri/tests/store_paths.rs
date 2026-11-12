@@ -83,6 +83,7 @@ impl World {
         let content = RequestContent {
             method: "GET".into(),
             url: "x".into(),
+            ..RequestContent::default()
         };
         let scratch = self.store.create_scratch().unwrap().id;
         let location = self.location(path);

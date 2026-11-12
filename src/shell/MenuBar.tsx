@@ -1,5 +1,6 @@
 import { Menu } from "../ui/Menu";
 import { shortcutLabel } from "../ui/platform";
+import { saveActiveRequest, sendActiveRequest } from "./activeRequest";
 import { useLayoutStore } from "./layoutStore";
 import { useTabsStore } from "./tabsStore";
 
@@ -19,8 +20,13 @@ export function MenuBar() {
         label="File"
         items={[
           { label: "New Tab", shortcut: shortcutLabel("N"), onSelect: newTab },
+          { label: "Save", shortcut: shortcutLabel("S"), onSelect: saveActiveRequest },
           { label: "Close Tab", shortcut: shortcutLabel("W"), onSelect: closeActiveTab },
         ]}
+      />
+      <Menu
+        label="Request"
+        items={[{ label: "Send", shortcut: shortcutLabel("Enter"), onSelect: sendActiveRequest }]}
       />
       <Menu
         label="View"

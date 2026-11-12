@@ -1,0 +1,7 @@
+auth:
+  token: "{{api_token}}"
+  type: bearer
+kind: http
+method: GET
+name: Bearer auth
+url: https://api.example.com/me
