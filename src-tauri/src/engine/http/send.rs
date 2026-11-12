@@ -244,6 +244,7 @@ fn head(exchange: &Exchange, response: &Response, ttfb_ms: u32) -> ResponseMeta 
         ttfb_ms,
         total_ms: ttfb_ms,
         tls_verified: exchange.verify_tls && response.url().scheme() == "https",
+        unresolved: Vec::new(),
     }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useCollectionsStore } from "../features/collections/collectionsStore";
+import { useEnvStore } from "../features/environments/envStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 import { ToastHost } from "../ui/Toast";
 import { MenuBar } from "./MenuBar";
@@ -23,8 +24,10 @@ export function AppShell() {
     void useCollectionsStore.getState().load();
     void useScratchStore.getState().load();
     const unlisten = useCollectionsStore.getState().subscribe();
+    const unlistenEnv = useEnvStore.getState().subscribe();
     return () => {
       void unlisten.then((fn) => fn());
+      void unlistenEnv.then((fn) => fn());
     };
   }, []);
   const width = useLayoutStore((s) => s.sidebarWidth);

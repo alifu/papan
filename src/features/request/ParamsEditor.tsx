@@ -1,13 +1,15 @@
+import type { EffectiveVariable } from "../../ipc/bindings";
 import { KeyValueTable, type KeyValueRow } from "./KeyValueTable";
 import type { ParamRow } from "./params";
 
 export interface ParamsEditorProps {
   readonly rows: readonly ParamRow[];
   readonly onChange: (rows: readonly ParamRow[]) => void;
+  readonly variables?: readonly EffectiveVariable[];
 }
 
 /** Params table: a two-way view of the URL query string. */
-export function ParamsEditor({ rows, onChange }: ParamsEditorProps) {
+export function ParamsEditor({ rows, onChange, variables }: ParamsEditorProps) {
   const shown: readonly KeyValueRow[] = rows.map((row, index) => ({
     id: `param-${index}`,
     name: row.name,
@@ -27,5 +29,5 @@ export function ParamsEditor({ rows, onChange }: ParamsEditorProps) {
         };
       }),
     );
-  return <KeyValueTable label="Query parameters" rows={shown} onChange={handleChange} />;
+  return <KeyValueTable label="Query parameters" rows={shown} variables={variables} onChange={handleChange} />;
 }

@@ -101,3 +101,16 @@ fn own_writes_and_git_changes_produce_none() {
     fs::write(git.join("index"), "x").unwrap();
     w.expect_no_event("a change under .git");
 }
+
+#[test]
+fn an_environments_folder_created_later_is_watched() {
+    let w = watched();
+    let dir = w.root.join("environments");
+
+    fs::create_dir(&dir).unwrap();
+    fs::write(dir.join("dev.env.yaml"), "name: Dev\n").unwrap();
+    w.expect_one_event("creating environments/");
+
+    fs::write(dir.join("dev.env.yaml"), "name: Dev 2\n").unwrap();
+    w.expect_one_event("editing an env file in the new folder");
+}

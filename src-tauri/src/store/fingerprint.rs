@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use super::collection::{is_listable, Collection, COLLECTION_FILE, MAX_DEPTH};
+use super::environments::{ENVIRONMENTS_DIR, ENV_SUFFIX};
 use super::fsio::{self, EntryKind, MAX_FILE_BYTES};
 use super::paths::{self, FOLDER_FILE};
 
@@ -28,7 +29,7 @@ const LIMITS: Limits = Limits {
 type Item = (String, Option<PathBuf>);
 
 impl Collection {
-    /// Hash of the collection file and everything listed under `requests/`.
+    /// Hash of the collection file, the environment files and everything under `requests/`.
     pub fn fingerprint(&self) -> u64 {
         fingerprint_with(self, LIMITS)
     }
@@ -39,6 +40,11 @@ fn fingerprint_with(collection: &Collection, limits: Limits) -> u64 {
         COLLECTION_FILE.to_string(),
         Some(collection.root.join(COLLECTION_FILE)),
     )];
+    items.extend(collection.env_stems().into_iter().map(|env| {
+        let name = format!("{env}{ENV_SUFFIX}");
+        let path = collection.environments_dir().join(&name);
+        (format!("{ENVIRONMENTS_DIR}/{name}"), Some(path))
+    }));
     let root = collection.requests_root();
     if fsio::entry_kind(&root) == Some(EntryKind::Dir) {
         collect(&root, "", 0, limits.files, &mut items);

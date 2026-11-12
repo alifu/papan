@@ -6,7 +6,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use papan_lib::error::ErrorCode;
 use papan_lib::store::collection::Collection;
-use papan_lib::store::model::RequestFile;
+use papan_lib::store::env_model::{EnvFile, GlobalsFile};
+use papan_lib::store::model::{CollectionFile, RequestFile};
 use papan_lib::store::types::{NodeKind, RequestContent, TreeNode};
 
 fn fixtures() -> PathBuf {
@@ -27,8 +28,85 @@ fn file_name(path: &Path) -> String {
     path.file_name().unwrap().to_string_lossy().into_owned()
 }
 
+/// Environment fixtures are named `env-*`; everything else is a request file.
+fn is_env_fixture(label: &str) -> bool {
+    label.starts_with("env-")
+}
+
 fn canonical(bytes: &[u8], label: &str) -> String {
+    if is_env_fixture(label) {
+        return canonical_env(bytes, label);
+    }
     RequestFile::parse(label, bytes).unwrap().to_yaml().unwrap()
+}
+
+fn canonical_env(bytes: &[u8], label: &str) -> String {
+    EnvFile::parse(label, bytes).unwrap().to_yaml().unwrap()
+}
+
+fn assert_fixed_point(path: &Path, emit: impl Fn(&[u8], &str) -> String) {
+    let bytes = fs::read(path).unwrap();
+    let name = file_name(path);
+    let written = emit(&bytes, &name);
+    assert_eq!(written, String::from_utf8(bytes).unwrap(), "{name}");
+}
+
+#[test]
+fn canonical_variable_files_are_fixed_points() {
+    let envs = files_in(&fixtures().join("canonical/environments"), ".env.yaml");
+    assert!(envs.len() >= 8, "fixtures missing");
+    for path in &envs {
+        assert_fixed_point(path, canonical_env);
+    }
+    assert_fixed_point(
+        &fixtures().join("canonical/globals/globals.yaml"),
+        |bytes, label| GlobalsFile::parse(label, bytes).unwrap().to_yaml().unwrap(),
+    );
+    assert_fixed_point(
+        &fixtures().join("canonical/collection-vars/papan.collection.yaml"),
+        |bytes, label| {
+            CollectionFile::parse(label, bytes)
+                .unwrap()
+                .to_yaml()
+                .unwrap()
+        },
+    );
+}
+
+#[test]
+fn editing_one_variable_keeps_every_other_line() {
+    let path = fixtures().join("canonical/environments/future-fields.env.yaml");
+    let original = fs::read_to_string(&path).unwrap();
+    let file = EnvFile::parse("future-fields.env.yaml", original.as_bytes()).unwrap();
+    let mut variables = file.variables.clone();
+    variables.get_mut("region").unwrap().value = "us-east-1".into();
+
+    let written = EnvFile { variables, ..file }.to_yaml().unwrap();
+
+    assert_eq!(written, original.replace("eu-west-1", "us-east-1"));
+}
+
+#[test]
+fn invalid_env_files_name_the_file_and_the_field() {
+    let dir = fixtures().join("invalid");
+    let files = files_in(&dir, ".env.yaml");
+    assert!(files.len() >= 8, "fixtures missing");
+
+    for path in files {
+        let name = file_name(&path);
+        let field = fs::read_to_string(dir.join(name.replace(".env.yaml", ".field.txt"))).unwrap();
+
+        let error = EnvFile::parse(&name, &fs::read(&path).unwrap()).unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::InvalidInput, "{name}");
+        assert!(error.message.contains(&name), "{name}: {}", error.message);
+        assert!(
+            error.message.contains(field.trim()),
+            "{name}: `{}` does not name `{}`",
+            error.message,
+            field.trim()
+        );
+    }
 }
 
 #[test]

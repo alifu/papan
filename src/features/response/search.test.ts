@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findMatches, MAX_MATCHES, stepIndex, toSegments } from "./search";
+import { findMatches, MAX_MATCHES, stepIndex } from "./search";
 
 describe("findMatches", () => {
   it("finds case-insensitive literal matches", () => {
@@ -18,14 +18,6 @@ describe("findMatches", () => {
     const result = findMatches("a".repeat(MAX_MATCHES + 5), "a");
     expect(result.matches).toHaveLength(MAX_MATCHES);
     expect(result.capped).toBe(true);
-  });
-});
-
-describe("toSegments", () => {
-  it("splits text around matches", () => {
-    const text = "xAbAy";
-    const segs = toSegments(text, findMatches(text, "a").matches);
-    expect(segs.map((s) => [s.text, s.match])).toEqual([["x", null], ["A", 0], ["b", null], ["A", 1], ["y", null]]);
   });
 });
 

@@ -1,3 +1,4 @@
+import { EnvSwitcher } from "../features/environments/EnvSwitcher";
 import { Button } from "../ui/Button";
 import { useLayoutStore } from "./layoutStore";
 import { ThemeSwitcher } from "./ThemeSwitcher";
@@ -17,6 +18,7 @@ export function Toolbar() {
         pressed={!collapsed}
         onClick={toggleSidebar}
       />
+      <EnvSwitcher />
       <div className="toolbar-spacer" />
       <ThemeSwitcher />
     </div>

@@ -44,6 +44,20 @@ export const commands = {
 	clearHistory: () => __TAURI_INVOKE<null>("clear_history"),
 	/**  Creates a scratch request from a history snapshot. */
 	restoreHistoryEntry: (id: string) => __TAURI_INVOKE<ScratchItem>("restore_history_entry", { id }),
+	listEnvironments: (collectionId: string) => __TAURI_INVOKE<EnvironmentList>("list_environments", { collectionId }),
+	createEnvironment: (collectionId: string, name: string) => __TAURI_INVOKE<EnvironmentList>("create_environment", { collectionId, name }),
+	renameEnvironment: (collectionId: string, env: string, name: string) => __TAURI_INVOKE<EnvironmentList>("rename_environment", { collectionId, env, name }),
+	/**  Also deletes the environment's local values and secrets. */
+	deleteEnvironment: (collectionId: string, env: string) => __TAURI_INVOKE<EnvironmentList>("delete_environment", { collectionId, env }),
+	selectEnvironment: (collectionId: string, env: string | null) => __TAURI_INVOKE<null>("select_environment", { collectionId, env }),
+	/**  Variables of one scope, sorted by name. */
+	readVariables: (scope: VarScope) => __TAURI_INVOKE<Variable[]>("read_variables", { scope }),
+	/**  Replaces the whole scope: rows not listed are deleted. */
+	writeVariables: (scope: VarScope, variables: VariableInput[]) => __TAURI_INVOKE<Variable[]>("write_variables", { scope, variables }),
+	effectiveVariables: (location: RequestLocation) => __TAURI_INVOKE<EffectiveVariable[]>("effective_variables", { location }),
+	previewTemplate: (location: RequestLocation, text: string) => __TAURI_INVOKE<TemplatePreview>("preview_template", { location, text }),
+	secretStorageStatus: () => __TAURI_INVOKE<SecretStorageStatus>("secret_storage_status"),
+	resetSecretStorage: () => __TAURI_INVOKE<SecretStorageStatus>("reset_secret_storage"),
 };
 
 /** Events */
@@ -91,6 +105,29 @@ export type CollectionSummary = {
 export type CollectionTree = {
 	collection: CollectionSummary,
 	children: TreeNode[],
+};
+
+/**  A variable after layering. `value` is "" when secret; dynamic names are listed too. */
+export type EffectiveVariable = {
+	name: string,
+	value: string,
+	source: VarSource,
+	secret: boolean,
+	resolved: boolean,
+};
+
+/**  A collection's environments, sorted by name then `env`, and the selected one. */
+export type EnvironmentList = {
+	environments: EnvironmentSummary[],
+	selected: string | null,
+};
+
+/**  One environment file of a collection; `env` is its file stem (its identity). */
+export type EnvironmentSummary = {
+	env: string,
+	name: string,
+	/**  The file failed to parse: it can only be deleted. */
+	invalid: boolean,
 };
 
 /**  Stable machine-readable error codes. Renaming a variant is a breaking IPC change. */
@@ -211,6 +248,8 @@ export type ResponseMeta = {
 	ttfb_ms: number,
 	total_ms: number,
 	tls_verified: boolean,
+	/**  Variable names that were sent as typed because they did not resolve. */
+	unresolved: string[],
 };
 
 export type ScratchItem = {
@@ -219,11 +258,28 @@ export type ScratchItem = {
 	method: string,
 };
 
+/**  What to do with a variable's stored secret value on write. */
+export type SecretEdit = { op: "keep" } | { op: "set"; value: string } | { op: "clear" };
+
+/**  How secret values are kept on this machine (plan 04 §4.3). */
+export type SecretStorageMode = "keychain" | "session_only" | "damaged";
+
+export type SecretStorageStatus = {
+	mode: SecretStorageMode,
+	message: string | null,
+};
+
 /**  Per-request send settings. `timeout_ms` 0 means no timeout. */
 export type Settings = {
 	follow_redirects: boolean,
 	timeout_ms: number,
 	verify_tls: boolean,
+};
+
+/**  A template resolved for display: secrets as "•••••", dynamics left as typed. */
+export type TemplatePreview = {
+	text: string,
+	unresolved: string[],
 };
 
 /**  Result of a mutation: the new tree and the node's new path (`None` after delete). */
@@ -241,6 +297,34 @@ export type TreeNode = {
 	method: string | null,
 	/**  Folders only. */
 	children: TreeNode[],
+};
+
+/**  Which set of variables a read or write addresses. */
+export type VarScope = { scope: "global" } | { scope: "collection"; collection_id: string } | { scope: "environment"; collection_id: string; env: string };
+
+/**  Where an effective variable's value comes from. */
+export type VarSource = "global" | "collection" | "environment" | "dynamic";
+
+/**  A variable as the editor shows it. For a secret, `value` is "" and `current` None. */
+export type Variable = {
+	name: string,
+	value: string,
+	current: string | null,
+	enabled: boolean,
+	secret: boolean,
+	/**  A secret value is stored on this machine. */
+	has_secret: boolean,
+};
+
+/**  A variable row sent by the editor; `previous_name` is set on a rename. */
+export type VariableInput = {
+	name: string,
+	previous_name: string | null,
+	value: string,
+	current: string | null,
+	enabled: boolean,
+	secret: boolean,
+	secret_edit: SecretEdit,
 };
 
 /* Tauri Specta runtime */

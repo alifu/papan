@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
+import { installEnvFake } from "./envMock";
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name: string, encoding: "utf8" | "base64"): string => readFileSync(join(FIXTURE_DIR, name), encoding);
@@ -15,7 +16,7 @@ declare global {
 
 /**
  * The browser has no Tauri runtime. This installs an in-memory fake of the backend
- * commands (app_info, the 17 storage commands and send/cancel/history). `send_request` answers by URL path:
+ * commands (app_info, the 17 storage commands, send/cancel/history; environments are in `envMock.ts`). `send_request` answers by URL path:
  * `/json`, `/xml`, `/html`, `/image`, `/error` (network error) and `/slow` (pending until cancelled), seeded with one collection and one
  * scratch request, and stubs for the event plugin.
  */
@@ -162,6 +163,7 @@ export async function mockTauri(page: Page): Promise<void> {
         ttfb_ms: 5,
         total_ms: 12,
         tls_verified: true,
+        unresolved: [],
       });
     };
     const scratchList = () => scratch.map(({ id, name, method }) => ({ id, name, method }));
@@ -280,6 +282,7 @@ export async function mockTauri(page: Page): Promise<void> {
       },
     };
 
+    (window as unknown as Record<string, unknown>).__handlers = handlers;
     window.__failNext = (cmd) => void failing.add(cmd);
 
     let callbackId = 0;
@@ -303,4 +306,5 @@ export async function mockTauri(page: Page): Promise<void> {
       unregisterListener: () => {},
     };
   }, bodies);
+  await installEnvFake(page);
 }

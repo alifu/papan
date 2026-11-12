@@ -40,6 +40,15 @@
   --color-focus: #0A246A;
   --color-splitter: #C7D8EE;
   --color-splitter-hover: #99BBE8;
+  --syntax-key: #0B4F9E;
+  --syntax-string: #0F6B2F;
+  --syntax-number: #9A3D00;
+  --syntax-keyword: #7A2E8E;
+  --syntax-tag: #8A1C1C;
+  --syntax-comment: #5A6472;
+  --syntax-var-ok: #0A4F7A;
+  --syntax-var-secret: #7A4B00;
+  --syntax-var-dynamic: #6B2E9E;
 }
 
 :root[data-theme="dark"] {
@@ -69,4 +78,13 @@
   --color-focus: #FFFFFF;
   --color-splitter: #2A2A2A;
   --color-splitter-hover: #6B6B6B;
+  --syntax-key: #7CB7FF;
+  --syntax-string: #8FD98F;
+  --syntax-number: #FFB070;
+  --syntax-keyword: #D8A0F0;
+  --syntax-tag: #FF9A9A;
+  --syntax-comment: #A0A0A0;
+  --syntax-var-ok: #6FC3FF;
+  --syntax-var-secret: #FFD166;
+  --syntax-var-dynamic: #D8A0F0;
 }

@@ -1,0 +1,27 @@
+{
+  "globals": {
+    "variables": {
+      "user_agent": { "value": "papan-e2e" }
+    }
+  },
+  "environments": [
+    {
+      "env": "dev",
+      "name": "Dev",
+      "variables": {
+        "api_token": { "secret": true },
+        "base_url": { "value": "https://dev.example.com" },
+        "path": { "value": "json" }
+      }
+    },
+    {
+      "env": "staging",
+      "name": "Staging",
+      "variables": {
+        "base_url": { "value": "https://staging.example.com" },
+        "path": { "value": "json" }
+      }
+    }
+  ],
+  "selected_env": "dev"
+}

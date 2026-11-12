@@ -54,6 +54,11 @@ function Loaded({ response }: { readonly response: ResponseMeta }) {
           <span className="response-badge">TLS not verified</span>
         ) : null}
       </div>
+      {response.unresolved.length > 0 ? (
+        <p className="response-notice" role="status">
+          Sent with unresolved variables: {response.unresolved.join(", ")}
+        </p>
+      ) : null}
       <Tabs
         label="Response sections"
         selectedId={pane}

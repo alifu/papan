@@ -1,6 +1,8 @@
 import "./request.css";
 import { useRef } from "react";
+import type { EffectiveVariable } from "../../ipc/bindings";
 import { Button } from "../../ui/Button";
+import { unresolvedAttrs } from "../environments/unresolvedAttrs";
 
 export interface KeyValueRow {
   readonly id: string;
@@ -13,12 +15,13 @@ export interface KeyValueTableProps {
   readonly rows: readonly KeyValueRow[];
   readonly onChange: (rows: readonly KeyValueRow[]) => void;
   readonly label: string;
+  readonly variables?: readonly EffectiveVariable[];
 }
 
 type Field = "name" | "value";
 
 /** Editable rows with an always-present empty trailing row. */
-export function KeyValueTable({ rows, onChange, label }: KeyValueTableProps) {
+export function KeyValueTable({ rows, onChange, label, variables }: KeyValueTableProps) {
   const nextId = useRef(0);
   const last = rows[rows.length - 1];
   const needsTrailing = last === undefined || last.name !== "" || last.value !== "";
@@ -61,6 +64,7 @@ export function KeyValueTable({ rows, onChange, label }: KeyValueTableProps) {
               <input
                 aria-label={`Name ${index + 1}`}
                 spellCheck={false}
+                {...unresolvedAttrs(row.name, variables)}
                 value={row.name}
                 onChange={(event) => update(index, { name: event.target.value })}
               />
@@ -69,6 +73,7 @@ export function KeyValueTable({ rows, onChange, label }: KeyValueTableProps) {
               <input
                 aria-label={`Value ${index + 1}`}
                 spellCheck={false}
+                {...unresolvedAttrs(row.value, variables)}
                 value={row.value}
                 onChange={(event) => update(index, { value: event.target.value })}
               />

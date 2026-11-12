@@ -39,4 +39,10 @@ describe("KeyValueTable", () => {
     expect(onChange).toHaveBeenLastCalledWith([ROWS[1]]);
     expect(ROWS[0]?.name).toBe("a");
   });
+  it("flags cells that name undefined variables", () => {
+    render(<KeyValueTable rows={[{ id: "1", name: "h", value: "{{nope}}", enabled: true }]} onChange={vi.fn()} label="H" variables={[]} />);
+    expect(screen.getByLabelText("Value 1")).toHaveClass("has-unresolved");
+    expect(screen.getByLabelText("Value 1")).toHaveAttribute("title", "Not defined: nope");
+    expect(screen.getByLabelText("Name 1")).not.toHaveClass("has-unresolved");
+  });
 });

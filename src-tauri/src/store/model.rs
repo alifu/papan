@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use super::env_model::{self, VarTable};
 use super::types::RequestContent;
 use super::yaml::{self, Node};
 use super::{request_emit, request_model};
@@ -48,6 +49,9 @@ pub struct FolderFile {
 pub struct CollectionFile {
     pub name: String,
     pub version: u64,
+    /// Filled from `extra` by [`CollectionFile::parse`] (plan 04 §3.1).
+    #[serde(skip)]
+    pub variables: VarTable,
     #[serde(flatten)]
     pub extra: Extra,
 }
@@ -233,12 +237,15 @@ impl CollectionFile {
         Self {
             name,
             version: SUPPORTED_VERSION,
+            variables: VarTable::new(),
             extra: Extra::new(),
         }
     }
 
     pub fn parse(label: &str, bytes: &[u8]) -> Result<Self, AppError> {
-        let file: Self = yaml::parse(label, bytes)?;
+        let mut file: Self = yaml::parse(label, bytes)?;
+        let raw = file.extra.remove(env_model::VARIABLES_KEY);
+        file.variables = env_model::parse_variables(label, raw.as_ref())?;
         check_name(label, &file.name)?;
         if file.version > SUPPORTED_VERSION {
             return Err(AppError::invalid_input(
@@ -256,7 +263,17 @@ impl CollectionFile {
             ("name", Node::String(self.name.clone())),
             ("version", Node::Number(self.version.into())),
         ];
-        emit_with(&self.extra, known)
+        let variables =
+            env_model::variables_node(&self.variables).map(|node| (env_model::VARIABLES_KEY, node));
+        emit_with(&self.extra, known.into_iter().chain(variables).collect())
+    }
+
+    #[must_use]
+    pub fn with_variables(&self, variables: VarTable) -> Self {
+        Self {
+            variables,
+            ..self.clone()
+        }
     }
 }
 

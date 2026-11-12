@@ -21,6 +21,7 @@ const meta: ResponseMeta = {
   ttfb_ms: 5,
   total_ms: 12,
   tls_verified: true,
+  unresolved: [],
 };
 
 beforeEach(() => {
@@ -93,7 +94,17 @@ describe("ResponseViewer", () => {
     render(<ResponseViewer response={meta} error={null} sending={false} />);
     await userEvent.click(await screen.findByRole("button", { name: "Raw" }));
     await userEvent.type(screen.getByLabelText("Find in response"), "a");
-    expect(document.querySelectorAll("mark")).toHaveLength(1);
+    await waitFor(() => expect(document.querySelectorAll(".search-mark-current")).toHaveLength(1));
+  });
+
+  it("lists variables that were sent as typed", () => {
+    render(<ResponseViewer response={{ ...meta, unresolved: ["base_url", "token"] }} error={null} sending={false} />);
+    expect(screen.getByText(/unresolved variables: base_url, token/i)).toBeInTheDocument();
+  });
+
+  it("shows no banner when everything resolved", () => {
+    render(<ResponseViewer response={meta} error={null} sending={false} />);
+    expect(screen.queryByText(/unresolved variables/i)).not.toBeInTheDocument();
   });
 
   it("tells the user when the body was evicted", async () => {

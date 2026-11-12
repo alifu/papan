@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CodeEditor } from "../../ui/code/CodeEditor";
 import type { ResponseBody, ResponseMeta } from "../../ipc/bindings";
 import { isAppError } from "../../ipc/errors";
 import { Button } from "../../ui/Button";
@@ -9,7 +10,7 @@ import { prettyJson, prettyXml } from "./format";
 import { HtmlPreview } from "./HtmlPreview";
 import { JsonTree } from "./JsonTree";
 import { SearchBar } from "./SearchBar";
-import { findMatches, toSegments } from "./search";
+import { findMatches } from "./search";
 import { copyText } from "./clipboard";
 import "./response.css";
 import "./viewer.css";
@@ -33,27 +34,6 @@ export interface BodyViewProps {
 
 const prettyText = (kind: BodyKind, text: string): string =>
   (kind === "json" ? prettyJson(text) : kind === "xml" ? prettyXml(text) : null) ?? text;
-
-function HighlightedText({ text, current, matches }: {
-  readonly text: string;
-  readonly current: number;
-  readonly matches: ReturnType<typeof findMatches>["matches"];
-}) {
-  const segments = useMemo(() => toSegments(text, matches), [text, matches]);
-  return (
-    <pre className="body-text">
-      {segments.map((seg, i) =>
-        seg.match === null ? (
-          seg.text
-        ) : (
-          <mark key={i} className={seg.match === current ? "search-mark search-mark-current" : "search-mark"}>
-            {seg.text}
-          </mark>
-        ),
-      )}
-    </pre>
-  );
-}
 
 /** The body of one response: loads the capped preview and offers pretty/raw/tree/preview. */
 export function BodyView({ response }: BodyViewProps) {
@@ -88,6 +68,11 @@ export function BodyView({ response }: BodyViewProps) {
   const { matches, capped } = useMemo(
     () => (searchable ? findMatches(shown, query) : { matches: [], capped: false }),
     [searchable, shown, query],
+  );
+
+  const marks = useMemo(
+    () => ({ ranges: matches.map((m) => ({ from: m.start, to: m.end })), current: matches.length > 0 ? current : null }),
+    [matches, current],
   );
 
   const copy = () => {
@@ -144,7 +129,17 @@ export function BodyView({ response }: BodyViewProps) {
       {active === "preview" && kind === "image" && body.encoding === "base64" ? (
         <img className="body-image" alt="Response" src={`data:${mime};base64,${body.data}`} />
       ) : null}
-      {searchable ? <HighlightedText text={shown} current={current} matches={matches} /> : null}
+      {searchable ? (
+        <div className="body-text">
+          <CodeEditor
+            readOnly
+            language={kind === "json" || kind === "xml" ? kind : "text"}
+            ariaLabel="Response body"
+            value={shown}
+            marks={marks}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

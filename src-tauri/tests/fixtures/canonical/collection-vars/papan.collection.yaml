@@ -1,0 +1,5 @@
+name: Collection vars
+variables:
+  tenant:
+    value: acme
+version: 1

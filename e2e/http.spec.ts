@@ -21,10 +21,10 @@ test.describe("http", () => {
 
     await page.getByLabel("Name 2").fill("b");
     await page.getByLabel("Value 2").fill("2");
-    await expect(url).toHaveValue("http://localhost/json?a=1&b=2");
+    await expect(url).toHaveText("http://localhost/json?a=1&b=2");
 
     await page.getByLabel("Enable row 1").uncheck();
-    await expect(url).toHaveValue("http://localhost/json?b=2");
+    await expect(url).toHaveText("http://localhost/json?b=2");
 
     await page.getByRole("tab", { name: /Headers/ }).click();
     await page.getByLabel("Name 1").fill("Accept");

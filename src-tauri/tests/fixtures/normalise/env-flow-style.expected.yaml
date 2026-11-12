@@ -1,0 +1,6 @@
+name: Flow style
+variables:
+  base:
+    value: https://example.com
+  flag:
+    enabled: false

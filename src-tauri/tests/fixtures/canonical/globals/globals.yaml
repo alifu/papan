@@ -1,0 +1,5 @@
+variables:
+  api_key:
+    secret: true
+  user_agent:
+    value: papan-test

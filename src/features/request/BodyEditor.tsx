@@ -1,5 +1,6 @@
-import type { Body, RequestLocation } from "../../ipc/bindings";
+import type { Body, EffectiveVariable, RequestLocation } from "../../ipc/bindings";
 import { Button } from "../../ui/Button";
+import { CodeEditor } from "../../ui/code/CodeEditor";
 import { reportError } from "../../ui/toastStore";
 import { pickBodyFile } from "./api";
 import { fromRows, toRows } from "./content";
@@ -11,6 +12,7 @@ export interface BodyEditorProps {
   readonly onChange: (body: Body) => void;
   /** Where the request lives: picked files are granted to that location only. */
   readonly location: RequestLocation;
+  readonly variables?: readonly EffectiveVariable[];
 }
 
 type TextType = "json" | "xml" | "text";
@@ -41,7 +43,7 @@ export function formatJsonText(text: string): string {
   }
 }
 
-export function BodyEditor({ body, onChange, location }: BodyEditorProps) {
+export function BodyEditor({ body, onChange, location, variables }: BodyEditorProps) {
   if (body.type === "unsupported") {
     return <p className="empty-text">Made by a newer Papan. This body is read-only.</p>;
   }
@@ -74,17 +76,19 @@ export function BodyEditor({ body, onChange, location }: BodyEditorProps) {
           {body.type === "json" ? (
             <Button label="Format" onClick={() => onChange({ ...body, text: formatJsonText(body.text) })} />
           ) : null}
-          <textarea
-            aria-label="Body text"
-            className="body-text"
-            spellCheck={false}
-            value={body.text}
-            onChange={(e) => onChange({ ...body, text: e.target.value })}
-          />
+          <div className="body-text">
+            <CodeEditor
+              language={body.type}
+              ariaLabel="Body text"
+              value={body.text}
+              variables={variables}
+              onChange={(text) => onChange({ ...body, text })}
+            />
+          </div>
         </>
       ) : null}
       {body.type === "form" ? (
-        <KeyValueTable label="Form fields" rows={toRows(body.fields)} onChange={(rows) => onChange({ type: "form", fields: fromRows(rows) })} />
+        <KeyValueTable label="Form fields" variables={variables} rows={toRows(body.fields)} onChange={(rows) => onChange({ type: "form", fields: fromRows(rows) })} />
       ) : null}
       {body.type === "multipart" ? (
         <MultipartEditor location={location} parts={body.parts} onChange={(parts) => onChange({ type: "multipart", parts: [...parts] })} />

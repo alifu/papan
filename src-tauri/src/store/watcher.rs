@@ -3,13 +3,14 @@
 //! filtered out without timers or path allow-lists.
 
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Duration;
 
 use notify_debouncer_mini::notify::{self, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer_opt, Config, DebounceEventResult, Debouncer};
 
 use super::collection::REQUESTS_DIR;
+use super::environments::ENVIRONMENTS_DIR;
 use super::fsio::{self, EntryKind};
 use super::service::Store;
 use crate::error::AppError;
@@ -18,7 +19,7 @@ const DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// Stops watching when dropped.
 pub struct CollectionWatcher {
-    _debouncer: Debouncer<RecommendedWatcher>,
+    _debouncer: Shared,
 }
 
 impl std::fmt::Debug for CollectionWatcher {
@@ -44,7 +45,52 @@ fn is_relevant(roots: &[PathBuf], path: &Path) -> bool {
     })
 }
 
-/// Watches `root` (non-recursively) and its `requests/` (recursively). After each
+type Shared = Arc<Mutex<Option<Debouncer<RecommendedWatcher>>>>;
+
+/// Subfolders watched once they exist: `git pull` may create them after the watcher
+/// started, so the handler keeps checking for the ones still missing.
+fn subfolders(root: &Path) -> Vec<(PathBuf, RecursiveMode)> {
+    vec![
+        (root.join(ENVIRONMENTS_DIR), RecursiveMode::NonRecursive),
+        (root.join(REQUESTS_DIR), RecursiveMode::Recursive),
+    ]
+}
+
+fn is_dir(path: &Path) -> bool {
+    fsio::entry_kind(path) == Some(EntryKind::Dir)
+}
+
+/// Watches every pending subfolder that now exists; keeps the rest pending.
+fn watch_new_subfolders(
+    shared: &Weak<Mutex<Option<Debouncer<RecommendedWatcher>>>>,
+    pending: &mut Vec<(PathBuf, RecursiveMode)>,
+) {
+    if !pending.iter().any(|(path, _)| is_dir(path)) {
+        return;
+    }
+    let Some(shared) = shared.upgrade() else {
+        return;
+    };
+    let mut guard = shared.lock().unwrap_or_else(PoisonError::into_inner);
+    let Some(debouncer) = guard.as_mut() else {
+        return;
+    };
+    pending.retain(|(path, mode)| {
+        if !is_dir(path) {
+            return true;
+        }
+        match debouncer.watcher().watch(path, *mode) {
+            Ok(()) => false,
+            Err(error) => {
+                tracing::warn!(%error, "could not watch a new collection folder");
+                true
+            }
+        }
+    });
+}
+
+/// Watches `root` and `environments/` (non-recursively) and `requests/` (recursively);
+/// a subfolder created later is watched from the first event that shows it. After each
 /// debounced burst the store's fingerprint for `id` is recomputed; `on_change(id)` runs
 /// only when it changed.
 pub fn watch(
@@ -56,6 +102,11 @@ pub fn watch(
     let roots: Vec<PathBuf> = std::iter::once(root.to_path_buf())
         .chain(fsio::canonicalize(root).ok())
         .collect();
+    let (existing, mut pending): (Vec<_>, Vec<_>) = subfolders(root)
+        .into_iter()
+        .partition(|(path, _)| is_dir(path));
+    let shared: Shared = Arc::new(Mutex::new(None));
+    let weak = Arc::downgrade(&shared);
     let handler = move |result: DebounceEventResult| {
         let events = match result {
             Ok(events) => events,
@@ -67,6 +118,7 @@ pub fn watch(
         if !events.iter().any(|event| is_relevant(&roots, &event.path)) {
             return;
         }
+        watch_new_subfolders(&weak, &mut pending);
         let changed = store
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -84,15 +136,11 @@ pub fn watch(
     watcher
         .watch(root, RecursiveMode::NonRecursive)
         .map_err(watch_error)?;
-    let requests = root.join(REQUESTS_DIR);
-    if fsio::entry_kind(&requests) == Some(EntryKind::Dir) {
-        watcher
-            .watch(&requests, RecursiveMode::Recursive)
-            .map_err(watch_error)?;
+    for (path, mode) in existing {
+        watcher.watch(&path, mode).map_err(watch_error)?;
     }
-    Ok(CollectionWatcher {
-        _debouncer: debouncer,
-    })
+    *shared.lock().unwrap_or_else(PoisonError::into_inner) = Some(debouncer);
+    Ok(CollectionWatcher { _debouncer: shared })
 }
 
 #[cfg(test)]

@@ -4,10 +4,13 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::build::{build, loggable_url, PartValue, Prepared, PreparedBody, PreparedPart};
+use reqwest::header::HeaderName;
+
+use super::build::{build, PartValue, Prepared, PreparedBody, PreparedPart, INVALID_URL_MESSAGE};
 use super::client::{jar_key, Clients};
 use super::grants::{grant_scope, Grants};
 use super::inflight::Inflight;
+use super::resolve::Resolved;
 use super::responses::{validate_id, Responses, MAX_BODY_BYTES};
 use super::send::{execute, Exchange};
 use super::types::{PickedFile, ResponseBody, ResponseMeta};
@@ -16,6 +19,7 @@ use crate::store::history::{Outcome, Sent};
 use crate::store::request_model::validate_content;
 use crate::store::types::{RequestContent, RequestLocation};
 use crate::store::StoreState;
+use crate::vars::template;
 
 const CONTENT_LABEL: &str = "Request";
 const UNNAMED: &str = "Untitled";
@@ -52,13 +56,45 @@ impl HttpEngine {
         }
     }
 
-    /// Sends the draft `content`; `location` picks the cookie jar.
+    /// Sends `content` as typed (no variables); `location` picks the cookie jar.
     pub async fn send(
         &self,
         request_id: &str,
         location: &RequestLocation,
         content: &RequestContent,
     ) -> Result<ResponseMeta, AppError> {
+        self.send_resolved(request_id, location, &Resolved::unchanged(content.clone()))
+            .await
+    }
+
+    /// Sends a resolved draft. Secret values are masked in the shown URL, the log line
+    /// and any error; unresolved names are reported in the response.
+    pub async fn send_resolved(
+        &self,
+        request_id: &str,
+        location: &RequestLocation,
+        resolved: &Resolved,
+    ) -> Result<ResponseMeta, AppError> {
+        if let Some(error) = undefined_in_host(resolved) {
+            return Err(error);
+        }
+        match self.send_inner(request_id, location, resolved).await {
+            Ok(meta) => Ok(ResponseMeta {
+                url: resolved.redact(&meta.url),
+                unresolved: resolved.unresolved.clone(),
+                ..meta
+            }),
+            Err(error) => Err(redact_error(error, resolved)),
+        }
+    }
+
+    async fn send_inner(
+        &self,
+        request_id: &str,
+        location: &RequestLocation,
+        resolved: &Resolved,
+    ) -> Result<ResponseMeta, AppError> {
+        let content = &resolved.content;
         let id = validate_id(request_id)?;
         if self.responses.is_kept(&id) {
             return Err(AppError::invalid_input(
@@ -66,11 +102,12 @@ impl HttpEngine {
             ));
         }
         validate_content(CONTENT_LABEL, content)?;
-        let prepared = self.authorize(location, build(content, &self.version)?)?;
+        let built = build(content, &self.version)?;
+        let prepared = self.authorize(location, with_secret_headers(built, resolved))?;
         let settings = content.settings;
         tracing::info!(
             method = %prepared.method,
-            url = %loggable_url(&prepared.url),
+            url = %resolved.loggable_url(),
             "sending request"
         );
         let exchange = Exchange {
@@ -155,6 +192,77 @@ impl HttpEngine {
         to: &RequestLocation,
     ) -> Result<(), AppError> {
         self.grants.carry(&grant_scope(from), &grant_scope(to))
+    }
+}
+
+fn with_secret_headers(prepared: Prepared, resolved: &Resolved) -> Prepared {
+    let extra = resolved
+        .secret_headers
+        .iter()
+        .filter_map(|name| HeaderName::from_bytes(name.as_bytes()).ok());
+    Prepared {
+        secret_headers: prepared.secret_headers.into_iter().chain(extra).collect(),
+        ..prepared
+    }
+}
+
+fn not_defined(resolved: &Resolved) -> AppError {
+    let names: Vec<String> = resolved
+        .unresolved
+        .iter()
+        .map(|n| format!("`{n}`"))
+        .collect();
+    AppError::invalid_input(format!(
+        "Not defined: {}. Select an environment or define it.",
+        names.join(", ")
+    ))
+}
+
+/// An unresolved token left in the scheme or host: the URL cannot be meant as typed.
+fn undefined_in_host(resolved: &Resolved) -> Option<AppError> {
+    let url = resolved.content.url.trim();
+    let without_scheme = ["https://", "http://"]
+        .iter()
+        .find_map(|scheme| {
+            let head = url.get(..scheme.len())?;
+            head.eq_ignore_ascii_case(scheme)
+                .then(|| &url[scheme.len()..])
+        })
+        .unwrap_or(url);
+    let authority = without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default();
+    let broken = template::names(authority)
+        .iter()
+        .any(|name| resolved.unresolved.iter().any(|missing| missing == name));
+    broken.then(|| not_defined(resolved))
+}
+
+/// Masks secrets in a failed send's message and detail. An invalid URL that still has
+/// unresolved variables names them instead.
+fn redact_error(error: AppError, resolved: &Resolved) -> AppError {
+    if error.code == ErrorCode::InvalidInput
+        && error.message == INVALID_URL_MESSAGE
+        && !resolved.unresolved.is_empty()
+    {
+        let names: Vec<String> = resolved
+            .unresolved
+            .iter()
+            .map(|n| format!("`{n}`"))
+            .collect();
+        return AppError::invalid_input(format!(
+            "Not defined: {}. Select an environment or define it.",
+            names.join(", ")
+        ));
+    }
+    AppError {
+        message: resolved.redact(&error.message),
+        detail: error
+            .detail
+            .as_deref()
+            .map(|detail| resolved.redact(detail)),
+        ..error
     }
 }
 

@@ -38,12 +38,11 @@
   padding: 4px 0;
 }
 
-.body-text {
-  margin: 0;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: monospace;
+.body-view .body-text {
+  height: 360px;
+  min-height: 160px;
+  border: 1px solid var(--color-control-border);
+  overflow: hidden;
 }
 
 .body-image { max-width: 100%; }

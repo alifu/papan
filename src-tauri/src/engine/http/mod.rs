@@ -8,10 +8,13 @@ pub mod client;
 pub mod commands;
 pub mod grants;
 pub mod inflight;
+mod mask;
 pub mod redirect;
+pub mod resolve;
 pub mod responses;
 pub mod send;
 pub mod service;
 pub mod types;
+pub mod variables;
 
 pub use service::HttpEngine;

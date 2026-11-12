@@ -16,6 +16,7 @@ use crate::engine::http::commands as http;
 use crate::error::AppError;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
+use crate::vars::commands as vars;
 
 /// Result of [`sync_bindings`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +59,17 @@ pub fn builder() -> Builder<tauri::Wry> {
             store::list_history,
             store::clear_history,
             store::restore_history_entry,
+            vars::list_environments,
+            vars::create_environment,
+            vars::rename_environment,
+            vars::delete_environment,
+            vars::select_environment,
+            vars::read_variables,
+            vars::write_variables,
+            vars::effective_variables,
+            vars::preview_template,
+            vars::secret_storage_status,
+            vars::reset_secret_storage,
         ])
         .events(collect_events![CollectionChanged])
         .typ::<AppError>()
@@ -178,6 +190,17 @@ mod tests {
             "listHistory",
             "clearHistory",
             "restoreHistoryEntry",
+            "listEnvironments",
+            "createEnvironment",
+            "renameEnvironment",
+            "deleteEnvironment",
+            "selectEnvironment",
+            "readVariables",
+            "writeVariables",
+            "effectiveVariables",
+            "previewTemplate",
+            "secretStorageStatus",
+            "resetSecretStorage",
         ];
 
         let missing: Vec<&str> = expected

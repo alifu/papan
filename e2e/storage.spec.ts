@@ -39,7 +39,7 @@ test.describe("storage", () => {
     await expandDemo(page);
     await row(page, "Health").click();
     const url = page.getByLabel("URL");
-    await expect(url).toHaveValue("https://api.example.com/health");
+    await expect(url).toHaveText("https://api.example.com/health");
 
     await url.fill("https://api.example.com/v2/health");
     await page.getByRole("button", { name: "Save" }).click();
@@ -47,7 +47,7 @@ test.describe("storage", () => {
     await page.getByRole("button", { name: "Close Health" }).click();
     await row(page, "Health").click();
 
-    await expect(page.getByLabel("URL")).toHaveValue("https://api.example.com/v2/health");
+    await expect(page.getByLabel("URL")).toHaveText("https://api.example.com/v2/health");
   });
 
   test("renames and deletes a request", async ({ page }) => {

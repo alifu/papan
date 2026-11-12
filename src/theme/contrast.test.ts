@@ -36,13 +36,26 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+const SYNTAX_TOKENS = [
+  "--syntax-key",
+  "--syntax-string",
+  "--syntax-number",
+  "--syntax-keyword",
+  "--syntax-tag",
+  "--syntax-comment",
+  "--syntax-var-ok",
+  "--syntax-var-secret",
+  "--syntax-var-dynamic",
+] as const;
+
 const PAIRS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["--color-text", ["--color-panel-bg", "--color-content-bg", "--color-status-bg", "--toolbar-bg", "--button-bg", "--button-hover-bg", "--button-active-bg"]],
   ["--color-text-muted", ["--color-panel-bg", "--color-content-bg"]],
   ["--color-header-text", ["--header-bg", "--color-tab-active-bg"]],
   ["--color-header-strong-text", ["--header-strong-bg"]],
   ["--color-selected-text", ["--color-selected-bg"]],
-  ["--color-error-text", ["--color-status-bg"]],
+  ["--color-error-text", ["--color-status-bg", "--color-content-bg"]],
+  ...SYNTAX_TOKENS.map((token) => [token, ["--color-content-bg"]] as const),
 ];
 
 const themes: ReadonlyArray<readonly [string, TokenMap]> = [

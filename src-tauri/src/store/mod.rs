@@ -8,6 +8,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 pub mod collection;
 pub mod commands;
+pub mod env_model;
+pub mod env_ops;
+pub mod environments;
 pub mod fingerprint;
 pub mod fsio;
 pub mod history;

@@ -36,8 +36,10 @@
   align-items: center;
 }
 
-.request-line input[aria-label="URL"] {
+.url-field {
   flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-control-border);
 }
 
 .tls-badge {
@@ -51,9 +53,10 @@
   gap: 6px;
 }
 
-.body-text {
-  min-height: 160px;
-  font-family: monospace;
+.editor-form .body-text {
+  height: 200px;
+  border: 1px solid var(--color-control-border);
+  overflow: hidden;
 }
 
 .multipart-row {

@@ -21,6 +21,7 @@ use crate::error::AppError;
 
 #[derive(Debug)]
 pub struct Store {
+    app_data: PathBuf,
     registry: Registry,
     scratch: Scratch,
     fingerprints: HashMap<String, u64>,
@@ -76,6 +77,7 @@ impl Store {
     pub fn new(app_data: &Path) -> Result<Self, AppError> {
         fsio::create_dir_all(app_data)?;
         Ok(Self {
+            app_data: app_data.to_path_buf(),
             registry: Registry::load(app_data),
             scratch: Scratch::new(app_data)?,
             fingerprints: HashMap::new(),
@@ -84,17 +86,21 @@ impl Store {
         })
     }
 
+    pub fn app_data(&self) -> &Path {
+        &self.app_data
+    }
+
     fn entry(&self, id: &str) -> Result<RegistryEntry, AppError> {
         self.registry.find(id).cloned()
     }
 
-    fn open_entry(&self, id: &str) -> Result<(RegistryEntry, Collection), AppError> {
+    pub(super) fn open_entry(&self, id: &str) -> Result<(RegistryEntry, Collection), AppError> {
         let entry = self.entry(id)?;
         let collection = open_registered(&entry)?;
         Ok((entry, collection))
     }
 
-    fn remember(&mut self, id: &str, collection: &Collection) {
+    pub(super) fn remember(&mut self, id: &str, collection: &Collection) {
         self.fingerprints
             .insert(id.to_string(), collection.fingerprint());
     }

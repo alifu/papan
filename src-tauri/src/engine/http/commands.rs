@@ -1,17 +1,16 @@
 //! Tauri commands for sending requests and handling responses. Thin adapters over
 //! [`HttpEngine`]; the store lock is never held across a network await.
 
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
-
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
-use super::service::record_history;
 use super::types::{PickedFile, ResponseBody, ResponseMeta};
+use super::variables::send_with_variables;
 use super::HttpEngine;
 use crate::error::AppError;
 use crate::store::types::{RequestContent, RequestLocation};
 use crate::store::StoreState;
+use crate::vars::commands::VarsState;
 
 type EngineResult<T> = Result<T, AppError>;
 
@@ -24,13 +23,6 @@ fn logged<T>(result: EngineResult<T>) -> EngineResult<T> {
     result
 }
 
-fn now_ms() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs_f64() * 1000.0)
-        .unwrap_or_default()
-}
-
 fn picked_path(picked: tauri_plugin_dialog::FilePath) -> EngineResult<std::path::PathBuf> {
     picked.into_path().map_err(|source| {
         AppError::invalid_input("That file cannot be used.").with_detail(source.to_string())
@@ -38,26 +30,27 @@ fn picked_path(picked: tauri_plugin_dialog::FilePath) -> EngineResult<std::path:
 }
 
 /// Sends the draft `content`; `location` picks the cookie jar and labels history.
+// Variables are resolved first, with the scopes of `location` (plan 04 §6).
 #[tauri::command]
 #[specta::specta]
 pub async fn send_request(
     engine: State<'_, HttpEngine>,
     store: State<'_, StoreState>,
+    vars: State<'_, VarsState>,
     request_id: String,
     location: RequestLocation,
     content: RequestContent,
 ) -> EngineResult<ResponseMeta> {
-    let sent_at_ms = now_ms();
-    let started = Instant::now();
-    let result = engine.send(&request_id, &location, &content).await;
-    record_history(
+    let result = send_with_variables(
+        &engine,
         &store,
+        &vars.service,
+        vars.dynamics.clone(),
+        &request_id,
         &location,
         &content,
-        sent_at_ms,
-        started.elapsed(),
-        &result,
-    );
+    )
+    .await;
     logged(result)
 }
 

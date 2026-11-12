@@ -41,6 +41,7 @@ pub fn run() {
             ipc_builder.mount_events(app);
             app.manage(store::StoreState::new(open_store(app.handle())?));
             app.manage(open_http_engine(app.handle())?);
+            app.manage(open_vars(app.handle())?);
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");
@@ -91,6 +92,30 @@ fn open_http_engine(app: &tauri::AppHandle) -> Result<engine::http::HttpEngine, 
     let app_data = locate(app.path().app_data_dir())?;
     let version = app.package_info().version.to_string();
     engine::http::HttpEngine::new(&cache_dir, &app_data, &version)
+}
+
+/// Secrets: an encrypted vault whose key is in the OS keychain. Nothing is opened here
+/// (the first secret access does it). Debug builds honour `PAPAN_SECRET_STORE=memory`
+/// so `tauri dev` does not prompt on every rebuild.
+fn open_vars(app: &tauri::AppHandle) -> Result<vars::commands::VarsState, error::AppError> {
+    use std::sync::Arc;
+    use vars::vault::{FileVault, OsKeys, SecretStore};
+
+    #[cfg(debug_assertions)]
+    if std::env::var("PAPAN_SECRET_STORE").as_deref() == Ok("memory") {
+        tracing::info!("secrets are kept in memory (PAPAN_SECRET_STORE=memory)");
+        let vault = vars::vault::MemoryVault::new(vars::types::SecretStorageMode::SessionOnly);
+        return Ok(vars::commands::VarsState::new(Arc::new(vault)));
+    }
+    let app_data = app.path().app_data_dir().map_err(|source| {
+        error::AppError::internal("Could not locate the app data directory.")
+            .with_detail(source.to_string())
+    })?;
+    let vault: Arc<dyn SecretStore> = Arc::new(FileVault::new(
+        app_data.join("secrets.vault"),
+        OsKeys::new(),
+    ));
+    Ok(vars::commands::VarsState::new(vault))
 }
 
 /// Keeps `src/ipc/bindings.ts` in step with the Rust commands during development.

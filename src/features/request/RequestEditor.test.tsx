@@ -10,6 +10,8 @@ import { useRequestStore } from "./requestStore";
 
 vi.mock("../collections/api");
 vi.mock("./api");
+vi.mock("../environments/api");
+vi.mock("../../ui/code/CodeEditor", () => import("../../ui/code/CodeEditor.mock"));
 vi.mock("../response/ResponseViewer", () => ({ ResponseViewer: () => <div>viewer</div> }));
 
 const loc = scratchLocation("s1");

@@ -41,6 +41,8 @@ pub struct ResponseMeta {
     pub ttfb_ms: u32,
     pub total_ms: u32,
     pub tls_verified: bool,
+    /// Variable names that were sent as typed because they did not resolve.
+    pub unresolved: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]

@@ -116,8 +116,10 @@ pub fn loggable_url(url: &Url) -> String {
     )
 }
 
+pub const INVALID_URL_MESSAGE: &str = "Enter a valid http:// or https:// URL.";
+
 fn invalid_url() -> AppError {
-    AppError::invalid_input("Enter a valid http:// or https:// URL.")
+    AppError::invalid_input(INVALID_URL_MESSAGE)
 }
 
 /// The text before `:` when it looks like a URL scheme (`file`, `ftp`, …) rather than a

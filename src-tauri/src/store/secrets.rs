@@ -7,14 +7,26 @@ use std::collections::HashMap;
 
 use super::types::{Auth, KeyValue, RequestContent, RequestLocation};
 use crate::logging::redact::is_sensitive_header;
+use crate::vars::template::is_single_reference;
+
+/// Scheme words allowed before a reference in a sensitive header (plan 04 §4.5).
+const HEADER_SCHEMES: [&str; 3] = ["bearer ", "basic ", "token "];
 
 /// Whether `value` is exactly one `{{name}}` reference (surrounding spaces allowed).
 fn is_variable(value: &str) -> bool {
-    value
-        .trim()
-        .strip_prefix("{{")
-        .and_then(|rest| rest.strip_suffix("}}"))
-        .is_some_and(|name| !name.trim().is_empty() && !name.contains('{') && !name.contains('}'))
+    is_single_reference(value.trim())
+}
+
+/// A sensitive header value kept on disk: one reference, optionally preceded by exactly
+/// `Bearer `, `Basic ` or `Token ` (any case).
+fn is_header_reference(value: &str) -> bool {
+    let trimmed = value.trim();
+    let after_scheme = HEADER_SCHEMES.iter().find_map(|scheme| {
+        let head = trimmed.get(..scheme.len())?;
+        head.eq_ignore_ascii_case(scheme)
+            .then(|| &trimmed[scheme.len()..])
+    });
+    is_variable(trimmed) || after_scheme.is_some_and(is_single_reference)
 }
 
 /// A value that is entirely a `{{var}}` reference is not a secret and is kept; any other
@@ -28,9 +40,9 @@ fn blank(value: &str) -> String {
 }
 
 fn redact_header(header: &KeyValue) -> KeyValue {
-    if is_sensitive_header(&header.name) {
+    if is_sensitive_header(&header.name) && !is_header_reference(&header.value) {
         KeyValue {
-            value: blank(&header.value),
+            value: String::new(),
             ..header.clone()
         }
     } else {
@@ -179,6 +191,38 @@ mod tests {
         ] {
             assert_eq!(blank(value) == value, kept, "{value}");
         }
+    }
+
+    #[test]
+    fn sensitive_headers_keep_a_scheme_word_and_one_reference() {
+        for (value, kept) in [
+            ("Bearer {{t}}", true),
+            ("basic {{t}}", true),
+            ("Token {{t}}", true),
+            ("{{t}}", true),
+            ("Bearer abc {{t}}", false),
+            ("Bearer  {{t}}", false),
+            ("{{a}}{{b}}", false),
+            ("\\{{t}}", false),
+            ("Digest {{t}}", false),
+        ] {
+            assert_eq!(is_header_reference(value), kept, "{value}");
+        }
+        let content = RequestContent {
+            headers: vec![header("Authorization", "Bearer {{t}}")],
+            auth: Auth::Bearer {
+                token: "Bearer {{t}}".into(),
+            },
+            ..RequestContent::default()
+        };
+        let redacted = redact(&content);
+        assert_eq!(redacted.headers[0].value, "Bearer {{t}}");
+        assert_eq!(
+            redacted.auth,
+            Auth::Bearer {
+                token: String::new()
+            }
+        );
     }
 
     #[test]

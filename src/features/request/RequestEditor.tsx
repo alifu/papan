@@ -4,6 +4,7 @@ import { Splitter } from "../../ui/Splitter";
 import { Tabs } from "../../ui/Tabs";
 import { subscribeCollectionChanged } from "../collections/api";
 import "../collections/collections.css";
+import { useEffectiveVariables } from "../environments/useEffectiveVariables";
 import { ResponseViewer } from "../response/ResponseViewer";
 import { AuthEditor } from "./AuthEditor";
 import { BodyEditor } from "./BodyEditor";
@@ -32,6 +33,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   const key = locationKey(location);
   const tab = useRequestStore((s) => s.byTab[tabId]);
   const { load, edit, editUrl, editParams, save, send, cancel } = useRequestStore.getState();
+  const variables = useEffectiveVariables(location);
   const [section, setSection] = useState("params");
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT);
   const resize = (h: number) => setEditorHeight(Math.min(EDITOR_MAX_HEIGHT, Math.max(EDITOR_MIN_HEIGHT, h)));
@@ -74,6 +76,8 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
       <UrlBar
         method={content.method}
         url={content.url}
+        location={location}
+        variables={variables}
         sending={tab.sending}
         dirty={tab.draft !== null}
         tlsVerified={content.settings.verify_tls}
@@ -84,19 +88,20 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         onSave={() => void save(tabId, location)}
       />
       <Tabs tabs={sections} selectedId={section} onSelect={setSection} label="Request sections">
-        {section === "params" ? <ParamsEditor rows={tab.paramRows} onChange={(rows) => editParams(tabId, rows)} /> : null}
+        {section === "params" ? <ParamsEditor variables={variables} rows={tab.paramRows} onChange={(rows) => editParams(tabId, rows)} /> : null}
         {section === "headers" ? (
           <KeyValueTable
             label="Headers"
+            variables={variables}
             rows={toRows(content.headers)}
             onChange={(rows) => edit(tabId, (c) => ({ ...c, headers: fromRows(rows) }))}
           />
         ) : null}
         {section === "body" ? (
-          <BodyEditor location={location} body={content.body} onChange={(body) => edit(tabId, (c) => ({ ...c, body }))} />
+          <BodyEditor location={location} variables={variables} body={content.body} onChange={(body) => edit(tabId, (c) => ({ ...c, body }))} />
         ) : null}
         {section === "auth" ? (
-          <AuthEditor auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
+          <AuthEditor location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
         ) : null}
         {section === "settings" ? (
           <SettingsEditor settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
