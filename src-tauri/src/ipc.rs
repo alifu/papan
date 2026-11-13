@@ -14,6 +14,7 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 use crate::commands;
 use crate::engine::http::commands as http;
 use crate::engine::http::net_commands as net;
+use crate::engine::http::oauth::commands as oauth;
 use crate::error::AppError;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
@@ -81,6 +82,10 @@ pub fn builder() -> Builder<tauri::Wry> {
             net::delete_cookies,
             net::export_curl,
             net::import_curl,
+            oauth::oauth_status,
+            oauth::oauth_authorize,
+            oauth::oauth_cancel,
+            oauth::oauth_clear,
         ])
         .events(collect_events![CollectionChanged])
         .typ::<AppError>()
@@ -222,6 +227,10 @@ mod tests {
             "deleteCookies",
             "exportCurl",
             "importCurl",
+            "oauthStatus",
+            "oauthAuthorize",
+            "oauthCancel",
+            "oauthClear",
         ];
 
         let missing: Vec<&str> = expected
@@ -232,6 +241,7 @@ mod tests {
             .collect();
 
         assert!(missing.is_empty(), "bindings are missing {missing:?}");
+        assert!(rendered.contains("export type OAuthStatus"));
     }
 
     #[test]

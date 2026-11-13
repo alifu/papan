@@ -97,4 +97,27 @@ test.describe("advanced http", () => {
     await jar.getByRole("button", { name: "Delete cookie sid" }).click();
     await expect(jar.getByText("No cookies.")).toBeVisible();
   });
+
+  test("gets an OAuth 2 token after confirming the hosts, and cancels a pending flow", async ({ page }) => {
+    await page.getByRole("tab", { name: "Auth" }).click();
+    await page.getByLabel("Auth type").selectOption("oauth2");
+    await page.getByLabel("Token URL").fill("https://login.example.com/token");
+    await page.getByLabel("Client ID").fill("papan");
+    await expect(page.locator(".oauth-status")).toHaveText("No token");
+
+    await page.getByRole("button", { name: "Get new token" }).click();
+    const dialog = page.getByRole("dialog", { name: "Get new token" });
+    await expect(dialog.getByText("login.example.com")).toBeVisible();
+    await dialog.getByRole("button", { name: "Get token" }).click();
+    await expect(page.locator(".oauth-status")).toHaveText(/Token valid until/);
+    expect(await page.content()).not.toMatch(/access_token|refresh_token/);
+
+    await page.getByRole("button", { name: "Clear token" }).click();
+    await expect(page.locator(".oauth-status")).toHaveText("No token");
+
+    await page.getByRole("button", { name: "Get new token" }).click();
+    await page.getByRole("dialog", { name: "Get new token" }).getByRole("button", { name: "Get token" }).click();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.locator(".oauth-status")).toHaveText("Cancelled");
+  });
 });

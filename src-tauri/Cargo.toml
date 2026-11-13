@@ -61,6 +61,11 @@ aws-lc-rs = "1"
 zeroize = "1"
 time = { version = "0.3", features = ["formatting"] }
 
+[target.'cfg(windows)'.dependencies]
+# The loopback listener binds with SO_EXCLUSIVEADDRUSE (already in the tree via hyper-util).
+socket2 = "0.6"
+windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock"] }
+
 [dev-dependencies]
 axum = { version = "0.8", features = ["multipart"] }
 axum-server = { version = "0.9", features = ["tls-rustls"] }

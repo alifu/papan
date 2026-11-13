@@ -6,7 +6,7 @@ import type { Page } from "@playwright/test";
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "curl.json");
 
 /**
- * In-memory fake of commands 38-46 (network settings, certificates, cookies, cURL). The proxy password
+ * In-memory fake of commands 38-50 (network settings, certificates, cookies, cURL, OAuth 2 status/authorize/cancel/clear). The proxy password
  * is write-only, as in the real backend. `import_curl` answers from `fixtures/curl.json`; `export_curl`
  * returns a fixed command. Must run after the base fake has published `window.__handlers`.
  */
@@ -26,6 +26,22 @@ export async function installNetFake(page: Page): Promise<void> {
     const sorted = () => [...jar].sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name));
     const sameCookie = (a: Cookie, b: { domain: string; path: string | null; name: string | null }) =>
       a.domain === b.domain && (b.path === null || a.path === b.path) && (b.name === null || a.name === b.name);
+
+    // OAuth: a token exists per configuration key; authorize resolves after 200 ms unless cancelled first.
+    const tokens = new Set<string>();
+    const flows = new Map<string, () => void>();
+    const hostOf = (url: string) => { try { return new URL(url).host; } catch { return ""; } };
+    const oauthStatus = (content: { auth: Record<string, string | number>; settings: { verify_tls: boolean } }) => {
+      const a = content.auth;
+      const key = `${a.grant}|${a.auth_url}|${a.token_url}|${a.client_id}|${a.scope}`;
+      return {
+        config_key: key, has_token: tokens.has(key), expires_at_ms: tokens.has(key) ? Date.now() + 3600_000 : null,
+        can_refresh: false, verify_tls: content.settings.verify_tls, scope: String(a.scope), token_host: hostOf(String(a.token_url)),
+        auth_host: a.grant === "authorization_code" ? hostOf(String(a.auth_url)) : null,
+        plaintext: String(a.token_url).startsWith("http:") || String(a.auth_url).startsWith("http:"),
+        redirect_uri: a.grant === "authorization_code" ? "http://127.0.0.1:53682/callback" : null,
+      };
+    };
 
     const handlers = w.__handlers;
     const send = handlers.send_request;
@@ -63,6 +79,28 @@ export async function installNetFake(page: Page): Promise<void> {
         const found = (cases as Case[]).find((c) => c.command === text);
         if (!found?.content) throw appError("invalid_input", "That is not a cURL command.");
         return { content: found.content, warnings: found.warnings };
+      },
+      oauth_status: (a: Args) => oauthStatus(a.content),
+      oauth_authorize: (a: Args) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            flows.delete(a.flowId);
+            tokens.add(a.configKey);
+            resolve(oauthStatus(a.content));
+          }, 200);
+          flows.set(a.flowId, () => {
+            clearTimeout(timer);
+            flows.delete(a.flowId);
+            reject(appError("cancelled", "The sign-in was cancelled."));
+          });
+        }),
+      oauth_cancel: (a: Args) => {
+        flows.get(a.flowId)?.();
+        return null;
+      },
+      oauth_clear: (a: Args) => {
+        tokens.delete(oauthStatus(a.content).config_key);
+        return oauthStatus(a.content);
       },
       // The base fake has no timing; add a fixed one.
       send_request: async (a: Args) => ({

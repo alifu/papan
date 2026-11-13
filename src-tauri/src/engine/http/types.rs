@@ -186,7 +186,7 @@ pub struct CurlImport {
     pub warnings: Vec<String>,
 }
 
-/// OAuth 2 token state for one configuration (phase B, commands 47–50; not registered yet).
+/// OAuth 2 token state for one configuration (phase B, commands 47–50).
 /// No field ever holds a token.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct OAuthStatus {
@@ -199,4 +199,6 @@ pub struct OAuthStatus {
     pub token_host: String,
     pub plaintext: bool,
     pub redirect_uri: Option<String>,
+    /// Whether "Get new token" will verify the provider's TLS certificate.
+    pub verify_tls: bool,
 }

@@ -230,12 +230,10 @@ fn authorization(auth: &Auth) -> Result<Option<HeaderValue>, AppError> {
         }
         Auth::Bearer { token } => format!("Bearer {token}"),
         Auth::Unsupported => return Err(newer_papan("authentication")),
-        Auth::Oauth2 { .. } => {
-            return Err(AppError::invalid_input(
-                "OAuth 2 arrives in the next update.",
-            ))
+        // OAuth 2 reaches `build` already turned into Bearer (plan 03b §5.3 rule 6).
+        Auth::None | Auth::Oauth2 { .. } | Auth::ApiKey { .. } | Auth::Digest { .. } => {
+            return Ok(None)
         }
-        Auth::None | Auth::ApiKey { .. } | Auth::Digest { .. } => return Ok(None),
     };
     header_value(&text).map(Some)
 }

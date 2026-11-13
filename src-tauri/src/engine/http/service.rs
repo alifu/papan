@@ -1,29 +1,30 @@
 //! `HttpEngine`: the plain-Rust API behind the HTTP commands (plan 03 §6). Managed by
 //! Tauri as the engine state; tests drive it directly against a local server.
 
-use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::header::HeaderName;
-
-use super::build::{build, PartValue, Prepared, PreparedBody, PreparedPart, INVALID_URL_MESSAGE};
+use super::build::{build, PartValue, Prepared, PreparedBody, PreparedPart};
 use super::client::{jar_key, ClientSelector, Clients};
 use super::cookie_jars::{CookieJars, Persisted};
 use super::grants::{grant_scope, Grants};
 use super::inflight::Inflight;
 use super::network::{NetConfig, Network};
+use super::oauth::flow::token_for_send;
+use super::oauth::OAuth;
 use super::resolve::Resolved;
 use super::responses::{validate_id, Responses, MAX_BODY_BYTES};
 use super::send::{execute, Exchange};
+use super::send_guard::{
+    redact_error, undefined_in_host, with_digest_secret, with_secret, with_secret_headers,
+};
 use super::types::{PickedFile, ResponseBody, ResponseMeta};
 use crate::error::{AppError, ErrorCode};
 use crate::store::history::{Outcome, Sent};
 use crate::store::request_model::validate_content;
-use crate::store::types::{Auth, RequestContent, RequestLocation};
+use crate::store::types::{RequestContent, RequestLocation};
 use crate::store::StoreState;
-use crate::vars::template;
 use crate::vars::vault::{MemoryVault, SecretStore};
 
 const CONTENT_LABEL: &str = "Request";
@@ -35,9 +36,10 @@ pub struct HttpEngine {
     clients: Arc<Clients>,
     cookies: Arc<CookieJars>,
     network: Arc<Network>,
+    oauth: Arc<OAuth>,
     responses: Responses,
     inflight: Inflight,
-    grants: Grants,
+    grants: Arc<Grants>,
     max_body_bytes: u64,
 }
 
@@ -46,14 +48,16 @@ impl HttpEngine {
     /// `app_data`. Secrets are kept in memory until [`HttpEngine::with_vault`].
     pub fn new(cache_dir: &Path, app_data: &Path, version: &str) -> Result<Self, AppError> {
         let clients = Arc::new(Clients::default());
+        let network = Arc::new(Network::load(app_data, Arc::new(MemoryVault::default())));
         Ok(Self {
             version: version.to_string(),
             cookies: Arc::new(CookieJars::new(Arc::clone(&clients), None)),
+            oauth: Arc::new(OAuth::new(Arc::clone(&clients), Arc::clone(&network))),
             clients,
-            network: Arc::new(Network::load(app_data, Arc::new(MemoryVault::default()))),
+            network,
             responses: Responses::new(cache_dir)?,
             inflight: Inflight::default(),
-            grants: Grants::load(app_data),
+            grants: Arc::new(Grants::load(app_data)),
             max_body_bytes: MAX_BODY_BYTES,
         })
     }
@@ -65,11 +69,18 @@ impl HttpEngine {
             dir: app_data.join("cookies"),
             vault: Arc::clone(&vault),
         };
+        let network = Arc::new(Network::load(app_data, vault));
         Self {
             cookies: Arc::new(CookieJars::new(Arc::clone(&self.clients), Some(persisted))),
-            network: Arc::new(Network::load(app_data, vault)),
+            oauth: Arc::new(OAuth::new(Arc::clone(&self.clients), Arc::clone(&network))),
+            network,
             ..self
         }
+    }
+
+    /// OAuth 2 over this engine's clients, network settings and vault.
+    pub fn oauth(&self) -> &OAuth {
+        &self.oauth
     }
 
     /// The machine-local network settings.
@@ -102,8 +113,11 @@ impl HttpEngine {
             .await
     }
 
-    /// Sends a resolved draft. Secret values are masked in the shown URL, the log line
-    /// and any error; unresolved names are reported in the response.
+    /// Sends a resolved draft. An OAuth 2 draft gets its stored token as Bearer auth
+    /// first (plan 03b §5.3), or is refused before anything is sent. Secret values are
+    /// masked in the shown URL, the log line and any error; unresolved names are
+    /// reported in the response. Everything that can wait on the network, the token
+    /// renewal included, runs under the request id, so Cancel stops it.
     pub async fn send_resolved(
         &self,
         request_id: &str,
@@ -113,69 +127,29 @@ impl HttpEngine {
         if let Some(error) = undefined_in_host(resolved) {
             return Err(error);
         }
-        let config = self.network_config().await?;
-        let resolved = with_secret(&with_digest_secret(resolved), config.password()).into_owned();
-        let resolved = &resolved;
-        match self
-            .send_inner(request_id, location, resolved, config)
-            .await
-        {
-            Ok(meta) => Ok(ResponseMeta {
-                url: resolved.redact(&meta.url),
-                unresolved: resolved.unresolved.clone(),
-                ..meta
-            }),
-            Err(error) => Err(redact_error(error, resolved)),
-        }
-    }
-
-    async fn send_inner(
-        &self,
-        request_id: &str,
-        location: &RequestLocation,
-        resolved: &Resolved,
-        config: Arc<NetConfig>,
-    ) -> Result<ResponseMeta, AppError> {
-        let content = &resolved.content;
         let id = validate_id(request_id)?;
         if self.responses.is_kept(&id) {
             return Err(AppError::invalid_input(
                 "That request id was already used. Send again with a new id.",
             ));
         }
-        validate_content(CONTENT_LABEL, content)?;
-        let built = build(content, &self.version)?;
-        let prepared = self.authorize(location, with_secret_headers(built, resolved))?;
-        let settings = content.settings;
-        let jar = jar_key(location);
-        self.cookies.open(&jar).await?;
-        tracing::info!(
-            method = %prepared.method,
-            url = %resolved.loggable_url(),
-            "sending request"
-        );
-        let exchange = Exchange {
+        let job = SendJob {
+            version: self.version.clone(),
+            clients: Arc::clone(&self.clients),
+            cookies: Arc::clone(&self.cookies),
+            network: Arc::clone(&self.network),
+            oauth: Arc::clone(&self.oauth),
+            grants: Arc::clone(&self.grants),
+            config: self.network_config().await?,
             request_id: id.clone(),
-            selector: ClientSelector::new(
-                Arc::clone(&self.clients),
-                self.network.vault(),
-                config,
-                Some(&jar),
-                settings.verify_tls,
-                settings.http_version,
-            ),
-            prepared,
-            timeout: (settings.timeout_ms > 0)
-                .then(|| Duration::from_millis(settings.timeout_ms.into())),
-            follow_redirects: settings.follow_redirects,
-            verify_tls: settings.verify_tls,
-            http_version: settings.http_version,
+            location: location.clone(),
+            resolved: resolved.clone(),
             body_file: self.responses.path(&id)?,
             max_body_bytes: self.max_body_bytes,
         };
-        let sent = self.inflight.run(&id, execute(exchange)).await;
-        if settings.verify_tls {
-            self.cookies.changed(&jar);
+        let sent = self.inflight.run(&id, job.run()).await;
+        if resolved.content.settings.verify_tls {
+            self.cookies.changed(&jar_key(location));
         }
         let meta = sent?;
         self.responses.keep(&id, meta.content_type.clone());
@@ -192,36 +166,6 @@ impl HttpEngine {
                 AppError::internal("Could not read the network settings.")
                     .with_detail(source.to_string())
             })?
-    }
-
-    /// Every file to upload must be granted; paths are replaced by their canonical form.
-    fn authorize(
-        &self,
-        location: &RequestLocation,
-        prepared: Prepared,
-    ) -> Result<Prepared, AppError> {
-        let scope = grant_scope(location);
-        let body = match prepared.body {
-            PreparedBody::File(path) => PreparedBody::File(self.grants.check(&scope, &path)?),
-            PreparedBody::Multipart(parts) => PreparedBody::Multipart(
-                parts
-                    .into_iter()
-                    .map(|part| self.authorize_part(&scope, part))
-                    .collect::<Result<_, _>>()?,
-            ),
-            other => other,
-        };
-        Ok(Prepared { body, ..prepared })
-    }
-
-    fn authorize_part(&self, scope: &str, part: PreparedPart) -> Result<PreparedPart, AppError> {
-        Ok(match part.value {
-            PartValue::File(path) => PreparedPart {
-                value: PartValue::File(self.grants.check(scope, &path)?),
-                ..part
-            },
-            PartValue::Text(_) => part,
-        })
     }
 
     pub fn cancel(&self, request_id: &str) -> Result<(), AppError> {
@@ -261,103 +205,99 @@ impl HttpEngine {
     }
 }
 
-/// The Digest password is masked like a secret value (plan 03b §6.3).
-fn with_digest_secret(resolved: &Resolved) -> Cow<'_, Resolved> {
-    match &resolved.content.auth {
-        Auth::Digest { password, .. } => with_secret(resolved, Some(password)),
-        _ => Cow::Borrowed(resolved),
-    }
+/// One send, owned so that it runs as a cancellable task under its request id.
+struct SendJob {
+    version: String,
+    clients: Arc<Clients>,
+    cookies: Arc<CookieJars>,
+    network: Arc<Network>,
+    oauth: Arc<OAuth>,
+    grants: Arc<Grants>,
+    config: Arc<NetConfig>,
+    request_id: String,
+    location: RequestLocation,
+    resolved: Resolved,
+    body_file: PathBuf,
+    max_body_bytes: u64,
 }
 
-/// `resolved` with `secret` added to the values masked in the URL and errors; the proxy
-/// password goes through here for every send (§15.2).
-fn with_secret<'a>(resolved: &'a Resolved, secret: Option<&str>) -> Cow<'a, Resolved> {
-    match secret {
-        Some(secret)
-            if !secret.is_empty() && !resolved.secret_values.iter().any(|s| s == secret) =>
-        {
-            Cow::Owned(Resolved {
-                secret_values: resolved
-                    .secret_values
-                    .iter()
-                    .cloned()
-                    .chain([secret.to_string()])
-                    .collect(),
-                ..resolved.clone()
-            })
+impl SendJob {
+    /// The token (if the draft uses OAuth 2), then the exchange; the result is masked.
+    async fn run(self) -> Result<ResponseMeta, AppError> {
+        let resolved = token_for_send(&self.oauth, &self.config, &self.location, &self.resolved)
+            .await
+            .map_err(|error| redact_error(error, &self.resolved))?;
+        let resolved =
+            with_secret(&with_digest_secret(&resolved), self.config.password()).into_owned();
+        match self.exchange(&resolved).await {
+            Ok(meta) => Ok(ResponseMeta {
+                url: resolved.redact(&meta.url),
+                unresolved: resolved.unresolved.clone(),
+                ..meta
+            }),
+            Err(error) => Err(redact_error(error, &resolved)),
         }
-        _ => Cow::Borrowed(resolved),
     }
-}
 
-fn with_secret_headers(prepared: Prepared, resolved: &Resolved) -> Prepared {
-    let extra = resolved
-        .secret_headers
-        .iter()
-        .filter_map(|name| HeaderName::from_bytes(name.as_bytes()).ok());
-    Prepared {
-        secret_headers: prepared.secret_headers.into_iter().chain(extra).collect(),
-        ..prepared
-    }
-}
-
-fn not_defined(resolved: &Resolved) -> AppError {
-    let names: Vec<String> = resolved
-        .unresolved
-        .iter()
-        .map(|n| format!("`{n}`"))
-        .collect();
-    AppError::invalid_input(format!(
-        "Not defined: {}. Select an environment or define it.",
-        names.join(", ")
-    ))
-}
-
-/// An unresolved token left in the scheme or host: the URL cannot be meant as typed.
-fn undefined_in_host(resolved: &Resolved) -> Option<AppError> {
-    let url = resolved.content.url.trim();
-    let without_scheme = ["https://", "http://"]
-        .iter()
-        .find_map(|scheme| {
-            let head = url.get(..scheme.len())?;
-            head.eq_ignore_ascii_case(scheme)
-                .then(|| &url[scheme.len()..])
+    async fn exchange(&self, resolved: &Resolved) -> Result<ResponseMeta, AppError> {
+        let content = &resolved.content;
+        validate_content(CONTENT_LABEL, content)?;
+        let built = build(content, &self.version)?;
+        let prepared = self.authorize(with_secret_headers(built, resolved))?;
+        let settings = content.settings;
+        let jar = jar_key(&self.location);
+        self.cookies.open(&jar).await?;
+        tracing::info!(
+            method = %prepared.method,
+            url = %resolved.loggable_url(),
+            "sending request"
+        );
+        execute(Exchange {
+            request_id: self.request_id.clone(),
+            selector: ClientSelector::new(
+                Arc::clone(&self.clients),
+                self.network.vault(),
+                Arc::clone(&self.config),
+                Some(&jar),
+                settings.verify_tls,
+                settings.http_version,
+            ),
+            prepared,
+            timeout: (settings.timeout_ms > 0)
+                .then(|| Duration::from_millis(settings.timeout_ms.into())),
+            follow_redirects: settings.follow_redirects,
+            verify_tls: settings.verify_tls,
+            http_version: settings.http_version,
+            body_file: self.body_file.clone(),
+            max_body_bytes: self.max_body_bytes,
         })
-        .unwrap_or(url);
-    let authority = without_scheme
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or_default();
-    let broken = template::names(authority)
-        .iter()
-        .any(|name| resolved.unresolved.iter().any(|missing| missing == name));
-    broken.then(|| not_defined(resolved))
-}
-
-/// Masks secrets in a failed send's message and detail. An invalid URL that still has
-/// unresolved variables names them instead.
-fn redact_error(error: AppError, resolved: &Resolved) -> AppError {
-    if error.code == ErrorCode::InvalidInput
-        && error.message == INVALID_URL_MESSAGE
-        && !resolved.unresolved.is_empty()
-    {
-        let names: Vec<String> = resolved
-            .unresolved
-            .iter()
-            .map(|n| format!("`{n}`"))
-            .collect();
-        return AppError::invalid_input(format!(
-            "Not defined: {}. Select an environment or define it.",
-            names.join(", ")
-        ));
+        .await
     }
-    AppError {
-        message: resolved.redact(&error.message),
-        detail: error
-            .detail
-            .as_deref()
-            .map(|detail| resolved.redact(detail)),
-        ..error
+
+    /// Every file to upload must be granted; paths are replaced by their canonical form.
+    fn authorize(&self, prepared: Prepared) -> Result<Prepared, AppError> {
+        let scope = grant_scope(&self.location);
+        let body = match prepared.body {
+            PreparedBody::File(path) => PreparedBody::File(self.grants.check(&scope, &path)?),
+            PreparedBody::Multipart(parts) => PreparedBody::Multipart(
+                parts
+                    .into_iter()
+                    .map(|part| self.authorize_part(&scope, part))
+                    .collect::<Result<_, _>>()?,
+            ),
+            other => other,
+        };
+        Ok(Prepared { body, ..prepared })
+    }
+
+    fn authorize_part(&self, scope: &str, part: PreparedPart) -> Result<PreparedPart, AppError> {
+        Ok(match part.value {
+            PartValue::File(path) => PreparedPart {
+                value: PartValue::File(self.grants.check(scope, &path)?),
+                ..part
+            },
+            PartValue::Text(_) => part,
+        })
     }
 }
 

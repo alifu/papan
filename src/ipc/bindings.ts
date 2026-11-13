@@ -83,6 +83,14 @@ export const commands = {
 	exportCurl: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<string>("export_curl", { location, content }),
 	/**  Parses a cURL command without executing or reading anything. */
 	importCurl: (text: string) => __TAURI_INVOKE<CurlImport>("import_curl", { text }),
+	/**  Command 47: the token state of the draft's resolved OAuth 2 configuration. */
+	oauthStatus: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<OAuthStatus>("oauth_status", { location, content }),
+	/**  Command 48: runs "Get new token" for the configuration the dialog showed (`config_key`). */
+	oauthAuthorize: (flowId: string, location: RequestLocation, content: RequestContent, configKey: string) => __TAURI_INVOKE<OAuthStatus>("oauth_authorize", { flowId, location, content, configKey }),
+	/**  Command 49: cancels the pending flow `flow_id`. */
+	oauthCancel: (flowId: string) => __TAURI_INVOKE<null>("oauth_cancel", { flowId }),
+	/**  Command 50: forgets the stored token of the draft's resolved configuration. */
+	oauthClear: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<OAuthStatus>("oauth_clear", { location, content }),
 };
 
 /** Events */
@@ -253,6 +261,24 @@ export type NetworkSettings = {
 export type NodeKind = "folder" | "request" | "invalid";
 
 export type OAuthGrant = "client_credentials" | "authorization_code";
+
+/**
+ *  OAuth 2 token state for one configuration (phase B, commands 47–50).
+ *  No field ever holds a token.
+ */
+export type OAuthStatus = {
+	config_key: string,
+	has_token: boolean,
+	expires_at_ms: number | null,
+	can_refresh: boolean,
+	scope: string,
+	auth_host: string | null,
+	token_host: string,
+	plaintext: boolean,
+	redirect_uri: string | null,
+	/**  Whether "Get new token" will verify the provider's TLS certificate. */
+	verify_tls: boolean,
+};
 
 /**  A query parameter switched off in the params table (plan 03 §3.1). */
 export type Pair = {

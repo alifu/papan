@@ -13,6 +13,7 @@ import { AuthEditor } from "./AuthEditor";
 import { BodyEditor } from "./BodyEditor";
 import { countEnabled, fromRows, toRows } from "./content";
 import { KeyValueTable } from "./KeyValueTable";
+import { OAuthTokenPanel } from "./OAuthTokenPanel";
 import { ParamsEditor } from "./ParamsEditor";
 import { currentContent, useRequestStore } from "./requestStore";
 import { SettingsEditor } from "./SettingsEditor";
@@ -118,7 +119,10 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
           <BodyEditor location={location} variables={variables} body={content.body} onChange={(body) => edit(tabId, (c) => ({ ...c, body }))} />
         ) : null}
         {section === "auth" ? (
-          <AuthEditor location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
+          <>
+            <AuthEditor location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
+            {content.auth.type === "oauth2" ? <OAuthTokenPanel tabId={tabId} location={location} content={content} /> : null}
+          </>
         ) : null}
         {section === "settings" ? (
           <SettingsEditor settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />

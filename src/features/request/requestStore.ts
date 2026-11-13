@@ -10,6 +10,7 @@ import { isAppError } from "../../ipc/errors";
 import { reportError } from "../../ui/toastStore";
 import { readRequest, writeRequest } from "../collections/api";
 import * as api from "./api";
+import { useOAuthStore } from "./oauthStore";
 import { equalContent } from "./content";
 import { applyRowsEdit, applyUrlEdit, rowsFromContent, type ParamRow } from "./params";
 
@@ -135,6 +136,7 @@ export const useRequestStore = create<RequestState>()((set, get) => {
     },
     drop: (tabId) => {
       get().cancel(tabId);
+      useOAuthStore.getState().drop(tabId);
       set((state) => {
         const rest = { ...state.byTab };
         delete rest[tabId];
