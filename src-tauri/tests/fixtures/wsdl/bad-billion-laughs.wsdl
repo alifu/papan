@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hostile fixture: a small, safe entity-expansion chain (lol3 expands to 1000 "lol"). The DTD must be refused, never expanded.
+     Only lol1 is referenced in the body: libxml2's amplification guard rejects a full expansion even in xmllint,
+     and the chain stays declared so a parser that expanded it would still blow up. -->
+<!DOCTYPE wsdl:definitions [
+  <!ENTITY lol "lol">
+  <!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol2 "&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+]>
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  targetNamespace="http://example.test/laughs"
+  name="Laughs">
+  <wsdl:documentation>&lol1;</wsdl:documentation>
+</wsdl:definitions>

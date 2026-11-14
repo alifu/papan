@@ -120,9 +120,34 @@ describe("CollectionsPanel", () => {
     expect(screen.getByRole("dialog", { name: "New Request" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Name"), "New{Enter}");
 
-    expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "New");
+    expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "New", "http");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(useTabsStore.getState().tabs[1].location).toMatchObject({ path: "auth/new.http.yaml" });
+  });
+
+  it("creates a SOAP request when the Type choice is changed", async () => {
+    seed();
+    vi.mocked(api.createRequest).mockResolvedValue({ tree: makeTree(), path: "auth/s.http.yaml" });
+    render(<CollectionsPanel />);
+
+    await pick("auth", "New Request");
+    await userEvent.selectOptions(screen.getByLabelText("Type"), "soap");
+    await userEvent.type(screen.getByLabelText("Name"), "s{Enter}");
+
+    expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "s", "soap");
+  });
+
+  it("shows the protocol badge for GraphQL and SOAP rows", () => {
+    const tree = makeTree();
+    const retag = (path: string, request_kind: "graphql" | "soap") =>
+      tree.children.map((n) => (n.path === path ? { ...n, request_kind } : n));
+    useCollectionsStore.setState({
+      trees: [{ ...tree, children: retag("health.http.yaml", "graphql") }],
+      expanded: new Set(["c1:"]),
+    });
+    render(<CollectionsPanel />);
+    const row = screen.getByRole("treeitem", { name: "health" });
+    expect(row).toHaveTextContent("GQL");
   });
 
   it("creates a folder and a collection", async () => {

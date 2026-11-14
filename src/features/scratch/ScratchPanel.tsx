@@ -1,10 +1,10 @@
 import { useState } from "react";
 import type { ScratchItem } from "../../ipc/bindings";
 import { useTabsStore } from "../../shell/tabsStore";
-import { Button } from "../../ui/Button";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
 import { NameDialog } from "../collections/NameDialog";
+import { kindBadge, kindIcon, REQUEST_KIND_OPTIONS } from "../collections/requestKind";
 import { scratchLocation } from "../locations";
 import { MoveToCollectionDialog } from "./MoveToCollectionDialog";
 import { useScratchStore } from "./scratchStore";
@@ -24,7 +24,13 @@ export function ScratchPanel() {
   return (
     <div className="scratch-panel">
       <div className="panel-actions">
-        <Button icon="plus" label="New Request" onClick={() => void useScratchStore.getState().create()} />
+        <Menu
+          label="New Request"
+          items={REQUEST_KIND_OPTIONS.map(({ kind, label }) => ({
+            label,
+            onSelect: () => void useScratchStore.getState().create(kind),
+          }))}
+        />
       </div>
       {items.length === 0 ? (
         <p className="empty-text">{EMPTY_TEXT}</p>
@@ -37,9 +43,9 @@ export function ScratchPanel() {
                 className="scratch-open"
                 onClick={() => useTabsStore.getState().openRequest(scratchLocation(item.id), item.name)}
               >
-                <Icon name="request-http" />
+                <Icon name={kindIcon(item.kind)} />
                 <span className="tree-label">{item.name}</span>
-                <span className="tree-method">{item.method}</span>
+                <span className="tree-method">{kindBadge(item.kind, item.method)}</span>
               </button>
               <Menu
                 label={`Actions for ${item.name}`}

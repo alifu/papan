@@ -1,0 +1,3 @@
+kind: graphql
+method: GET
+name: GraphQL GET

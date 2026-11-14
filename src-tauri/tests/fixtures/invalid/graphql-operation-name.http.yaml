@@ -1,0 +1,7 @@
+body:
+  operation_name: 1Bad
+  query: "{ a }"
+  type: graphql
+kind: graphql
+method: POST
+name: Bad operation name

@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use super::fsio::{self, EntryKind};
 use super::model::{self, RequestFile};
 use super::paths::REQUEST_SUFFIX;
-use super::types::{RequestContent, ScratchItem};
+use super::protocol_model;
+use super::types::{RequestContent, RequestKind, ScratchItem};
 use crate::error::AppError;
 
 pub const SCRATCH_DIR: &str = "scratch";
@@ -61,9 +62,9 @@ impl Scratch {
         Ok(items)
     }
 
-    pub fn create(&self) -> Result<ScratchItem, AppError> {
+    pub fn create(&self, kind: RequestKind) -> Result<ScratchItem, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
-        let file = RequestFile::new(DEFAULT_NAME.to_string(), DEFAULT_METHOD);
+        let file = protocol_model::new_request_file(DEFAULT_NAME.to_string(), kind)?;
         fsio::write_atomic(&self.path_of(&id)?, file.to_yaml()?.as_bytes())?;
         Ok(item(id, &file))
     }
@@ -76,7 +77,7 @@ impl Scratch {
     ) -> Result<ScratchItem, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
         let name = model::clean_name(name).unwrap_or_else(|_| DEFAULT_NAME.to_string());
-        let file = RequestFile::new(name, DEFAULT_METHOD).with_content(content)?;
+        let file = RequestFile::new(name, DEFAULT_METHOD, content.kind).with_content(content)?;
         self.save(&id, &file)?;
         Ok(item(id, &file))
     }
@@ -114,8 +115,10 @@ impl Scratch {
     }
 }
 
+/// `file` was validated when read, so its kind parses.
 fn item(id: String, file: &RequestFile) -> ScratchItem {
     ScratchItem {
+        kind: protocol_model::parse_kind(&id, &file.kind).unwrap_or_default(),
         id,
         name: file.name.clone(),
         method: file.method.clone(),
@@ -137,7 +140,7 @@ mod tests {
     fn create_rename_write_delete() {
         let (_dir, scratch) = scratch();
 
-        let created = scratch.create().unwrap();
+        let created = scratch.create(RequestKind::Http).unwrap();
         let renamed = scratch.rename(&created.id, " Users ").unwrap();
         scratch
             .write(&created.id, &RequestContent::new("POST", "https://x"))
@@ -165,7 +168,7 @@ mod tests {
     fn list_sorts_by_name_case_insensitively() {
         let (_dir, scratch) = scratch();
         for name in ["beta", "Alpha", "gamma"] {
-            let item = scratch.create().unwrap();
+            let item = scratch.create(RequestKind::Http).unwrap();
             scratch.rename(&item.id, name).unwrap();
         }
 

@@ -1,0 +1,13 @@
+body:
+  operation_name: GetUser
+  query: |
+    query GetUser($id: ID!) {
+      user(id: $id) { id name }
+    }
+  type: graphql
+  variables: |
+    { "id": "{{userId}}" }
+kind: graphql
+method: POST
+name: Get user
+url: "{{baseUrl}}/graphql"

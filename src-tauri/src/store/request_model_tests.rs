@@ -28,16 +28,16 @@ fn error_of(content: &RequestContent) -> AppError {
 
 #[test]
 fn absent_sections_parse_to_defaults() {
-    let content = parse_sections("r", &Extra::new()).unwrap();
+    let content = parse_sections("r", RequestKind::Http, &Extra::new()).unwrap();
 
     assert_eq!(content, RequestContent::default());
 }
 
 #[test]
 fn unknown_auth_and_body_types_parse_to_unsupported() {
-    let raw = extra(json!({"auth": {"type": "hawk"}, "body": {"type": "graphql"}}));
+    let raw = extra(json!({"auth": {"type": "hawk"}, "body": {"type": "protobuf"}}));
 
-    let content = parse_sections("r", &raw).unwrap();
+    let content = parse_sections("r", RequestKind::Http, &raw).unwrap();
 
     assert_eq!(content.auth, Auth::Unsupported);
     assert_eq!(content.body, Body::Unsupported);
@@ -70,7 +70,7 @@ fn shape_errors_name_the_dotted_field() {
         ),
     ];
     for (raw, field) in cases {
-        let error = parse_sections("r", &extra(raw)).unwrap_err();
+        let error = parse_sections("r", RequestKind::Http, &extra(raw)).unwrap_err();
         assert_eq!(error.code, ErrorCode::InvalidInput);
         assert!(
             error.message.contains(field),
@@ -186,7 +186,7 @@ fn canonical_form_omits_defaults_and_drops_unnamed_entries() {
         "other": 1,
     }));
 
-    let canonical = canonical_extra("r", &raw).unwrap();
+    let canonical = canonical_extra("r", RequestKind::Http, &raw).unwrap();
 
     assert_eq!(
         canonical,
@@ -206,14 +206,14 @@ fn merge_keeps_unchanged_sections_and_rewrites_changed_ones() {
         "settings": {"timeout_ms": 5000, "retries": 3},
         "auth": {"type": "hawk", "flows": {}},
     }));
-    let disk = parse_sections("r", &raw).unwrap();
+    let disk = parse_sections("r", RequestKind::Http, &raw).unwrap();
     let edited = RequestContent {
         headers: vec![header("B", "2")],
         ..disk.clone()
     };
 
-    let unchanged = merge("r", &raw, &disk).unwrap();
-    let changed = merge("r", &raw, &edited).unwrap();
+    let unchanged = merge("r", RequestKind::Http, &raw, &disk).unwrap();
+    let changed = merge("r", RequestKind::Http, &raw, &edited).unwrap();
 
     assert_eq!(unchanged, raw);
     assert_eq!(changed["headers"], json!([{"name": "B", "value": "2"}]));
@@ -229,7 +229,7 @@ fn merge_refuses_to_write_an_unsupported_section_over_a_known_one() {
         ..RequestContent::default()
     };
 
-    let error = merge("r", &raw, &incoming).unwrap_err();
+    let error = merge("r", RequestKind::Http, &raw, &incoming).unwrap_err();
 
     assert!(error.message.contains("auth"), "{}", error.message);
 }
@@ -285,8 +285,11 @@ fn every_body_and_auth_type_survives_emit_and_parse() {
             ..RequestContent::default()
         }));
     for content in contents {
-        let written = merge("r", &Extra::new(), &content).unwrap();
-        assert_eq!(parse_sections("r", &written).unwrap(), content);
+        let written = merge("r", RequestKind::Http, &Extra::new(), &content).unwrap();
+        assert_eq!(
+            parse_sections("r", RequestKind::Http, &written).unwrap(),
+            content
+        );
     }
 }
 
@@ -317,11 +320,11 @@ fn normalise_matches_what_a_write_reads_back() {
         ..RequestContent::new("GET", "x")
     };
 
-    let written = merge("r", &Extra::new(), &content).unwrap();
+    let written = merge("r", RequestKind::Http, &Extra::new(), &content).unwrap();
     let read_back = RequestContent {
         method: "GET".into(),
         url: "x".into(),
-        ..parse_sections("r", &written).unwrap()
+        ..parse_sections("r", RequestKind::Http, &written).unwrap()
     };
 
     assert_eq!(crate::store::request_emit::normalise(&content), read_back);
@@ -341,12 +344,20 @@ fn with_scripts(pre: &str, post: &str) -> RequestContent {
 fn scripts_section_parses_merges_and_is_omitted_when_empty() {
     let content = with_scripts("pm.a();\n", "");
 
-    let written = merge("r", &Extra::new(), &content).unwrap();
-    let cleared = merge("r", &written, &RequestContent::new("GET", "https://x")).unwrap();
+    let written = merge("r", RequestKind::Http, &Extra::new(), &content).unwrap();
+    let cleared = merge(
+        "r",
+        RequestKind::Http,
+        &written,
+        &RequestContent::new("GET", "https://x"),
+    )
+    .unwrap();
 
     assert_eq!(written["scripts"], json!({"pre_request": "pm.a();\n"}));
     assert_eq!(
-        parse_sections("r", &written).unwrap().scripts,
+        parse_sections("r", RequestKind::Http, &written)
+            .unwrap()
+            .scripts,
         content.scripts
     );
     assert!(!cleared.contains_key("scripts"));
@@ -356,8 +367,8 @@ fn scripts_section_parses_merges_and_is_omitted_when_empty() {
 fn scripts_section_keeps_unknown_keys_until_it_changes() {
     let raw = extra(json!({"scripts": {"pre_request": "a", "future": true}}));
 
-    let canonical = canonical_extra("r", &raw).unwrap();
-    let rewritten = merge("r", &raw, &with_scripts("b", "c")).unwrap();
+    let canonical = canonical_extra("r", RequestKind::Http, &raw).unwrap();
+    let rewritten = merge("r", RequestKind::Http, &raw, &with_scripts("b", "c")).unwrap();
 
     assert_eq!(
         canonical["scripts"],
@@ -375,6 +386,7 @@ fn oversized_or_malformed_request_scripts_name_file_and_field() {
     let too_big = error_of(&with_scripts(&big, ""));
     let malformed = parse_sections(
         "a.http.yaml",
+        RequestKind::Http,
         &extra(json!({"scripts": {"post_response": 1}})),
     )
     .unwrap_err();

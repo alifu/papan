@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CollectionTree, TreeChange } from "../../ipc/bindings";
+import type { CollectionTree, RequestKind, TreeChange } from "../../ipc/bindings";
 import { reportError } from "../../ui/toastStore";
 import * as api from "./api";
 
@@ -16,7 +16,12 @@ export interface CollectionsState {
   open: () => Promise<CollectionTree | null>;
   close: (collectionId: string) => Promise<boolean>;
   createFolder: (collectionId: string, parent: string, name: string) => Promise<TreeChange | null>;
-  createRequest: (collectionId: string, parent: string, name: string) => Promise<TreeChange | null>;
+  createRequest: (
+    collectionId: string,
+    parent: string,
+    name: string,
+    kind?: RequestKind,
+  ) => Promise<TreeChange | null>;
   rename: (collectionId: string, path: string, name: string) => Promise<TreeChange | null>;
   remove: (collectionId: string, path: string) => Promise<TreeChange | null>;
   move: (collectionId: string, path: string, folder: string, index: number) => Promise<TreeChange | null>;
@@ -92,8 +97,8 @@ export const useCollectionsStore = create<CollectionsState>()((set, get) => {
     },
     createFolder: (id, parent, name) =>
       applyChange(() => api.createFolder(id, parent, name), [expandKey(id, parent)]),
-    createRequest: (id, parent, name) =>
-      applyChange(() => api.createRequest(id, parent, name), [expandKey(id, parent)]),
+    createRequest: (id, parent, name, kind = "http") =>
+      applyChange(() => api.createRequest(id, parent, name, kind), [expandKey(id, parent)]),
     rename: (id, path, name) => applyChange(() => api.renameNode(id, path, name)),
     remove: (id, path) => applyChange(() => api.deleteNode(id, path)),
     move: (id, path, folder, index) =>

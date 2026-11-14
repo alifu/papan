@@ -3,6 +3,7 @@ import { json } from "@codemirror/lang-json";
 import { xml } from "@codemirror/lang-xml";
 import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { graphql } from "cm6-graphql";
 import { useEffect, useRef } from "react";
 import { marksEffects, searchMarks } from "./searchMarks";
 import { baseExtensions, lineExtensions } from "./setup";
@@ -19,6 +20,8 @@ export interface CodeEditorProps {
   readonly ariaLabel: string;
   readonly variables?: readonly EditorVariable[];
   readonly marks?: EditorMarks;
+  /** Extra extensions (e.g. a schema-aware graphql language), swapped through a compartment. */
+  readonly extensions?: Extension;
 }
 
 /** Marks a transaction that applies a prop, so it is never echoed back through `onChange`. */
@@ -28,6 +31,7 @@ function languageExtension(language: EditorLanguage): Extension {
   if (language === "json") return json();
   if (language === "xml") return xml();
   if (language === "javascript") return javascript();
+  if (language === "graphql") return graphql();
   return [];
 }
 
@@ -58,7 +62,7 @@ function minimalChange(from: string, to: string): { from: number; to: number; in
 
 /** The one shared CodeMirror 6 editor: one `EditorView` per mount, props applied through compartments. */
 export function CodeEditor(props: CodeEditorProps) {
-  const { value, language, readOnly = false, singleLine = false, ariaLabel, variables, marks } = props;
+  const { value, language, readOnly = false, singleLine = false, ariaLabel, variables, marks, extensions } = props;
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChange = useRef(props.onChange);
@@ -69,9 +73,10 @@ export function CodeEditor(props: CodeEditorProps) {
     mode: new Compartment(),
     aria: new Compartment(),
     variables: new Compartment(),
+    extra: new Compartment(),
   });
   // Initial values are read once at mount; later changes flow through the effects below.
-  const initial = useRef({ value, language, readOnly, singleLine, ariaLabel, variables });
+  const initial = useRef({ value, language, readOnly, singleLine, ariaLabel, variables, extensions });
 
   useEffect(() => {
     const c = compartments.current;
@@ -89,6 +94,7 @@ export function CodeEditor(props: CodeEditorProps) {
           c.mode.of(modeExtensions(i.readOnly, i.singleLine)),
           c.aria.of(attributeExtensions(i.ariaLabel, i.singleLine)),
           c.variables.of(variablesFacet.of(i.variables)),
+          c.extra.of(i.extensions ?? []),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged || update.transactions.some((tr) => tr.annotation(external))) return;
             onChange.current?.(update.state.doc.toString());
@@ -128,6 +134,10 @@ export function CodeEditor(props: CodeEditorProps) {
   useEffect(() => {
     viewRef.current?.dispatch({ effects: compartments.current.variables.reconfigure(variablesFacet.of(variables)) });
   }, [variables]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: compartments.current.extra.reconfigure(extensions ?? []) });
+  }, [extensions]);
 
   useEffect(() => {
     if (marks) viewRef.current?.dispatch({ effects: marksEffects(marks) });

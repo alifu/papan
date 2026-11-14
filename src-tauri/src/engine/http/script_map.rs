@@ -4,6 +4,7 @@
 
 use base64::Engine as _;
 
+use super::protocol_body;
 use super::resolve::Resolved;
 use super::types::ResponseMeta;
 use crate::error::AppError;
@@ -220,6 +221,11 @@ fn body_text(body: &Body) -> Option<String> {
     match body {
         Body::Json { text } | Body::Xml { text } | Body::Text { text } => Some(text.clone()),
         Body::Form { fields } => Some(form_text(fields)),
+        Body::Graphql {
+            query,
+            variables,
+            operation_name,
+        } => protocol_body::graphql_script_text(query, variables, operation_name),
         Body::None | Body::Multipart { .. } | Body::Binary { .. } | Body::Unsupported => None,
     }
 }
@@ -260,6 +266,7 @@ fn changed_body(original: &Body, text: Option<&str>) -> Body {
                 .map(|(name, value)| enabled(&name, &value))
                 .collect(),
         },
+        Body::Graphql { .. } => protocol_body::graphql_from_script(text),
         Body::None
         | Body::Text { .. }
         | Body::Multipart { .. }

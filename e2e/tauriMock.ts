@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { installEnvFake } from "./envMock";
 import { installNetFake } from "./netMock";
+import { installGraphqlFake } from "./graphqlMock";
+import { installSoapFake } from "./soapMock";
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name: string, encoding: "utf8" | "base64"): string => readFileSync(join(FIXTURE_DIR, name), encoding);
@@ -327,4 +329,6 @@ export async function mockTauri(page: Page): Promise<void> {
   }, bodies);
   await installEnvFake(page);
   await installNetFake(page);
+  await installSoapFake(page);
+  await installGraphqlFake(page);
 }

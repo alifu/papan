@@ -1,0 +1,4 @@
+kind: soap
+method: POST
+name: Minimal SOAP
+url: http://example.test/service

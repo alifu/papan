@@ -1,6 +1,7 @@
-//! The six request sections of plan 03 §3 and plan 05 §3 (`auth`, `body`,
-//! `disabled_params`, `headers`, `scripts`, `settings`): parsing from the raw YAML values
-//! and validation of the typed content. Emitting and the merge rule live in `request_emit`.
+//! The seven request sections of plan 03 §3, plan 05 §3 and plan 06 §3 (`auth`, `body`,
+//! `disabled_params`, `headers`, `scripts`, `settings`, `soap`): parsing from the raw YAML
+//! values and validation of the typed content. Emitting and the merge rule live in
+//! `request_emit`; the protocol parts (`kind`, GraphQL, SOAP) in `protocol_model`.
 
 use std::collections::BTreeMap;
 
@@ -8,9 +9,11 @@ use serde_json::{Map, Value};
 
 use super::auth_model::{parse_auth, validate_auth};
 use super::model;
+use super::protocol_model::{self, SOAP};
 use super::script_model::{parse_scripts, validate_scripts, SCRIPTS};
 use super::types::{
-    Body, HttpVersion, KeyValue, Pair, Part, RequestContent, Settings, DEFAULT_TIMEOUT_MS,
+    Body, HttpVersion, KeyValue, Pair, Part, RequestContent, RequestKind, Settings,
+    DEFAULT_TIMEOUT_MS,
 };
 use super::yaml;
 use crate::error::AppError;
@@ -20,7 +23,15 @@ pub const BODY: &str = "body";
 pub const DISABLED_PARAMS: &str = "disabled_params";
 pub const HEADERS: &str = "headers";
 pub const SETTINGS: &str = "settings";
-pub const SECTIONS: [&str; 6] = [AUTH, BODY, DISABLED_PARAMS, HEADERS, SCRIPTS, SETTINGS];
+pub const SECTIONS: [&str; 7] = [
+    AUTH,
+    BODY,
+    DISABLED_PARAMS,
+    HEADERS,
+    SCRIPTS,
+    SETTINGS,
+    SOAP,
+];
 
 pub const MAX_ENTRIES: usize = 200;
 pub const MAX_PARTS: usize = 100;
@@ -38,8 +49,12 @@ pub fn invalid(label: &str, field: &str, problem: &str) -> AppError {
     yaml::invalid(label, &format!("field `{field}` {problem}"))
 }
 
-/// The typed sections of a request file. `method` and `url` are left empty.
-pub fn parse_sections(label: &str, extra: &Extra) -> Result<RequestContent, AppError> {
+/// The typed sections of a request file of `kind`. `method` and `url` are left empty.
+pub fn parse_sections(
+    label: &str,
+    kind: RequestKind,
+    extra: &Extra,
+) -> Result<RequestContent, AppError> {
     let content = RequestContent {
         method: String::new(),
         url: String::new(),
@@ -50,10 +65,12 @@ pub fn parse_sections(label: &str, extra: &Extra) -> Result<RequestContent, AppE
             parse_pair,
         )?,
         headers: parse_list(label, extra.get(HEADERS), HEADERS, parse_key_value)?,
-        body: parse_body(label, extra.get(BODY))?,
+        body: protocol_model::body_for_kind(kind, parse_body(label, extra.get(BODY))?),
         auth: parse_auth(label, extra.get(AUTH))?,
         settings: parse_settings(label, extra.get(SETTINGS))?,
         scripts: parse_scripts(label, extra.get(SCRIPTS))?,
+        kind,
+        soap: protocol_model::parse_soap(label, kind, extra.get(SOAP))?,
     };
     validate_sections(label, &content)?;
     Ok(content)
@@ -61,7 +78,7 @@ pub fn parse_sections(label: &str, extra: &Extra) -> Result<RequestContent, AppE
 
 /// Checks typed content from the webview: shared by `write_request` and `send_request`.
 pub fn validate_content(label: &str, content: &RequestContent) -> Result<(), AppError> {
-    model::check_method(label, &content.method)?;
+    protocol_model::check_method(label, content.kind, &content.method)?;
     model::check_url(label, &content.url)?;
     validate_sections(label, content)
 }
@@ -199,6 +216,7 @@ fn parse_body(label: &str, value: Option<&Value>) -> Result<Body, AppError> {
         "binary" => Body::Binary {
             file: non_empty(opt_text(label, fields, BODY, "file")?),
         },
+        "graphql" => protocol_model::parse_graphql(label, fields)?,
         _ => Body::Unsupported,
     })
 }
@@ -260,6 +278,7 @@ fn validate_sections(label: &str, content: &RequestContent) -> Result<(), AppErr
         MAX_ENTRIES,
     )?;
     validate_body(label, &content.body)?;
+    protocol_model::validate(label, content)?;
     validate_auth(label, &content.auth)?;
     if content.settings.timeout_ms > MAX_TIMEOUT_MS {
         return Err(timeout_error(label));
@@ -292,7 +311,8 @@ fn validate_body(label: &str, body: &Body) -> Result<(), AppError> {
         Body::Binary { file } => file.as_deref().map_or(Ok(()), |file| {
             check_text(label, "body.file", file, MAX_FILE_PATH_CHARS)
         }),
-        Body::None | Body::Unsupported => Ok(()),
+        // GraphQL limits are checked by `protocol_model::validate`.
+        Body::None | Body::Graphql { .. } | Body::Unsupported => Ok(()),
     }
 }
 

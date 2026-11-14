@@ -1,0 +1,21 @@
+body:
+  text: |
+    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">
+      <soapenv:Header/>
+      <soapenv:Body>
+        <tem:Add><tem:intA>{{a}}</tem:intA><tem:intB>?</tem:intB></tem:Add>
+      </soapenv:Body>
+    </soapenv:Envelope>
+  type: xml
+kind: soap
+method: POST
+name: Add
+soap:
+  action: http://tempuri.org/Add
+  version: "1.2"
+  wsdl:
+    operation: Add
+    port: CalculatorSoap12
+    service: Calculator
+    url: http://example.test/calculator.asmx?WSDL
+url: http://example.test/calculator.asmx

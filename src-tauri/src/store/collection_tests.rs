@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::ErrorCode;
 use crate::store::scan::arrange;
-use crate::store::types::{NodeKind, RequestContent, TreeNode};
+use crate::store::types::{NodeKind, RequestContent, RequestKind, TreeNode};
 
 fn write(path: &Path, text: &str) {
     if let Some(parent) = path.parent() {
@@ -81,7 +81,7 @@ fn new_names_never_land_on_an_existing_entry() {
     write(&kelvin, "kind: http\nmethod: GET\nname: Kelvin\n");
     let folds = fsio::entry_kind(&collection.requests_root().join("k.http.yaml")).is_some();
 
-    let created = collection.create_request("", "K");
+    let created = collection.create_request("", "K", RequestKind::Http);
 
     assert_eq!(read(&kelvin), "kind: http\nmethod: GET\nname: Kelvin\n");
     if folds {
@@ -137,9 +137,13 @@ fn tree_of_collection_without_requests_folder_is_empty() {
 fn create_items_do_not_touch_order_and_sort_into_the_tail() {
     let (_dir, collection) = new_collection();
 
-    let b = collection.create_request("", "B").unwrap();
+    let b = collection
+        .create_request("", "B", RequestKind::Http)
+        .unwrap();
     let a = collection.create_folder("", "A").unwrap();
-    let nested = collection.create_request(&a, "Inner").unwrap();
+    let nested = collection
+        .create_request(&a, "Inner", RequestKind::Http)
+        .unwrap();
 
     assert_eq!((a.as_str(), b.as_str()), ("a", "b.http.yaml"));
     assert_eq!(nested, "a/inner.http.yaml");
@@ -156,8 +160,12 @@ fn create_items_do_not_touch_order_and_sort_into_the_tail() {
 fn create_names_collide_case_insensitively() {
     let (_dir, collection) = new_collection();
 
-    let first = collection.create_request("", "Users").unwrap();
-    let second = collection.create_request("", "USERS").unwrap();
+    let first = collection
+        .create_request("", "Users", RequestKind::Http)
+        .unwrap();
+    let second = collection
+        .create_request("", "USERS", RequestKind::Http)
+        .unwrap();
     let folder = collection.create_folder("", "users").unwrap();
 
     assert_eq!(first, "users.http.yaml");
@@ -169,7 +177,9 @@ fn create_names_collide_case_insensitively() {
 fn reorder_writes_full_list_of_children() {
     let (_dir, collection) = new_collection();
     for name in ["A", "B", "C"] {
-        collection.create_request("", name).unwrap();
+        collection
+            .create_request("", name, RequestKind::Http)
+            .unwrap();
     }
 
     let moved = collection.move_node("c.http.yaml", "", 0).unwrap();
@@ -189,10 +199,14 @@ fn reorder_writes_full_list_of_children() {
 fn index_counts_positions_after_the_node_is_removed() {
     let (_dir, collection) = new_collection();
     for name in ["A", "B", "C"] {
-        collection.create_request("", name).unwrap();
+        collection
+            .create_request("", name, RequestKind::Http)
+            .unwrap();
     }
     let target = collection.create_folder("", "T").unwrap();
-    collection.create_request(&target, "X").unwrap();
+    collection
+        .create_request(&target, "X", RequestKind::Http)
+        .unwrap();
     let root_names =
         |c: &Collection| -> Vec<String> { c.tree().iter().map(|node| node.path.clone()).collect() };
 
@@ -222,8 +236,12 @@ fn index_counts_positions_after_the_node_is_removed() {
 #[test]
 fn reorder_clamps_index_and_drops_stale_entries() {
     let (_dir, collection) = new_collection();
-    collection.create_request("", "A").unwrap();
-    collection.create_request("", "B").unwrap();
+    collection
+        .create_request("", "A", RequestKind::Http)
+        .unwrap();
+    collection
+        .create_request("", "B", RequestKind::Http)
+        .unwrap();
     write(
         &collection.requests_root().join(FOLDER_FILE),
         "order:\n  - gone.http.yaml\n  - ../x\n  - /abs\n  - b.http.yaml\n",
@@ -241,7 +259,9 @@ fn reorder_clamps_index_and_drops_stale_entries() {
 fn rename_replaces_listed_entry_and_keeps_position() {
     let (_dir, collection) = new_collection();
     for name in ["A", "B", "C"] {
-        collection.create_request("", name).unwrap();
+        collection
+            .create_request("", name, RequestKind::Http)
+            .unwrap();
     }
     collection.move_node("c.http.yaml", "", 0).unwrap();
 
@@ -256,7 +276,9 @@ fn rename_replaces_listed_entry_and_keeps_position() {
 #[test]
 fn rename_with_same_slug_only_changes_yaml_and_leaves_unlisted_order_alone() {
     let (_dir, collection) = new_collection();
-    collection.create_request("", "Users").unwrap();
+    collection
+        .create_request("", "Users", RequestKind::Http)
+        .unwrap();
 
     let renamed = collection.rename("users.http.yaml", "  USERS! ").unwrap();
 
@@ -269,7 +291,9 @@ fn rename_with_same_slug_only_changes_yaml_and_leaves_unlisted_order_alone() {
 fn rename_folder_writes_name_into_its_folder_file() {
     let (_dir, collection) = new_collection();
     let folder = collection.create_folder("", "Auth").unwrap();
-    collection.create_request(&folder, "Login").unwrap();
+    collection
+        .create_request(&folder, "Login", RequestKind::Http)
+        .unwrap();
 
     let renamed = collection.rename(&folder, "Sign in").unwrap();
 
@@ -295,8 +319,12 @@ fn rename_and_move_refuse_the_root_and_foreign_files() {
 fn delete_removes_listed_entry_and_folders_recursively() {
     let (_dir, collection) = new_collection();
     let folder = collection.create_folder("", "F").unwrap();
-    collection.create_request(&folder, "Inner").unwrap();
-    collection.create_request("", "A").unwrap();
+    collection
+        .create_request(&folder, "Inner", RequestKind::Http)
+        .unwrap();
+    collection
+        .create_request("", "A", RequestKind::Http)
+        .unwrap();
     collection.move_node("f", "", 1).unwrap();
 
     collection.delete("f").unwrap();
@@ -315,7 +343,9 @@ fn delete_removes_listed_entry_and_folders_recursively() {
 #[test]
 fn delete_last_order_entry_removes_the_folder_file() {
     let (_dir, collection) = new_collection();
-    collection.create_request("", "A").unwrap();
+    collection
+        .create_request("", "A", RequestKind::Http)
+        .unwrap();
     collection.move_node("a.http.yaml", "", 0).unwrap();
 
     collection.delete("a.http.yaml").unwrap();
@@ -327,9 +357,15 @@ fn delete_last_order_entry_removes_the_folder_file() {
 fn move_across_folders_updates_both_orders() {
     let (_dir, collection) = new_collection();
     let target = collection.create_folder("", "T").unwrap();
-    collection.create_request(&target, "X").unwrap();
-    collection.create_request("", "A").unwrap();
-    collection.create_request("", "B").unwrap();
+    collection
+        .create_request(&target, "X", RequestKind::Http)
+        .unwrap();
+    collection
+        .create_request("", "A", RequestKind::Http)
+        .unwrap();
+    collection
+        .create_request("", "B", RequestKind::Http)
+        .unwrap();
     collection.move_node("a.http.yaml", "", 5).unwrap();
 
     let moved = collection.move_node("a.http.yaml", &target, 0).unwrap();
@@ -349,8 +385,12 @@ fn move_across_folders_updates_both_orders() {
 fn move_renames_on_collision_in_target() {
     let (_dir, collection) = new_collection();
     let target = collection.create_folder("", "T").unwrap();
-    collection.create_request(&target, "A").unwrap();
-    collection.create_request("", "A").unwrap();
+    collection
+        .create_request(&target, "A", RequestKind::Http)
+        .unwrap();
+    collection
+        .create_request("", "A", RequestKind::Http)
+        .unwrap();
 
     let moved = collection.move_node("a.http.yaml", &target, 0).unwrap();
 
@@ -481,7 +521,9 @@ fn fingerprint_changes_with_content_only() {
     write(&collection.requests_root().join("notes.txt"), "ignored");
     let unchanged = collection.fingerprint();
 
-    collection.create_request("", "A").unwrap();
+    collection
+        .create_request("", "A", RequestKind::Http)
+        .unwrap();
 
     assert_eq!(before, unchanged);
     assert_ne!(before, collection.fingerprint());

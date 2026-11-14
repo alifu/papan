@@ -134,3 +134,63 @@ fn a_url_starting_with_a_dash_is_not_read_as_an_option() {
     assert!(command.ends_with("--url '-o/tmp/x'"));
     assert_eq!(import(&command).unwrap().content.url, "-o/tmp/x");
 }
+
+#[test]
+fn graphql_exports_the_built_json_and_the_accept_header() {
+    let content = RequestContent {
+        body: Body::Graphql {
+            query: "{ a }".into(),
+            variables: "{\"x\": 1}".into(),
+            operation_name: String::new(),
+        },
+        kind: crate::store::types::RequestKind::Graphql,
+        ..post(Body::None)
+    };
+
+    let command = export(&content).unwrap();
+
+    assert!(
+        command.contains(r#"-H 'Accept: application/graphql-response+json, application/json'"#),
+        "{command}"
+    );
+    assert!(
+        command.contains("-H 'Content-Type: application/json'"),
+        "{command}"
+    );
+    assert!(
+        command.contains(r#"--data-raw '{"query":"{ a }","variables":{"x": 1}}'"#),
+        "{command}"
+    );
+}
+
+#[test]
+fn soap_exports_the_derived_headers_unless_the_user_set_them() {
+    use crate::store::types::{RequestKind, SoapSettings, SoapVersion};
+    let soap = |headers: Vec<KeyValue>| RequestContent {
+        headers,
+        kind: RequestKind::Soap,
+        soap: SoapSettings {
+            version: SoapVersion::V11,
+            action: "urn:Add".into(),
+            wsdl: None,
+        },
+        ..post(Body::Xml {
+            text: "<e/>".into(),
+        })
+    };
+
+    let derived = export(&soap(vec![])).unwrap();
+    let user = export(&soap(vec![header("soapaction", "mine")])).unwrap();
+
+    assert!(
+        derived.contains(r#"-H 'SOAPAction: "urn:Add"'"#),
+        "{derived}"
+    );
+    assert!(
+        derived.contains("-H 'Content-Type: text/xml; charset=utf-8'"),
+        "{derived}"
+    );
+    assert!(!derived.contains("application/xml"), "{derived}");
+    assert!(user.contains("-H 'soapaction: mine'"), "{user}");
+    assert!(!user.contains("urn:Add\""), "{user}");
+}

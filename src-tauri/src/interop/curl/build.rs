@@ -125,6 +125,7 @@ pub(super) fn build(mut parsed: Parsed) -> Result<CurlImport, AppError> {
             http_version: parsed.http_version,
         },
         scripts: Scripts::default(),
+        ..RequestContent::default()
     };
     Ok(CurlImport {
         content,

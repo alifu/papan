@@ -1,0 +1,6 @@
+body:
+  query: "{ a }"
+  type: graphql
+kind: http
+method: POST
+name: GraphQL body in HTTP

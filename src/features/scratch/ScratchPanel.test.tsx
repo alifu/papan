@@ -11,7 +11,7 @@ import { useScratchStore } from "./scratchStore";
 
 vi.mock("./api");
 
-const item = (id: string, name: string) => ({ id, name, method: "GET" });
+const item = (id: string, name: string) => ({ id, name, method: "GET", kind: "http" as const });
 
 async function pick(name: string, entry: string) {
   await userEvent.click(screen.getByRole("menuitem", { name: `Actions for ${name}` }));
@@ -32,10 +32,25 @@ describe("ScratchPanel", () => {
     render(<ScratchPanel />);
     expect(screen.getByText("No scratch requests yet.")).toBeVisible();
 
-    await userEvent.click(screen.getByRole("button", { name: "New Request" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "New Request" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "HTTP" }));
 
     expect(await screen.findByRole("button", { name: /Untitled/ })).toBeVisible();
     expect(useTabsStore.getState().tabs[1].title).toBe("Untitled");
+  });
+
+  it("offers GraphQL and SOAP and shows their badge", async () => {
+    vi.mocked(api.createScratch).mockResolvedValue({ id: "g", name: "Q", method: "POST", kind: "graphql" });
+    render(<ScratchPanel />);
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "New Request" }));
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(
+      expect.arrayContaining(["HTTP", "GraphQL", "SOAP"]),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: "GraphQL" }));
+
+    expect(api.createScratch).toHaveBeenCalledWith("graphql");
+    expect(await screen.findByRole("button", { name: /Q/ })).toHaveTextContent("GQL");
   });
 
   it("clicking a row opens its tab", async () => {

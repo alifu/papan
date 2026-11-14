@@ -18,6 +18,8 @@ export function emptyContent(): RequestContent {
     auth: { type: "none" },
     settings: DEFAULT_SETTINGS,
     scripts: { pre_request: "", post_response: "" },
+    kind: "http",
+    soap: { version: "1.1", action: "", wsdl: null },
   };
 }
 

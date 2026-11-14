@@ -23,7 +23,7 @@ describe("NameDialog", () => {
     await userEvent.clear(screen.getByLabelText("Name"));
     await userEvent.type(screen.getByLabelText("Name"), "  New  {Enter}");
 
-    expect(onSubmit).toHaveBeenCalledWith("New");
+    expect(onSubmit).toHaveBeenCalledWith("New", "http");
     expect(onClose).toHaveBeenCalled();
   });
 

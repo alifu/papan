@@ -1,0 +1,4 @@
+kind: graphql
+method: POST
+name: Minimal GraphQL
+url: https://api.example.com/graphql

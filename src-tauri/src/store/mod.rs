@@ -17,6 +17,7 @@ pub mod fsio;
 pub mod history;
 pub mod model;
 pub mod paths;
+pub mod protocol_model;
 pub mod registry;
 pub mod request_emit;
 pub mod request_model;

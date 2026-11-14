@@ -6,6 +6,7 @@ use std::path::Path;
 use super::collection::{is_listable, read_folder_file, read_request_file, Collection, MAX_DEPTH};
 use super::fsio::{self, DirEntry, EntryKind};
 use super::paths::{self, FOLDER_FILE};
+use super::protocol_model::parse_kind;
 use super::types::{NodeKind, TreeNode};
 
 /// Children in display order: names listed in `order` that exist, then the rest by name.
@@ -29,6 +30,7 @@ fn invalid_node(rel: &str, entry: &str) -> TreeNode {
         name: entry.to_string(),
         kind: NodeKind::Invalid,
         method: None,
+        request_kind: None,
         children: Vec::new(),
     }
 }
@@ -88,11 +90,13 @@ fn scan_entry(dir: &Path, rel: &str, entry: &DirEntry, depth: usize) -> TreeNode
             name: name.unwrap_or_else(|| entry.name.clone()),
             kind: NodeKind::Folder,
             method: None,
+            request_kind: None,
             children,
         };
     }
     match read_request_file(&abs) {
         Ok(file) => TreeNode {
+            request_kind: parse_kind(&entry.name, &file.kind).ok(),
             path,
             name: file.name,
             kind: NodeKind::Request,

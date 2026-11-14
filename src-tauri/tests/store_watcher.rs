@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use papan_lib::store::types::RequestKind;
 use papan_lib::store::watcher::{self, CollectionWatcher};
 use papan_lib::store::Store;
 
@@ -26,7 +27,9 @@ fn watched() -> Watched {
     let mut store = Store::new(&temp.path().join("app")).unwrap();
     let tree = store.create_collection(temp.path(), "W").unwrap();
     let id = tree.collection.id;
-    store.create_request(&id, "", "Existing").unwrap();
+    store
+        .create_request(&id, "", "Existing", RequestKind::Http)
+        .unwrap();
     let root = PathBuf::from(tree.collection.path);
     let store = Arc::new(Mutex::new(store));
     let (sender, events) = channel();
@@ -92,7 +95,7 @@ fn own_writes_and_git_changes_produce_none() {
     w.store
         .lock()
         .unwrap()
-        .create_request(&w.id, "", "Mine")
+        .create_request(&w.id, "", "Mine", RequestKind::Http)
         .unwrap();
     w.expect_no_event("a store write");
 

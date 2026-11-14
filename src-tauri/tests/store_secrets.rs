@@ -5,7 +5,7 @@ use std::path::Path;
 
 use papan_lib::error::ErrorCode;
 use papan_lib::store::history::{Outcome, Sent};
-use papan_lib::store::types::{Auth, KeyValue, RequestContent, RequestLocation};
+use papan_lib::store::types::{Auth, KeyValue, RequestContent, RequestKind, RequestLocation};
 use papan_lib::store::Store;
 
 const TOKEN: &str = "tok-SECRET-1234";
@@ -61,7 +61,9 @@ fn collection(f: &mut Fixture) -> (String, RequestLocation) {
         .unwrap()
         .collection
         .id;
-    f.store.create_request(&id, "", "R").unwrap();
+    f.store
+        .create_request(&id, "", "R", RequestKind::Http)
+        .unwrap();
     let location = RequestLocation::Collection {
         collection_id: id.clone(),
         path: "r.http.yaml".into(),
@@ -107,7 +109,7 @@ fn an_outside_edit_drops_the_remembered_secrets() {
 fn scratch_keeps_secrets_on_disk_and_moving_it_redacts_them() {
     let mut f = fixture();
     let (id, _) = collection(&mut f);
-    let scratch = f.store.create_scratch().unwrap();
+    let scratch = f.store.create_scratch(RequestKind::Http).unwrap();
     let in_scratch = RequestLocation::Scratch {
         id: scratch.id.clone(),
     };

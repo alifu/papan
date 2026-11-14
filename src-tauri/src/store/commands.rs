@@ -8,8 +8,8 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::types::{
-    CollectionChanged, CollectionTree, RequestContent, RequestDoc, RequestLocation, ScratchItem,
-    ScriptTarget, Scripts, TreeChange,
+    CollectionChanged, CollectionTree, RequestContent, RequestDoc, RequestKind, RequestLocation,
+    ScratchItem, ScriptTarget, Scripts, TreeChange,
 };
 use super::{model, watcher, Store, StoreState};
 use crate::engine::http::types::HistoryEntry;
@@ -152,9 +152,10 @@ pub fn create_request(
     collection_id: String,
     parent: String,
     name: String,
+    kind: RequestKind,
 ) -> StoreResult<TreeChange> {
     with_store(&state, |store| {
-        store.create_request(&collection_id, &parent, &name)
+        store.create_request(&collection_id, &parent, &name, kind)
     })
 }
 
@@ -239,8 +240,8 @@ pub fn list_scratch(state: State<'_, StoreState>) -> StoreResult<Vec<ScratchItem
 
 #[tauri::command]
 #[specta::specta]
-pub fn create_scratch(state: State<'_, StoreState>) -> StoreResult<ScratchItem> {
-    with_store(&state, |store| store.create_scratch())
+pub fn create_scratch(state: State<'_, StoreState>, kind: RequestKind) -> StoreResult<ScratchItem> {
+    with_store(&state, |store| store.create_scratch(kind))
 }
 
 #[tauri::command]

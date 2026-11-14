@@ -1,4 +1,4 @@
-import type { CollectionTree, TreeNode } from "../../ipc/bindings";
+import type { CollectionTree, RequestKind, TreeNode } from "../../ipc/bindings";
 import { expandKey } from "./collectionsStore";
 
 export type RowKind = "collection" | "folder" | "request" | "invalid";
@@ -12,6 +12,7 @@ export interface TreeRowModel {
   readonly name: string;
   readonly kind: RowKind;
   readonly method: string | null;
+  readonly requestKind: RequestKind | null;
   readonly level: number;
   /** Position among siblings, 0-based. */
   readonly index: number;
@@ -39,6 +40,7 @@ function nodeRows(
       name: node.name,
       kind: node.kind,
       method: node.method,
+      requestKind: node.request_kind,
       level,
       index,
       siblingCount: nodes.length,
@@ -67,6 +69,7 @@ export function visibleRows(
       name: tree.collection.name,
       kind: "collection",
       method: null,
+      requestKind: null,
       level: 1,
       index: 0,
       siblingCount: 1,

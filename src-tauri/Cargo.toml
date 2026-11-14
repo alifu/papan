@@ -63,6 +63,8 @@ time = { version = "0.3", features = ["formatting"] }
 # Script sandbox (plan 05 §2). Core only: no module loader, no QuickJS std/os, no bindgen
 # (bindings for macOS, Windows and Linux ship with the crate). `std` is Rust's std.
 rquickjs = { version = "0.14", default-features = false, features = ["std"] }
+# WSDL/XSD parsing (plan 06 §2): read-only, namespace-aware DOM; DTDs refused by default.
+roxmltree = "0.21"
 
 [target.'cfg(windows)'.dependencies]
 # The loopback listener binds with SO_EXCLUSIVEADDRUSE (already in the tree via hyper-util).
@@ -77,3 +79,6 @@ rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", 
 flate2 = "1"
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "net"] }
+# GraphQL test server (plan 06 §2); 8.0 is still rc.
+async-graphql = { version = "=7.2.1", default-features = false }
+async-graphql-axum = "=7.2.1"

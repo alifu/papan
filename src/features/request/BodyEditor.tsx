@@ -6,6 +6,7 @@ import { pickBodyFile } from "./api";
 import { fromRows, toRows } from "./content";
 import { KeyValueTable } from "./KeyValueTable";
 import { MultipartEditor } from "./MultipartEditor";
+import { formatXmlText } from "./xmlFormat";
 
 export interface BodyEditorProps {
   readonly body: Body;
@@ -13,6 +14,8 @@ export interface BodyEditorProps {
   /** Where the request lives: picked files are granted to that location only. */
   readonly location: RequestLocation;
   readonly variables?: readonly EffectiveVariable[];
+  /** Body types the type select offers; all of them when omitted (SOAP passes `["xml"]`). */
+  readonly allowedTypes?: readonly Body["type"][];
 }
 
 type TextType = "json" | "xml" | "text";
@@ -43,7 +46,17 @@ export function formatJsonText(text: string): string {
   }
 }
 
-export function BodyEditor({ body, onChange, location, variables }: BodyEditorProps) {
+const BODY_TYPE_OPTIONS: readonly { value: Body["type"]; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "json", label: "JSON" },
+  { value: "xml", label: "XML" },
+  { value: "text", label: "Text" },
+  { value: "form", label: "Form" },
+  { value: "multipart", label: "Multipart" },
+  { value: "binary", label: "Binary" },
+];
+
+export function BodyEditor({ body, onChange, location, variables, allowedTypes }: BodyEditorProps) {
   if (body.type === "unsupported") {
     return <p className="empty-text">Made by a newer Papan. This body is read-only.</p>;
   }
@@ -62,19 +75,20 @@ export function BodyEditor({ body, onChange, location, variables }: BodyEditorPr
       <label>
         Body type
         <select aria-label="Body type" value={body.type} onChange={(e) => onChange(bodyOfType(body, e.target.value))}>
-          <option value="none">None</option>
-          <option value="json">JSON</option>
-          <option value="xml">XML</option>
-          <option value="text">Text</option>
-          <option value="form">Form</option>
-          <option value="multipart">Multipart</option>
-          <option value="binary">Binary</option>
+          {BODY_TYPE_OPTIONS.filter((o) => !allowedTypes || allowedTypes.includes(o.value)).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </label>
       {isTextBody(body) ? (
         <>
           {body.type === "json" ? (
             <Button label="Format" onClick={() => onChange({ ...body, text: formatJsonText(body.text) })} />
+          ) : null}
+          {body.type === "xml" ? (
+            <Button label="Format" onClick={() => onChange({ ...body, text: formatXmlText(body.text) })} />
           ) : null}
           <div className="body-text">
             <CodeEditor

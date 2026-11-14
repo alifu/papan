@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ScriptTarget } from "../../ipc/bindings";
+import type { RequestKind, ScriptTarget } from "../../ipc/bindings";
 import { useTabsStore } from "../../shell/tabsStore";
 import { Button } from "../../ui/Button";
 import { collectionLocation } from "../locations";
@@ -35,14 +35,18 @@ export function CollectionsPanel() {
   const openRequestTab = (collectionId: string, path: string, title: string) =>
     useTabsStore.getState().openRequest(collectionLocation(collectionId, path), title);
 
-  const submitName = async (state: DialogState, name: string): Promise<boolean> => {
+  const submitName = async (
+    state: DialogState,
+    name: string,
+    kind: RequestKind,
+  ): Promise<boolean> => {
     const s = store.getState();
     if (state.kind === "newCollection") return (await s.create(name)) !== null;
     if (state.kind === "delete" || state.kind === "scripts") return false;
     const { collectionId, path } = state.row;
     if (state.kind === "newFolder") return (await s.createFolder(collectionId, path, name)) !== null;
     if (state.kind === "newRequest") {
-      const change = await s.createRequest(collectionId, path, name);
+      const change = await s.createRequest(collectionId, path, name, kind);
       if (change?.path) openRequestTab(collectionId, change.path, name);
       return change !== null;
     }
@@ -115,7 +119,8 @@ export function CollectionsPanel() {
           title={dialogTitle(dialog)}
           initialName={dialog.kind === "rename" ? dialog.row.name : ""}
           submitLabel={dialog.kind === "rename" ? "Rename" : "Create"}
-          onSubmit={(name) => submitName(dialog, name)}
+          withKind={dialog.kind === "newRequest"}
+          onSubmit={(name, kind) => submitName(dialog, name, kind)}
           onClose={closeDialog}
         />
       ) : null}

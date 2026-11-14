@@ -29,7 +29,7 @@ describe("api wrappers", () => {
     await api.closeCollection("c");
     await api.readTree("c");
     await api.createFolder("c", "p", "n");
-    await api.createRequest("c", "p", "n");
+    await api.createRequest("c", "p", "n", "graphql");
     await api.renameNode("c", "p", "n");
     await api.deleteNode("c", "p");
     await api.moveNode("c", "p", "t", 2);

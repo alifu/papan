@@ -18,4 +18,4 @@ export interface EditorMarks {
   readonly current: number | null;
 }
 
-export type EditorLanguage = "json" | "xml" | "javascript" | "text";
+export type EditorLanguage = "json" | "xml" | "javascript" | "graphql" | "text";

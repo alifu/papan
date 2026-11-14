@@ -4,7 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use papan_lib::error::ErrorCode;
-use papan_lib::store::types::{RequestContent, RequestLocation, ScriptTarget, Scripts};
+use papan_lib::store::types::{
+    RequestContent, RequestKind, RequestLocation, ScriptTarget, Scripts,
+};
 use papan_lib::store::Store;
 
 const PRE: &str = "pm.environment.set(\"ts\", Date.now());\n";
@@ -58,7 +60,9 @@ fn collection(f: &Fixture) -> ScriptTarget {
 #[test]
 fn request_scripts_are_written_as_block_scalars_and_read_back() {
     let mut f = fixture();
-    f.store.create_request(&f.id, "", "Login").unwrap();
+    f.store
+        .create_request(&f.id, "", "Login", RequestKind::Http)
+        .unwrap();
     let location = RequestLocation::Collection {
         collection_id: f.id.clone(),
         path: "login.http.yaml".into(),

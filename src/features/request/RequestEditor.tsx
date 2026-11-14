@@ -6,6 +6,10 @@ import { subscribeCollectionChanged } from "../collections/api";
 import "../collections/collections.css";
 import { reportError, showToast } from "../../ui/toastStore";
 import { importCurl } from "../curl/api";
+import { GraphqlEditor, graphqlBodyOf } from "../graphql/GraphqlEditor";
+import { SUBSCRIPTION_HINT, runsSubscription } from "../graphql/operations";
+import { VariablesEditor } from "../graphql/VariablesEditor";
+import SoapPanel from "../soap/SoapPanel";
 import { useNetworkStore } from "../network/networkStore";
 import { useEffectiveVariables } from "../environments/useEffectiveVariables";
 import { ResponseViewer } from "../response/ResponseViewer";
@@ -15,6 +19,7 @@ import { countEnabled, fromRows, toRows } from "./content";
 import { KeyValueTable } from "./KeyValueTable";
 import { OAuthTokenPanel } from "./OAuthTokenPanel";
 import { ParamsEditor } from "./ParamsEditor";
+import { sectionsFor } from "./sections";
 import { currentContent, useRequestStore } from "./requestStore";
 import { ScriptsEditor, type ScriptPhase } from "./ScriptsEditor";
 import { appendSnippet } from "./snippets";
@@ -86,14 +91,12 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   const content = currentContent(tab);
   if (!tab || !content) return null;
 
-  const sections = [
-    { id: "params", label: "Params", count: tab.paramRows.filter((r) => r.enabled && r.name !== "").length },
-    { id: "headers", label: "Headers", count: countEnabled(content.headers) },
-    { id: "body", label: "Body" },
-    { id: "auth", label: "Auth" },
-    { id: "scripts", label: "Scripts" },
-    { id: "settings", label: "Settings" },
-  ];
+  const kind = content.kind;
+  const sections = sectionsFor(kind, {
+    params: tab.paramRows.filter((r) => r.enabled && r.name !== "").length,
+    headers: countEnabled(content.headers),
+  });
+  const shown = sections.some((s) => s.id === section) ? section : "params";
 
   return (
     <div className="request-editor">
@@ -105,6 +108,8 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         variables={variables}
         sending={tab.sending}
         dirty={tab.draft !== null}
+        hideMethod={kind === "graphql"}
+        sendBlockedReason={runsSubscription(content) ? SUBSCRIPTION_HINT : undefined}
         tlsVerified={content.settings.verify_tls}
         proxyActive={proxyActive}
         onImportCurl={(text) => void applyCurl(text)}
@@ -114,9 +119,9 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         onCancel={() => cancel(tabId)}
         onSave={() => void save(tabId, location)}
       />
-      <Tabs tabs={sections} selectedId={section} onSelect={setSection} label="Request sections">
-        {section === "params" ? <ParamsEditor variables={variables} rows={tab.paramRows} onChange={(rows) => editParams(tabId, rows)} /> : null}
-        {section === "headers" ? (
+      <Tabs tabs={sections} selectedId={shown} onSelect={setSection} label="Request sections">
+        {shown === "params" ? <ParamsEditor variables={variables} rows={tab.paramRows} onChange={(rows) => editParams(tabId, rows)} /> : null}
+        {shown === "headers" ? (
           <KeyValueTable
             label="Headers"
             variables={variables}
@@ -124,16 +129,33 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
             onChange={(rows) => edit(tabId, (c) => ({ ...c, headers: fromRows(rows) }))}
           />
         ) : null}
-        {section === "body" ? (
-          <BodyEditor location={location} variables={variables} body={content.body} onChange={(body) => edit(tabId, (c) => ({ ...c, body }))} />
+        {shown === "body" ? (
+          <BodyEditor
+            location={location}
+            variables={variables}
+            body={kind === "soap" && content.body.type !== "xml" ? { type: "xml", text: "" } : content.body}
+            allowedTypes={kind === "soap" ? ["xml"] : undefined}
+            onChange={(body) => edit(tabId, (c) => ({ ...c, body }))}
+          />
         ) : null}
-        {section === "auth" ? (
+        {shown === "query" ? (
+          <GraphqlEditor tabId={tabId} location={location} content={content} variables={variables} onChange={(body) => edit(tabId, (c) => ({ ...c, body }))} />
+        ) : null}
+        {shown === "variables" ? (
+          <VariablesEditor
+            value={content.body.type === "graphql" ? content.body.variables : ""}
+            variables={variables}
+            onChange={(text) => edit(tabId, (c) => ({ ...c, body: { ...graphqlBodyOf(c), variables: text } }))}
+          />
+        ) : null}
+        {shown === "soap" ? <SoapPanel location={location} content={content} variables={variables} onChange={(update) => edit(tabId, update)} /> : null}
+        {shown === "auth" ? (
           <>
             <AuthEditor location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
             {content.auth.type === "oauth2" ? <OAuthTokenPanel tabId={tabId} location={location} content={content} /> : null}
           </>
         ) : null}
-        {section === "scripts" ? (
+        {shown === "scripts" ? (
           <ScriptsEditor
             scripts={content.scripts}
             phase={phase}
@@ -141,7 +163,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
             onChange={(scripts) => edit(tabId, (c) => ({ ...c, scripts }))}
           />
         ) : null}
-        {section === "settings" ? (
+        {shown === "settings" ? (
           <SettingsEditor settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
         ) : null}
       </Tabs>

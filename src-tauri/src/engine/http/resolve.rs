@@ -3,7 +3,7 @@
 //! file paths are never resolved: a variable must not choose which file is uploaded.
 
 use super::mask::mask_secrets;
-use crate::store::types::{Auth, Body, KeyValue, Part, RequestContent};
+use crate::store::types::{Auth, Body, KeyValue, Part, RequestContent, SoapSettings, SoapVersion};
 use crate::vars::dynamic::Dynamics;
 use crate::vars::resolve::{resolve_text, Report};
 use crate::vars::scopes::Scopes;
@@ -135,7 +135,33 @@ impl Resolver<'_> {
             Body::Multipart { parts } => Body::Multipart {
                 parts: parts.iter().map(|part| self.part(part)).collect(),
             },
+            // `operation_name` picks an operation in the query: never resolved.
+            Body::Graphql {
+                query,
+                variables,
+                operation_name,
+            } => Body::Graphql {
+                query: self.text(query),
+                variables: self.text(variables),
+                operation_name: operation_name.clone(),
+            },
             Body::None | Body::Binary { .. } | Body::Unsupported => body.clone(),
+        }
+    }
+
+    /// Only the action is resolved; `wsdl` is a UI reference, never sent.
+    fn soap(&mut self, soap: &SoapSettings) -> SoapSettings {
+        let (action, secret) = self.tracked(&soap.action);
+        if secret {
+            let carrier = match soap.version {
+                SoapVersion::V11 => "SOAPAction",
+                SoapVersion::V12 => "Content-Type",
+            };
+            self.secret_headers.push(carrier.to_string());
+        }
+        SoapSettings {
+            action,
+            ..soap.clone()
         }
     }
 
@@ -205,6 +231,7 @@ pub fn resolve_content(
             .collect(),
         body: resolver.body(&content.body),
         auth: resolver.auth(&content.auth),
+        soap: resolver.soap(&content.soap),
         ..content.clone()
     };
     Resolved {

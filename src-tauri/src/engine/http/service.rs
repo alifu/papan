@@ -28,6 +28,10 @@ use crate::store::types::{RequestContent, RequestLocation};
 use crate::store::StoreState;
 use crate::vars::vault::{MemoryVault, SecretStore};
 
+#[path = "fetch.rs"]
+mod fetch;
+pub use fetch::{FetchLimits, FetchedDocument, HopCheck};
+
 const CONTENT_LABEL: &str = "Request";
 const UNNAMED: &str = "Untitled";
 

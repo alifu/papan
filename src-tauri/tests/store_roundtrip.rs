@@ -8,7 +8,7 @@ use papan_lib::error::ErrorCode;
 use papan_lib::store::collection::Collection;
 use papan_lib::store::env_model::{EnvFile, GlobalsFile};
 use papan_lib::store::model::{CollectionFile, RequestFile};
-use papan_lib::store::types::{NodeKind, RequestContent, TreeNode};
+use papan_lib::store::types::{Body, NodeKind, RequestContent, RequestKind, SoapVersion, TreeNode};
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -319,4 +319,80 @@ fn rewriting_with_an_edited_url_keeps_unknown_and_unsupported_sections() {
         );
         assert_eq!(fs::read_to_string(&target).unwrap(), expected, "{fixture}");
     }
+}
+
+#[test]
+fn m6_graphql_and_soap_requests_are_fixed_points() {
+    let files = files_in(&fixtures().join("canonical/m6"), ".http.yaml");
+    assert!(files.len() >= 6, "fixtures missing");
+
+    for path in &files {
+        assert_fixed_point(path, canonical);
+    }
+}
+
+#[test]
+fn m6_requests_parse_to_their_kind_and_round_trip_through_content() {
+    let read = |name: &str| {
+        let bytes = fs::read(fixtures().join("canonical/m6").join(name)).unwrap();
+        RequestFile::parse(name, &bytes).unwrap()
+    };
+    let gql = read("graphql-get-user.http.yaml");
+    let soap = read("soap-add.http.yaml");
+
+    let gql_content = gql.content().unwrap();
+    let soap_content = soap.content().unwrap();
+
+    assert_eq!(gql_content.kind, RequestKind::Graphql);
+    assert_eq!(
+        gql_content.body,
+        Body::Graphql {
+            query: "query GetUser($id: ID!) {\n  user(id: $id) { id name }\n}\n".into(),
+            variables: "{ \"id\": \"{{userId}}\" }\n".into(),
+            operation_name: "GetUser".into(),
+        }
+    );
+    assert_eq!(soap_content.kind, RequestKind::Soap);
+    assert_eq!(soap_content.soap.version, SoapVersion::V12);
+    assert_eq!(soap_content.soap.action, "http://tempuri.org/Add");
+    for (file, content) in [(&gql, &gql_content), (&soap, &soap_content)] {
+        let written = file.with_content(content).unwrap();
+        assert_eq!(written.to_yaml().unwrap(), file.to_yaml().unwrap());
+    }
+}
+
+#[test]
+fn editing_a_soap_request_keeps_unknown_soap_keys() {
+    let name = "soap-file-wsdl.http.yaml";
+    let source = fixtures().join("canonical/m6").join(name);
+    let file = RequestFile::parse(name, &fs::read(&source).unwrap()).unwrap();
+    let content = file.content().unwrap();
+    let edited = RequestContent {
+        url: "http://example.test/edited".into(),
+        ..content.clone()
+    };
+
+    let written = file.with_content(&edited).unwrap().to_yaml().unwrap();
+
+    let expected = fs::read_to_string(&source)
+        .unwrap()
+        .replace(&content.url, "http://example.test/edited");
+    assert_eq!(written, expected);
+}
+
+#[test]
+fn collection_tree_carries_the_request_kind() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("c");
+    copy_dir(&fixtures().join("canonical/m6"), &root.join("requests"));
+    fs::write(root.join("papan.collection.yaml"), "name: C\nversion: 1\n").unwrap();
+
+    let tree = Collection::open(&root).unwrap().tree();
+    let kind_of = |path: &str| tree.iter().find(|n| n.path == path).unwrap().request_kind;
+    assert_eq!(
+        kind_of("graphql-minimal.http.yaml"),
+        Some(RequestKind::Graphql)
+    );
+    assert_eq!(kind_of("soap-add.http.yaml"), Some(RequestKind::Soap));
+    assert!(tree.iter().all(|node| node.kind == NodeKind::Request));
 }

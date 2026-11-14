@@ -12,9 +12,11 @@ use specta_typescript::Typescript;
 use tauri_specta::{collect_commands, collect_events, Builder};
 
 use crate::commands;
+use crate::engine::graphql::commands as graphql;
 use crate::engine::http::commands as http;
 use crate::engine::http::net_commands as net;
 use crate::engine::http::oauth::commands as oauth;
+use crate::engine::soap::commands as soap;
 use crate::error::AppError;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
@@ -88,6 +90,13 @@ pub fn builder() -> Builder<tauri::Wry> {
             oauth::oauth_authorize,
             oauth::oauth_cancel,
             oauth::oauth_clear,
+            graphql::introspect_graphql,
+            graphql::read_cached_schema,
+            graphql::load_schema_file,
+            graphql::clear_cached_schema,
+            soap::import_wsdl,
+            soap::read_cached_wsdl,
+            soap::soap_envelope,
         ])
         .events(collect_events![CollectionChanged])
         .typ::<AppError>()
@@ -233,6 +242,13 @@ mod tests {
             "oauthAuthorize",
             "oauthCancel",
             "oauthClear",
+            "introspectGraphql",
+            "readCachedSchema",
+            "loadSchemaFile",
+            "clearCachedSchema",
+            "importWsdl",
+            "readCachedWsdl",
+            "soapEnvelope",
         ];
 
         let missing: Vec<&str> = expected

@@ -1,0 +1,8 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://example.test/split/types">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ns1:GetCustomer>
+      <ns1:id>?</ns1:id>
+    </ns1:GetCustomer>
+  </soapenv:Body>
+</soapenv:Envelope>

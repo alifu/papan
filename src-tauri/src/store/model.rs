@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use super::env_model::{self, VarTable};
+use super::protocol_model::{self as protocol, parse_kind};
 use super::script_model::{self, SCRIPTS};
-use super::types::{RequestContent, Scripts};
+use super::types::{RequestContent, RequestKind, Scripts};
 use super::yaml::{self, Node};
 use super::{request_emit, request_model};
 use crate::error::AppError;
@@ -16,7 +17,6 @@ pub const SUPPORTED_VERSION: u64 = 1;
 const MAX_NAME_CHARS: usize = 100;
 const MAX_METHOD_CHARS: usize = 20;
 const MAX_URL_CHARS: usize = 8192;
-const REQUEST_KIND: &str = "http";
 /// Label used in messages about request content that has no file name yet.
 const CONTENT_LABEL: &str = "Request";
 
@@ -120,9 +120,9 @@ fn emit_with(extra: &Extra, known: Vec<(&str, Node)>) -> Result<String, AppError
 }
 
 impl RequestFile {
-    pub fn new(name: String, method: &str) -> Self {
+    pub fn new(name: String, method: &str, kind: RequestKind) -> Self {
         Self {
-            kind: REQUEST_KIND.to_string(),
+            kind: protocol::kind_name(kind).to_string(),
             method: method.to_string(),
             name,
             url: String::new(),
@@ -137,18 +137,17 @@ impl RequestFile {
     }
 
     pub fn validate(&self, label: &str) -> Result<(), AppError> {
-        if self.kind != REQUEST_KIND {
-            return Err(yaml::invalid(label, "field `kind` must be `http`."));
-        }
+        let kind = parse_kind(label, &self.kind)?;
         check_name(label, &self.name)?;
-        check_method(label, &self.method)?;
+        protocol::check_method(label, kind, &self.method)?;
         check_url(label, &self.url)?;
-        request_model::parse_sections(label, &self.extra).map(|_| ())
+        request_model::parse_sections(label, kind, &self.extra).map(|_| ())
     }
 
     /// The typed request content (plan 03 §3).
     pub fn content(&self) -> Result<RequestContent, AppError> {
-        let sections = request_model::parse_sections(CONTENT_LABEL, &self.extra)?;
+        let kind = parse_kind(CONTENT_LABEL, &self.kind)?;
+        let sections = request_model::parse_sections(CONTENT_LABEL, kind, &self.extra)?;
         Ok(RequestContent {
             method: self.method.clone(),
             url: self.url.clone(),
@@ -157,7 +156,8 @@ impl RequestFile {
     }
 
     pub fn to_yaml(&self) -> Result<String, AppError> {
-        let extra = request_emit::canonical_extra(CONTENT_LABEL, &self.extra)?;
+        let kind = parse_kind(CONTENT_LABEL, &self.kind)?;
+        let extra = request_emit::canonical_extra(CONTENT_LABEL, kind, &self.extra)?;
         let url = (!self.url.is_empty()).then(|| ("url", Node::String(self.url.clone())));
         let known = [
             ("kind", Node::String(self.kind.clone())),
@@ -173,11 +173,12 @@ impl RequestFile {
     /// Copy holding `content` (validated first); name and unknown fields are kept, and
     /// so is the on-disk form of every section that `content` leaves unchanged.
     pub fn with_content(&self, content: &RequestContent) -> Result<Self, AppError> {
+        let kind = parse_kind(CONTENT_LABEL, &self.kind)?;
         request_model::validate_content(CONTENT_LABEL, content)?;
         Ok(Self {
             method: content.method.clone(),
             url: content.url.clone(),
-            extra: request_emit::merge(CONTENT_LABEL, &self.extra, content)?,
+            extra: request_emit::merge(CONTENT_LABEL, kind, &self.extra, content)?,
             ..self.clone()
         })
     }
@@ -312,7 +313,7 @@ mod tests {
 
     #[test]
     fn request_round_trips_and_omits_empty_url() {
-        let file = RequestFile::new("Ping".into(), "GET");
+        let file = RequestFile::new("Ping".into(), "GET", RequestKind::Http);
 
         let text = file.to_yaml().unwrap();
 
@@ -322,7 +323,7 @@ mod tests {
 
     #[test]
     fn request_validation_names_the_field() {
-        let base = RequestFile::new("Ok".into(), "GET");
+        let base = RequestFile::new("Ok".into(), "GET", RequestKind::Http);
         let with = |method: &str, url: &str| RequestFile {
             method: method.into(),
             url: url.into(),
@@ -334,13 +335,6 @@ mod tests {
             (with("GET", &"u".repeat(8193)), "url"),
             (base.with_name("   "), "name"),
             (base.with_name("a\u{7}"), "name"),
-            (
-                RequestFile {
-                    kind: "graphql".into(),
-                    ..base.clone()
-                },
-                "kind",
-            ),
         ];
         for (file, field) in cases {
             let error = file.validate("r.http.yaml").unwrap_err();

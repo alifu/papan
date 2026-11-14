@@ -290,3 +290,43 @@ fn a_script_composed_url_is_masked_with_the_secrets_of_the_scopes() {
         resolved
     );
 }
+
+#[test]
+fn a_graphql_body_maps_to_its_json_and_back() {
+    let draft = RequestContent {
+        body: Body::Graphql {
+            query: "{ a }".into(),
+            variables: "{\"x\": 1}".into(),
+            operation_name: String::new(),
+        },
+        kind: crate::store::types::RequestKind::Graphql,
+        ..RequestContent::new("POST", "http://x")
+    };
+    let request = script_request(&draft);
+    let with = |body: &str| ScriptRequest {
+        body: Some(body.into()),
+        ..request.clone()
+    };
+
+    let unchanged = content_after(&draft, &request);
+    let changed = content_after(
+        &draft,
+        &with(r#"{"query":"{ b }","operationName":"B","variables":{"y":2}}"#),
+    );
+    let not_graphql = content_after(&draft, &with("[1]"));
+
+    assert_eq!(
+        request.body.as_deref(),
+        Some(r#"{"query":"{ a }","variables":{"x": 1}}"#)
+    );
+    assert_eq!(unchanged, draft);
+    assert_eq!(
+        changed.body,
+        Body::Graphql {
+            query: "{ b }".into(),
+            variables: "{\n  \"y\": 2\n}".into(),
+            operation_name: "B".into(),
+        }
+    );
+    assert_eq!(not_graphql.body, Body::Text { text: "[1]".into() });
+}

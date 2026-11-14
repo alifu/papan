@@ -9,10 +9,10 @@ use super::collection::{
 use super::fsio::{self, EntryKind};
 use super::model::{self, FolderFile, RequestFile};
 use super::paths::{self, FOLDER_FILE, REQUEST_SUFFIX};
+use super::protocol_model;
 use super::scan::arrange;
+use super::types::RequestKind;
 use crate::error::AppError;
-
-const DEFAULT_METHOD: &str = "GET";
 
 enum Content {
     Folder(FolderFile),
@@ -50,9 +50,14 @@ impl Collection {
         Ok(paths::join_rel(parent_rel, &stem))
     }
 
-    pub fn create_request(&self, parent_rel: &str, name: &str) -> Result<String, AppError> {
+    pub fn create_request(
+        &self,
+        parent_rel: &str,
+        name: &str,
+        kind: RequestKind,
+    ) -> Result<String, AppError> {
         let name = model::clean_name(name)?;
-        self.add_request(parent_rel, &RequestFile::new(name, DEFAULT_METHOD))
+        self.add_request(parent_rel, &protocol_model::new_request_file(name, kind)?)
     }
 
     /// Writes `file` as a new request in `parent_rel`, named after its display name.

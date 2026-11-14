@@ -116,3 +116,52 @@ fn malformed_file_counts_as_empty_and_clear_empties() {
     assert!(history.list().is_empty());
     assert_eq!(history.find(&id).unwrap_err().code, ErrorCode::NotFound);
 }
+
+#[test]
+fn history_written_before_m6_reads_as_http() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut file = serde_json::to_value(HistoryFile {
+        version: HISTORY_VERSION,
+        entries: vec![record("https://x", &RequestContent::new("GET", ""), ok())],
+    })
+    .unwrap();
+    let entry = &mut file["entries"][0];
+    entry.as_object_mut().unwrap().remove("kind");
+    let content = entry["content"].as_object_mut().unwrap();
+    content.remove("kind");
+    content.remove("soap");
+    std::fs::write(dir.path().join(HISTORY_FILE), file.to_string()).unwrap();
+    let history = History::new(dir.path());
+
+    let listed = history.list();
+    let found = history.find(&listed[0].id).unwrap();
+
+    assert_eq!(listed[0].kind, RequestKind::Http);
+    assert_eq!(found.content.kind, RequestKind::Http);
+    assert_eq!(found.content.soap, SoapSettings::default());
+}
+
+#[test]
+fn records_keep_the_kind_and_drop_a_big_graphql_query() {
+    let content = RequestContent {
+        body: Body::Graphql {
+            query: "q".repeat(MAX_SNAPSHOT_BODY_BYTES),
+            variables: "{\"a\": 1}".into(),
+            operation_name: "Op".into(),
+        },
+        kind: RequestKind::Graphql,
+        ..RequestContent::new("POST", "")
+    };
+
+    let stored = record("https://x", &content, ok());
+
+    assert_eq!(stored.entry.kind, RequestKind::Graphql);
+    assert_eq!(
+        stored.content.body,
+        Body::Graphql {
+            query: String::new(),
+            variables: String::new(),
+            operation_name: "Op".into(),
+        }
+    );
+}

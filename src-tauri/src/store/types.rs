@@ -29,6 +29,8 @@ pub struct TreeNode {
     pub kind: NodeKind,
     /// Requests only.
     pub method: Option<String>,
+    /// Requests only.
+    pub request_kind: Option<RequestKind>,
     /// Folders only.
     pub children: Vec<TreeNode>,
 }
@@ -102,7 +104,51 @@ pub enum Body {
     Binary {
         file: Option<String>,
     },
+    /// `kind: graphql` only (plan 06 §3.2). Empty `variables`/`operation_name` mean none.
+    Graphql {
+        query: String,
+        variables: String,
+        operation_name: String,
+    },
     Unsupported,
+}
+
+/// Which editor a request opens in and how its body is built (plan 06 §3.1).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum RequestKind {
+    #[default]
+    Http,
+    Graphql,
+    Soap,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum SoapVersion {
+    #[default]
+    #[serde(rename = "1.1")]
+    V11,
+    #[serde(rename = "1.2")]
+    V12,
+}
+
+/// The WSDL a SOAP request was generated from; a UI reference, never needed to send.
+/// `file` is a file name only, never a path.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WsdlRef {
+    pub url: String,
+    pub file: String,
+    pub service: String,
+    pub port: String,
+    pub operation: String,
+}
+
+/// The `soap` section of a `kind: soap` request (plan 06 §3.3).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct SoapSettings {
+    pub version: SoapVersion,
+    pub action: String,
+    pub wsdl: Option<WsdlRef>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -226,6 +272,8 @@ pub struct RequestContent {
     pub auth: Auth,
     pub settings: Settings,
     pub scripts: Scripts,
+    pub kind: RequestKind,
+    pub soap: SoapSettings,
 }
 
 impl RequestContent {
@@ -250,6 +298,7 @@ pub struct ScratchItem {
     pub id: String,
     pub name: String,
     pub method: String,
+    pub kind: RequestKind,
 }
 
 /// Emitted when a collection changed on disk outside the app. TS: `events.collectionChanged`.

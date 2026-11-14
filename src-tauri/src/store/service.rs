@@ -13,8 +13,8 @@ use super::request_emit::normalise;
 use super::scratch::Scratch;
 use super::secrets::{redact, SessionSecrets};
 use super::types::{
-    CollectionSummary, CollectionTree, RequestContent, RequestDoc, RequestLocation, ScratchItem,
-    TreeChange,
+    CollectionSummary, CollectionTree, RequestContent, RequestDoc, RequestKind, RequestLocation,
+    ScratchItem, TreeChange,
 };
 use crate::engine::http::types::HistoryEntry;
 use crate::error::AppError;
@@ -202,8 +202,9 @@ impl Store {
         id: &str,
         parent: &str,
         name: &str,
+        kind: RequestKind,
     ) -> Result<TreeChange, AppError> {
-        self.mutate(id, |c| c.create_request(parent, name).map(Some))
+        self.mutate(id, |c| c.create_request(parent, name, kind).map(Some))
     }
 
     pub fn rename_node(
@@ -271,8 +272,8 @@ impl Store {
         self.scratch.list()
     }
 
-    pub fn create_scratch(&self) -> Result<ScratchItem, AppError> {
-        self.scratch.create()
+    pub fn create_scratch(&self, kind: RequestKind) -> Result<ScratchItem, AppError> {
+        self.scratch.create(kind)
     }
 
     pub fn rename_scratch(&self, id: &str, name: &str) -> Result<Vec<ScratchItem>, AppError> {

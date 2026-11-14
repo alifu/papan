@@ -3,6 +3,7 @@
 
 use super::export_check::{check_command, check_exportable};
 use super::quote::{bare_or_quoted, quote};
+use crate::engine::http::protocol_body;
 use crate::error::AppError;
 use crate::store::types::{
     ApiKeyPlacement, Auth, Body, HttpVersion, KeyValue, Part, RequestContent, Settings,
@@ -21,6 +22,7 @@ const GLOB_CHARACTERS: [char; 4] = ['{', '}', '[', ']'];
 /// The command for `content`, exactly as given; refused when cURL would read part of it
 /// as a file or an option, or a shell could misread it.
 pub fn export(content: &RequestContent) -> Result<String, AppError> {
+    let content = &as_sent(content)?;
     check_exportable(content)?;
     let url = with_api_key_query(&content.url, &content.auth);
     let mut lines = vec![format!("curl -X {}", bare_or_quoted(&content.method))];
@@ -36,6 +38,56 @@ pub fn export(content: &RequestContent) -> Result<String, AppError> {
     let command = lines.join(LINE_BREAK);
     check_command(&command)?;
     Ok(command)
+}
+
+/// GraphQL and SOAP as the HTTP request Papan sends: the built JSON body and the derived
+/// headers (`Accept`, `Content-Type`, `SOAPAction`) unless the user set the same name.
+fn as_sent(content: &RequestContent) -> Result<RequestContent, AppError> {
+    let derived = protocol_body::derived_headers(content)?;
+    let given = |name: &str| {
+        content
+            .headers
+            .iter()
+            .any(|row| row.enabled && row.name.trim().eq_ignore_ascii_case(name))
+    };
+    let extra = derived
+        .iter()
+        .map(|(name, value)| {
+            (
+                display_name(name.as_str()),
+                value.to_str().unwrap_or_default(),
+            )
+        })
+        .filter(|(name, _)| !given(name))
+        .map(|(name, value)| KeyValue {
+            name: name.to_string(),
+            value: value.to_string(),
+            enabled: true,
+        });
+    let body = match &content.body {
+        Body::Graphql {
+            query,
+            variables,
+            operation_name,
+        } => Body::Json {
+            text: protocol_body::graphql_json(query, variables, operation_name)?,
+        },
+        other => other.clone(),
+    };
+    Ok(RequestContent {
+        headers: content.headers.iter().cloned().chain(extra).collect(),
+        body,
+        ..content.clone()
+    })
+}
+
+fn display_name(name: &str) -> &str {
+    match name {
+        "accept" => "Accept",
+        "content-type" => "Content-Type",
+        "soapaction" => "SOAPAction",
+        other => other,
+    }
 }
 
 /// A URL starting with `-` would be read as an option.
@@ -157,7 +209,8 @@ fn body_lines(body: &Body) -> Vec<String> {
         Body::Binary { file: Some(path) } if !path.is_empty() => {
             vec![format!("--data-binary @{}", bare_or_quoted(path))]
         }
-        Body::Binary { .. } | Body::None | Body::Unsupported => Vec::new(),
+        // `as_sent` turned a GraphQL body into JSON.
+        Body::Binary { .. } | Body::None | Body::Graphql { .. } | Body::Unsupported => Vec::new(),
     }
 }
 

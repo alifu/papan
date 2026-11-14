@@ -15,14 +15,14 @@ vi.mock("./api", () => ({ listHistory: vi.fn(), clearHistory: vi.fn(), restoreHi
 
 const entry = (over: Partial<HistoryEntry>): HistoryEntry => ({
   id: "h1", sent_at_ms: Date.now() - 5 * 60_000, name: "n", method: "GET", url: "http://a.test/x",
-  status: 200, error_code: null, total_ms: 3, size_bytes: 1, ...over,
+  status: 200, error_code: null, total_ms: 3, size_bytes: 1, kind: "http", ...over,
 });
 
 beforeEach(() => {
   useHistoryStore.setState({ entries: [] });
   vi.mocked(api.listHistory).mockResolvedValue([entry({}), entry({ id: "h2", status: null, error_code: "timeout", sent_at_ms: null })]);
   vi.mocked(api.clearHistory).mockResolvedValue(null);
-  vi.mocked(api.restoreHistoryEntry).mockResolvedValue({ id: "s1", name: "Restored", method: "GET" });
+  vi.mocked(api.restoreHistoryEntry).mockResolvedValue({ id: "s1", name: "Restored", method: "GET", kind: "http" });
 });
 
 describe("HistoryPanel", () => {
@@ -38,6 +38,17 @@ describe("HistoryPanel", () => {
     await userEvent.click((await screen.findAllByRole("button", { name: /GET/ }))[0]!);
     await waitFor(() => expect(open).toHaveBeenCalledWith({ scope: "scratch", id: "s1" }, "Restored"));
     expect(api.restoreHistoryEntry).toHaveBeenCalledWith("h1");
+  });
+
+  it("shows SOAP and GQL badges instead of POST", async () => {
+    vi.mocked(api.listHistory).mockResolvedValue([
+      entry({ id: "a", method: "POST", kind: "soap" }),
+      entry({ id: "b", method: "POST", kind: "graphql" }),
+    ]);
+    render(<HistoryPanel />);
+    expect(await screen.findByText("SOAP")).toBeInTheDocument();
+    expect(screen.getByText("GQL")).toBeInTheDocument();
+    expect(screen.queryByText("POST")).toBeNull();
   });
 
   it("clears the list", async () => {

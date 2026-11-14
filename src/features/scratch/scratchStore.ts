@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ScratchItem } from "../../ipc/bindings";
+import type { RequestKind, ScratchItem } from "../../ipc/bindings";
 import { showToast, reportError } from "../../ui/toastStore";
 import { useCollectionsStore } from "../collections/collectionsStore";
 import { collectionLocation, scratchLocation } from "../locations";
@@ -9,7 +9,7 @@ import * as api from "./api";
 export interface ScratchState {
   readonly items: readonly ScratchItem[];
   load: () => Promise<void>;
-  create: () => Promise<ScratchItem | null>;
+  create: (kind?: RequestKind) => Promise<ScratchItem | null>;
   rename: (id: string, name: string) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
   moveToCollection: (id: string, collectionId: string, folder: string) => Promise<boolean>;
@@ -34,8 +34,8 @@ export const useScratchStore = create<ScratchState>()((set, get) => {
       const items = await attempt(api.listScratch);
       if (items) set({ items });
     },
-    create: async () => {
-      const item = await attempt(api.createScratch);
+    create: async (kind = "http") => {
+      const item = await attempt(() => api.createScratch(kind));
       if (!item) return null;
       set({ items: [...get().items, item].sort(byNameThenId) });
       useTabsStore.getState().openRequest(scratchLocation(item.id), item.name);

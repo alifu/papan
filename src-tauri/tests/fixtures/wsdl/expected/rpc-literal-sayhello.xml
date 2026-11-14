@@ -1,0 +1,9 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://example.test/rpc">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ns1:SayHello>
+      <name>?</name>
+      <times>?</times>
+    </ns1:SayHello>
+  </soapenv:Body>
+</soapenv:Envelope>

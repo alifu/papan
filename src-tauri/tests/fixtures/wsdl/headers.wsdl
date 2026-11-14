@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:h="http://example.test/headers"
+  targetNamespace="http://example.test/headers"
+  name="Orders">
+  <wsdl:types>
+    <xs:schema targetNamespace="http://example.test/headers" elementFormDefault="qualified">
+      <xs:element name="AuthHeader">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="token" type="xs:string"/>
+            <xs:element name="tenant" type="xs:string" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="PlaceOrder">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="sku" type="xs:string"/>
+            <xs:element name="quantity" type="xs:int"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="PlaceOrderResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="orderId" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="PlaceOrderIn">
+    <wsdl:part name="parameters" element="h:PlaceOrder"/>
+  </wsdl:message>
+  <wsdl:message name="PlaceOrderOut">
+    <wsdl:part name="parameters" element="h:PlaceOrderResponse"/>
+  </wsdl:message>
+  <wsdl:message name="AuthHeaderMsg">
+    <wsdl:part name="Auth" element="h:AuthHeader"/>
+  </wsdl:message>
+  <wsdl:portType name="OrdersPortType">
+    <wsdl:operation name="PlaceOrder">
+      <wsdl:input message="h:PlaceOrderIn"/>
+      <wsdl:output message="h:PlaceOrderOut"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="OrdersBinding" type="h:OrdersPortType">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="PlaceOrder">
+      <soap:operation soapAction="http://example.test/headers/PlaceOrder" style="document"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+        <soap:header message="h:AuthHeaderMsg" part="Auth" use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="Orders">
+    <wsdl:port name="OrdersPort" binding="h:OrdersBinding">
+      <soap:address location="http://example.test/orders"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

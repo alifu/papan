@@ -1,0 +1,17 @@
+body:
+  text: <a/>
+  type: xml
+headers:
+  - name: X-Trace
+    value: "1"
+kind: soap
+method: POST
+name: From a file WSDL
+soap:
+  retries: 2
+  wsdl:
+    file: calculator.wsdl
+    operation: Subtract
+    port: CalculatorSoap
+    service: Calculator
+url: http://example.test/calculator.asmx

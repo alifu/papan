@@ -1,15 +1,16 @@
-//! Canonical emit of the six request sections and the merge rule of plan 03 §3:
+//! Canonical emit of the seven request sections and the merge rule of plan 03 §3:
 //! defaults are omitted, unknown keys found on disk are kept, an `Unsupported` section is
 //! written back verbatim, and a section the user did not change keeps its on-disk value.
 
 use serde_json::Value;
 
 use super::auth_model;
+use super::protocol_model::{self, SOAP};
 use super::request_model::{self, Extra, Fields, AUTH, BODY, DISABLED_PARAMS, HEADERS, SECTIONS};
 use super::script_model::{emit_scripts, SCRIPTS};
 use super::types::{
     ApiKeyPlacement, Auth, Body, ClientAuth, HttpVersion, KeyValue, OAuthGrant, Pair, Part,
-    RequestContent, Settings,
+    RequestContent, RequestKind, Settings,
 };
 use crate::error::AppError;
 
@@ -39,9 +40,9 @@ const SETTINGS_KEYS: [&str; 4] = [
 ];
 const TYPE_KEY: &str = "type";
 
-/// `extra` with its six sections in canonical form (the rest untouched).
-pub fn canonical_extra(label: &str, extra: &Extra) -> Result<Extra, AppError> {
-    let content = request_model::parse_sections(label, extra)?;
+/// `extra` with its seven sections in canonical form (the rest untouched).
+pub fn canonical_extra(label: &str, kind: RequestKind, extra: &Extra) -> Result<Extra, AppError> {
+    let content = request_model::parse_sections(label, kind, extra)?;
     Ok(with_sections(extra, |key| {
         emit_section(key, &content, extra.get(key))
     }))
@@ -49,8 +50,14 @@ pub fn canonical_extra(label: &str, extra: &Extra) -> Result<Extra, AppError> {
 
 /// `extra` updated to `incoming`: a section whose typed value equals what is on disk keeps
 /// its raw value (unknown keys and all); a changed one is replaced by its canonical form.
-pub fn merge(label: &str, extra: &Extra, incoming: &RequestContent) -> Result<Extra, AppError> {
-    let disk = request_model::parse_sections(label, extra)?;
+pub fn merge(
+    label: &str,
+    kind: RequestKind,
+    extra: &Extra,
+    incoming: &RequestContent,
+) -> Result<Extra, AppError> {
+    protocol_model::check_same_kind(label, kind, incoming.kind)?;
+    let disk = request_model::parse_sections(label, kind, extra)?;
     for key in SECTIONS {
         let changed = !section_eq(key, &disk, incoming);
         if changed && is_unsupported(key, incoming) {
@@ -90,6 +97,7 @@ fn section_eq(key: &str, a: &RequestContent, b: &RequestContent) -> bool {
         DISABLED_PARAMS => a.disabled_params == b.disabled_params,
         HEADERS => a.headers == b.headers,
         SCRIPTS => a.scripts == b.scripts,
+        SOAP => a.soap == b.soap,
         _ => a.settings == b.settings,
     }
 }
@@ -111,6 +119,7 @@ pub fn emit_section(key: &str, content: &RequestContent, raw: Option<&Value>) ->
         DISABLED_PARAMS => list_value(content.disabled_params.iter().map(pair_fields), raw),
         HEADERS => list_value(content.headers.iter().map(key_value_fields), raw),
         SCRIPTS => emit_scripts(&content.scripts, raw),
+        SOAP => protocol_model::emit_soap(&content.soap, raw),
         _ => emit_settings(&content.settings, raw),
     }
 }
@@ -200,6 +209,7 @@ fn emit_body(body: &Body, raw: Option<&Value>) -> Option<Value> {
     let canonical = match body {
         Body::None => return None,
         Body::Unsupported => return raw.cloned(),
+        Body::Graphql { .. } => return protocol_model::emit_graphql(body, raw),
         Body::Json { text: body } => typed("json", fields([("text", Some(text(body)))])),
         Body::Xml { text: body } => typed("xml", fields([("text", Some(text(body)))])),
         Body::Text { text: body } => typed("text", fields([("text", Some(text(body)))])),

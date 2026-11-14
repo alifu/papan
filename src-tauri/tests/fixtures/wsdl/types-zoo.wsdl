@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:z="http://example.test/zoo"
+  targetNamespace="http://example.test/zoo"
+  name="Zoo">
+  <wsdl:types>
+    <xs:schema targetNamespace="http://example.test/zoo" elementFormDefault="unqualified">
+      <xs:simpleType name="Diet">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="herbivore"/>
+          <xs:enumeration value="carnivore"/>
+          <xs:enumeration value="omnivore"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType name="Name">
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="40"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:complexType name="Animal">
+        <xs:sequence>
+          <xs:element name="name" type="z:Name"/>
+          <xs:element name="diet" type="z:Diet" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:string" use="required"/>
+        <xs:attribute name="legs" type="xs:int" default="4"/>
+      </xs:complexType>
+      <xs:complexType name="Mammal">
+        <xs:complexContent>
+          <xs:extension base="z:Animal">
+            <xs:sequence>
+              <xs:element name="furColor" type="xs:string" minOccurs="0"/>
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:complexType name="ShortName">
+        <xs:complexContent>
+          <xs:restriction base="xs:anyType">
+            <xs:sequence>
+              <xs:element name="code" type="xs:string"/>
+            </xs:sequence>
+          </xs:restriction>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:complexType name="Enclosure">
+        <xs:sequence>
+          <xs:choice>
+            <xs:element name="cage" type="xs:string"/>
+            <xs:element name="pond" type="xs:string"/>
+            <xs:element name="aviary" type="xs:boolean"/>
+          </xs:choice>
+          <xs:element name="tag" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+          <xs:element name="keeper" type="xs:string" maxOccurs="3"/>
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="TreeNode">
+        <xs:sequence>
+          <xs:element name="label" type="xs:string"/>
+          <xs:element name="child" type="z:TreeNode" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="Inventory">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="animal" type="z:Mammal" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="enclosure" type="z:Enclosure"/>
+            <xs:element name="tree" type="z:TreeNode" minOccurs="0"/>
+            <xs:element name="short" type="z:ShortName" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="InventoryResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="count" type="xs:int"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="InventoryIn">
+    <wsdl:part name="parameters" element="z:Inventory"/>
+  </wsdl:message>
+  <wsdl:message name="InventoryOut">
+    <wsdl:part name="parameters" element="z:InventoryResponse"/>
+  </wsdl:message>
+  <wsdl:portType name="ZooPortType">
+    <wsdl:operation name="Inventory">
+      <wsdl:input message="z:InventoryIn"/>
+      <wsdl:output message="z:InventoryOut"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ZooBinding" type="z:ZooPortType">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="Inventory">
+      <soap:operation soapAction="http://example.test/zoo/Inventory" style="document"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="Zoo">
+    <wsdl:port name="ZooPort" binding="z:ZooBinding">
+      <soap:address location="http://example.test/zoo"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

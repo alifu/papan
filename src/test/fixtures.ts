@@ -5,7 +5,14 @@ export const node = (
   kind: TreeNode["kind"],
   children: TreeNode[] = [],
   method: string | null = kind === "request" ? "GET" : null,
-): TreeNode => ({ path, name: path.split("/").pop()!.replace(".http.yaml", ""), kind, method, children });
+): TreeNode => ({
+  path,
+  name: path.split("/").pop()!.replace(".http.yaml", ""),
+  kind,
+  method,
+  request_kind: kind === "request" ? "http" : null,
+  children,
+});
 
 /** Collection "c1": health, auth/{login, logout}, broken (invalid). */
 export const makeTree = (id = "c1", name = "My API", available = true): CollectionTree => ({

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hostile fixture: well-formed XML with a DTD and an external entity. Must be refused ("DTDs are not allowed in WSDL imports"); never resolve &xxe;. -->
+<!DOCTYPE wsdl:definitions [
+  <!ENTITY xxe SYSTEM "file:///etc/hosts">
+]>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="http://example.test/xxe"
+  targetNamespace="http://example.test/xxe"
+  name="XxeProbe">
+  <wsdl:documentation>&xxe;</wsdl:documentation>
+  <wsdl:message name="PingIn"/>
+  <wsdl:message name="PingOut"/>
+  <wsdl:portType name="PingPortType">
+    <wsdl:operation name="Ping">
+      <wsdl:input message="tns:PingIn"/>
+      <wsdl:output message="tns:PingOut"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="PingBinding" type="tns:PingPortType">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="Ping">
+      <soap:operation soapAction="http://example.test/xxe/Ping" style="document"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="XxeProbe">
+    <wsdl:port name="PingPort" binding="tns:PingBinding">
+      <soap:address location="http://example.test/xxe"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

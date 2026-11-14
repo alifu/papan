@@ -82,6 +82,15 @@ fn masked_body(body: &Body, text: &dyn Fn(&str) -> String) -> Body {
         Body::Multipart { parts } => Body::Multipart {
             parts: parts.iter().map(|part| masked_part(part, text)).collect(),
         },
+        Body::Graphql {
+            query,
+            variables,
+            operation_name,
+        } => Body::Graphql {
+            query: text(query),
+            variables: text(variables),
+            operation_name: operation_name.clone(),
+        },
         Body::None | Body::Binary { .. } | Body::Unsupported => body.clone(),
     }
 }

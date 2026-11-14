@@ -17,6 +17,10 @@ export interface UrlBarProps {
   readonly proxyActive?: boolean;
   /** Called with a pasted cURL command once the user agrees to replace the request. */
   readonly onImportCurl?: (text: string) => void;
+  /** GraphQL requests are always POST: the method select is hidden. */
+  readonly hideMethod?: boolean;
+  /** Why Send is unavailable (for example a subscription); Send is disabled and shows this as its hint. */
+  readonly sendBlockedReason?: string;
   readonly onMethod: (method: string) => void;
   readonly onUrl: (url: string) => void;
   readonly onSend: () => void;
@@ -42,13 +46,15 @@ export function UrlBar(props: UrlBarProps) {
   };
   return (
     <div className="request-line">
-      <select aria-label="Method" value={method} onChange={(e) => props.onMethod(e.target.value)}>
-        {methods.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
+      {props.hideMethod ? null : (
+        <select aria-label="Method" value={method} onChange={(e) => props.onMethod(e.target.value)}>
+          {methods.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      )}
       <div className="url-field" title={preview} onPasteCapture={onPaste}>
         <CodeEditor
           singleLine
@@ -76,8 +82,13 @@ export function UrlBar(props: UrlBarProps) {
       {sending ? (
         <Button label="Cancel" onClick={props.onCancel} />
       ) : (
-        <Button label="Send" onClick={props.onSend} />
+        <Button label="Send" disabled={props.sendBlockedReason !== undefined} title={props.sendBlockedReason} onClick={props.onSend} />
       )}
+      {props.sendBlockedReason !== undefined ? (
+        <span className="send-hint" role="status">
+          {props.sendBlockedReason}
+        </span>
+      ) : null}
       <Button label="Save" disabled={!dirty} onClick={props.onSave} />
     </div>
   );

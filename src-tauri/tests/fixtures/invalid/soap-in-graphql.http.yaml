@@ -1,0 +1,5 @@
+kind: graphql
+method: POST
+name: SOAP section in GraphQL
+soap:
+  action: urn:x

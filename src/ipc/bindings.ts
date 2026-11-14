@@ -13,7 +13,7 @@ export const commands = {
 	closeCollection: (collectionId: string) => __TAURI_INVOKE<null>("close_collection", { collectionId }),
 	readTree: (collectionId: string) => __TAURI_INVOKE<CollectionTree>("read_tree", { collectionId }),
 	createFolder: (collectionId: string, parent: string, name: string) => __TAURI_INVOKE<TreeChange>("create_folder", { collectionId, parent, name }),
-	createRequest: (collectionId: string, parent: string, name: string) => __TAURI_INVOKE<TreeChange>("create_request", { collectionId, parent, name }),
+	createRequest: (collectionId: string, parent: string, name: string, kind: RequestKind) => __TAURI_INVOKE<TreeChange>("create_request", { collectionId, parent, name, kind }),
 	renameNode: (collectionId: string, path: string, name: string) => __TAURI_INVOKE<TreeChange>("rename_node", { collectionId, path, name }),
 	deleteNode: (collectionId: string, path: string) => __TAURI_INVOKE<TreeChange>("delete_node", { collectionId, path }),
 	moveNode: (collectionId: string, path: string, targetFolder: string, index: number) => __TAURI_INVOKE<TreeChange>("move_node", { collectionId, path, targetFolder, index }),
@@ -23,7 +23,7 @@ export const commands = {
 	readScripts: (target: ScriptTarget) => __TAURI_INVOKE<Scripts>("read_scripts", { target }),
 	writeScripts: (target: ScriptTarget, scripts: Scripts) => __TAURI_INVOKE<null>("write_scripts", { target, scripts }),
 	listScratch: () => __TAURI_INVOKE<ScratchItem[]>("list_scratch"),
-	createScratch: () => __TAURI_INVOKE<ScratchItem>("create_scratch"),
+	createScratch: (kind: RequestKind) => __TAURI_INVOKE<ScratchItem>("create_scratch", { kind }),
 	renameScratch: (id: string, name: string) => __TAURI_INVOKE<ScratchItem[]>("rename_scratch", { id, name }),
 	deleteScratch: (id: string) => __TAURI_INVOKE<ScratchItem[]>("delete_scratch", { id }),
 	moveScratchToCollection: (id: string, collectionId: string, targetFolder: string) => __TAURI_INVOKE<TreeChange>("move_scratch_to_collection", { id, collectionId, targetFolder }),
@@ -98,6 +98,26 @@ export const commands = {
 	oauthCancel: (flowId: string) => __TAURI_INVOKE<null>("oauth_cancel", { flowId }),
 	/**  Command 50: forgets the stored token of the draft's resolved configuration. */
 	oauthClear: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<OAuthStatus>("oauth_clear", { location, content }),
+	/**
+	 *  Runs the introspection query against the request's endpoint and caches the schema.
+	 *  Cancellable with `cancel_request(request_id)`.
+	 */
+	introspectGraphql: (requestId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<GraphqlSchema>("introspect_graphql", { requestId, location, content }),
+	/**  The cached schema for the request's resolved endpoint, without network. */
+	readCachedSchema: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<GraphqlSchema | null>("read_cached_schema", { location, content }),
+	/**  Picks an SDL or introspection JSON file in a native dialog; `None` when cancelled. */
+	loadSchemaFile: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<GraphqlSchema | null>("load_schema_file", { location, content }),
+	/**  Deletes the cached schema of the request's resolved endpoint. */
+	clearCachedSchema: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<null>("clear_cached_schema", { location, content }),
+	/**
+	 *  Imports a WSDL and its imports; `None` when the file dialog is cancelled.
+	 *  Cancellable with `cancel_request(import_id)`.
+	 */
+	importWsdl: (importId: string, location: RequestLocation, source: WsdlSource) => __TAURI_INVOKE<WsdlImport | null>("import_wsdl", { importId, location, source }),
+	/**  The cached import behind a saved request's WSDL reference, without network. */
+	readCachedWsdl: (location: RequestLocation, wsdl: WsdlRef) => __TAURI_INVOKE<WsdlImport | null>("read_cached_wsdl", { location, wsdl }),
+	/**  Generates the envelope of one operation from the cached model. */
+	soapEnvelope: (wsdlId: string, service: string, port: string, operation: string, options: EnvelopeOptions) => __TAURI_INVOKE<SoapTemplate>("soap_envelope", { wsdlId, service, port, operation, options }),
 };
 
 /** Events */
@@ -126,7 +146,9 @@ export type Auth = { type: "none" } | { type: "basic"; username: string; passwor
 { type: "oauth2"; grant: OAuthGrant; auth_url: string; token_url: string; client_id: string; client_secret: string; scope: string; client_auth: ClientAuth; redirect_port: number } | { type: "unsupported" };
 
 /**  `Unsupported` is a body type made by a newer Papan: kept on disk, never sent. */
-export type Body = { type: "none" } | { type: "json"; text: string } | { type: "xml"; text: string } | { type: "text"; text: string } | { type: "form"; fields: KeyValue[] } | { type: "multipart"; parts: Part[] } | { type: "binary"; file: string | null } | { type: "unsupported" };
+export type Body = { type: "none" } | { type: "json"; text: string } | { type: "xml"; text: string } | { type: "text"; text: string } | { type: "form"; fields: KeyValue[] } | { type: "multipart"; parts: Part[] } | { type: "binary"; file: string | null } | 
+/**  `kind: graphql` only (plan 06 §3.2). Empty `variables`/`operation_name` mean none. */
+{ type: "graphql"; query: string; variables: string; operation_name: string } | { type: "unsupported" };
 
 export type BodyEncoding = "text" | "base64" | "none";
 
@@ -207,6 +229,10 @@ export type EffectiveVariable = {
 	resolved: boolean,
 };
 
+export type EnvelopeOptions = {
+	include_optional: boolean,
+};
+
 /**  A collection's environments, sorted by name then `env`, and the selected one. */
 export type EnvironmentList = {
 	environments: EnvironmentSummary[],
@@ -238,6 +264,13 @@ export type ErrorCode =
 /**  A request was cancelled by the user. */
 "cancelled";
 
+/**  A schema for one endpoint. `endpoint` is masked (scheme, host, port and path only). */
+export type GraphqlSchema = {
+	endpoint: string,
+	fetched_at_ms: number | null,
+	source: SchemaSource,
+};
+
 /**  A response header; non-UTF-8 values are decoded lossily. */
 export type Header = {
 	name: string,
@@ -255,6 +288,7 @@ export type HistoryEntry = {
 	error_code: ErrorCode | null,
 	total_ms: number,
 	size_bytes: number,
+	kind: RequestKind,
 };
 
 /**  `Http2` is `h2` by ALPN over TLS and prior knowledge over cleartext (plan 03b §6.2). */
@@ -347,12 +381,17 @@ export type RequestContent = {
 	auth: Auth,
 	settings: Settings,
 	scripts: Scripts,
+	kind: RequestKind,
+	soap: SoapSettings,
 };
 
 export type RequestDoc = {
 	name: string,
 	content: RequestContent,
 };
+
+/**  Which editor a request opens in and how its body is built (plan 06 §3.1). */
+export type RequestKind = "http" | "graphql" | "soap";
 
 /**  Where a request lives: in the app's scratch area or inside a collection. */
 export type RequestLocation = { scope: "scratch"; id: string } | { scope: "collection"; collection_id: string; path: string };
@@ -395,10 +434,14 @@ export type ResponseMeta = {
 	unresolved: string[],
 };
 
+/**  Where a cached schema came from: an introspection result or an SDL file. */
+export type SchemaSource = { type: "introspection"; json: string } | { type: "sdl"; text: string };
+
 export type ScratchItem = {
 	id: string,
 	name: string,
 	method: string,
+	kind: RequestKind,
 };
 
 /**  Why a chain stopped early. */
@@ -496,6 +539,25 @@ export type Settings = {
 	http_version: HttpVersion,
 };
 
+/**  The `soap` section of a `kind: soap` request (plan 06 §3.3). */
+export type SoapSettings = {
+	version: SoapVersion,
+	action: string,
+	wsdl: WsdlRef | null,
+};
+
+export type SoapStyle = "document" | "rpc";
+
+/**  A generated request: `envelope` goes to the body, `action`/`version` to `soap`. */
+export type SoapTemplate = {
+	version: SoapVersion,
+	action: string,
+	address: string,
+	envelope: string,
+};
+
+export type SoapVersion = "1.1" | "1.2";
+
 /**  A cookie in a jar, as listed by the cookie manager. */
 export type StoredCookie = {
 	name: string,
@@ -545,6 +607,8 @@ export type TreeNode = {
 	kind: NodeKind,
 	/**  Requests only. */
 	method: string | null,
+	/**  Requests only. */
+	request_kind: RequestKind | null,
 	/**  Folders only. */
 	children: TreeNode[],
 };
@@ -578,6 +642,54 @@ export type VariableInput = {
 	secret: boolean,
 	secret_edit: SecretEdit,
 };
+
+/**  A parsed WSDL. `source` and `fetched` are masked locations. */
+export type WsdlImport = {
+	id: string,
+	source: string,
+	/**
+	 *  What a request saves as `soap.wsdl.url` to find this import again; empty for a
+	 *  picked file (then the file name in `source` is saved as `soap.wsdl.file`).
+	 */
+	ref_url: string,
+	services: WsdlServiceInfo[],
+	fetched: string[],
+	warnings: string[],
+};
+
+export type WsdlOperationInfo = {
+	name: string,
+	action: string,
+	style: SoapStyle,
+	documentation: string,
+};
+
+export type WsdlPortInfo = {
+	name: string,
+	version: SoapVersion,
+	address: string,
+	operations: WsdlOperationInfo[],
+};
+
+/**
+ *  The WSDL a SOAP request was generated from; a UI reference, never needed to send.
+ *  `file` is a file name only, never a path.
+ */
+export type WsdlRef = {
+	url: string,
+	file: string,
+	service: string,
+	port: string,
+	operation: string,
+};
+
+export type WsdlServiceInfo = {
+	name: string,
+	ports: WsdlPortInfo[],
+};
+
+/**  Where a WSDL import starts: a URL typed by the user or a file picked in Rust. */
+export type WsdlSource = { type: "url"; url: string } | { type: "pick_file" };
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

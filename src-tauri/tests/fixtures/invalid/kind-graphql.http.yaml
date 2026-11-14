@@ -1,4 +1,0 @@
-kind: graphql
-method: POST
-name: Wrong kind
-url: https://example.com/graphql

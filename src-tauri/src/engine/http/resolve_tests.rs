@@ -216,3 +216,49 @@ fn redaction_covers_encoded_forms_and_case() {
     let typed = Resolved::unchanged(RequestContent::new("GET", " {{base}}/a?k={{key}}#f "));
     assert_eq!(typed.loggable_url(), "{{base}}/a");
 }
+
+#[test]
+fn graphql_query_variables_and_soap_action_resolve_but_operation_name_does_not() {
+    use crate::store::types::{RequestKind, SoapSettings, SoapVersion, WsdlRef};
+    let gql = RequestContent {
+        body: Body::Graphql {
+            query: "{ a(x: \"{{v}}\") }".into(),
+            variables: "{\"t\": \"{{s}}\", \"e\": \"\\{{v}}\"}".into(),
+            operation_name: "{{v}}".into(),
+        },
+        kind: RequestKind::Graphql,
+        ..RequestContent::new("POST", "https://x")
+    };
+    let soap = RequestContent {
+        kind: RequestKind::Soap,
+        soap: SoapSettings {
+            version: SoapVersion::V11,
+            action: "urn:{{s}}".into(),
+            wsdl: Some(WsdlRef {
+                url: "{{v}}".into(),
+                ..WsdlRef::default()
+            }),
+        },
+        ..RequestContent::new("POST", "https://x")
+    };
+
+    let gql_resolved = resolve_content(&gql, &scopes(), &FixedDynamics::default());
+    let soap_resolved = resolve_content(&soap, &scopes(), &FixedDynamics::default());
+
+    assert_eq!(
+        gql_resolved.content.body,
+        Body::Graphql {
+            query: "{ a(x: \"V\") }".into(),
+            variables: "{\"t\": \"S E\", \"e\": \"{{v}}\"}".into(),
+            operation_name: "{{v}}".into(),
+        }
+    );
+    assert_eq!(gql_resolved.secret_values, ["S E"]);
+    assert_eq!(soap_resolved.content.soap.action, "urn:S E");
+    assert_eq!(
+        soap_resolved.content.soap.wsdl.as_ref().unwrap().url,
+        "{{v}}"
+    );
+    assert_eq!(soap_resolved.secret_headers, ["SOAPAction"]);
+    assert!(!soap_resolved.redact("urn:S E").contains("S E"));
+}

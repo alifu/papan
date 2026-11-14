@@ -1,14 +1,18 @@
 import { useId, useState, type FormEvent } from "react";
+import type { RequestKind } from "../../ipc/bindings";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { checkName } from "./nameSchema";
+import { REQUEST_KIND_OPTIONS } from "./requestKind";
 
 export interface NameDialogProps {
   readonly title: string;
   readonly initialName?: string;
   readonly submitLabel?: string;
+  /** Shows a Type choice (HTTP, GraphQL, SOAP) for new requests. */
+  readonly withKind?: boolean;
   /** Resolves true when the dialog may close. */
-  readonly onSubmit: (name: string) => Promise<boolean>;
+  readonly onSubmit: (name: string, kind: RequestKind) => Promise<boolean>;
   readonly onClose: () => void;
 }
 
@@ -17,11 +21,13 @@ export function NameDialog({
   title,
   initialName = "",
   submitLabel = "OK",
+  withKind = false,
   onSubmit,
   onClose,
 }: NameDialogProps) {
   const formId = useId();
   const [value, setValue] = useState(initialName);
+  const [kind, setKind] = useState<RequestKind>("http");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,7 +40,7 @@ export function NameDialog({
     }
     setError(null);
     setBusy(true);
-    const done = await onSubmit(check.name);
+    const done = await onSubmit(check.name, kind);
     setBusy(false);
     if (done) onClose();
   };
@@ -56,6 +62,18 @@ export function NameDialog({
             aria-describedby={error ? `${formId}-error` : undefined}
           />
         </label>
+        {withKind ? (
+          <label>
+            <span>Type</span>
+            <select value={kind} onChange={(event) => setKind(event.target.value as RequestKind)}>
+              {REQUEST_KIND_OPTIONS.map((option) => (
+                <option key={option.kind} value={option.kind}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {error ? (
           <p id={`${formId}-error`} className="field-error">
             {error}

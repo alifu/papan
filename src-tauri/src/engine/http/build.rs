@@ -10,6 +10,7 @@ use reqwest::Method;
 use url::Url;
 
 use super::digest::DigestCredentials;
+use super::protocol_body;
 use crate::error::AppError;
 use crate::store::types::{ApiKeyPlacement, Auth, Body, KeyValue, Part, RequestContent};
 
@@ -78,6 +79,8 @@ pub fn build(content: &RequestContent, version: &str) -> Result<Prepared, AppErr
     let url = with_api_key_query(parse_url(&content.url)?, &content.auth);
     let user = user_headers(&content.headers)?;
     let (body, content_type) = body_of(&content.body)?;
+    let derived = protocol_body::derived_headers(content)?;
+    let content_type = content_type.filter(|_| !derived.iter().any(|(n, _)| *n == CONTENT_TYPE));
     let is_multipart = matches!(body, PreparedBody::Multipart(_));
     let api_key = api_key_header(&content.auth)?;
     let secret_headers = api_key.iter().map(|(name, _)| name.clone()).collect();
@@ -87,6 +90,7 @@ pub fn build(content: &RequestContent, version: &str) -> Result<Prepared, AppErr
         (USER_AGENT, Some(header_value(&format!("Papan/{version}"))?)),
     ]
     .into_iter()
+    .chain(derived.into_iter().map(|(name, value)| (name, Some(value))))
     .chain(api_key)
     .filter_map(|(name, value)| value.map(|value| (name, value)));
     let headers = user
@@ -151,7 +155,8 @@ fn explicit_scheme(text: &str) -> Option<&str> {
     (looks_like_scheme && (rest.starts_with("//") || !is_port)).then_some(scheme)
 }
 
-fn parse_url(text: &str) -> Result<Url, AppError> {
+/// The URL as sent: `http://` is assumed when no scheme is typed; only http(s).
+pub fn parse_url(text: &str) -> Result<Url, AppError> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Err(invalid_url());
@@ -276,6 +281,14 @@ fn body_of(body: &Body) -> Result<(PreparedBody, Option<&'static str>), AppError
             ))
         }
         Body::Unsupported => return Err(newer_papan("body")),
+        Body::Graphql {
+            query,
+            variables,
+            operation_name,
+        } => {
+            let json = protocol_body::graphql_json(query, variables, operation_name)?;
+            (bytes(&json), Some(JSON_TYPE))
+        }
     })
 }
 

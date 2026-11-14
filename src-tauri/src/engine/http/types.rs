@@ -108,6 +108,7 @@ pub struct HistoryEntry {
     pub error_code: Option<ErrorCode>,
     pub total_ms: u32,
     pub size_bytes: u32,
+    pub kind: crate::store::types::RequestKind,
 }
 
 /// Machine-local proxy choice (plan 03b §4.1). `System` is the OS proxy configuration.

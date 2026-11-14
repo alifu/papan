@@ -1,6 +1,6 @@
 use super::*;
 use crate::error::ErrorCode;
-use crate::store::types::NodeKind;
+use crate::store::types::{NodeKind, RequestKind};
 
 struct Fixture {
     _app: tempfile::TempDir,
@@ -74,7 +74,9 @@ fn missing_folder_is_unavailable_with_no_children() {
     let mut f = fixture();
     let created = f.store.create_collection(f.work.path(), "Gone").unwrap();
     let id = created.collection.id;
-    f.store.create_request(&id, "", "R").unwrap();
+    f.store
+        .create_request(&id, "", "R", RequestKind::Http)
+        .unwrap();
     fsio::remove_dir_all(&f.work.path().join("gone")).unwrap();
 
     let tree = f.store.read_tree(&id).unwrap();
@@ -97,7 +99,10 @@ fn tree_operations_return_the_new_tree_and_path() {
         .id;
 
     let folder = f.store.create_folder(&id, "", "F").unwrap();
-    let request = f.store.create_request(&id, "f", "R").unwrap();
+    let request = f
+        .store
+        .create_request(&id, "f", "R", RequestKind::Http)
+        .unwrap();
     let renamed = f.store.rename_node(&id, "f/r.http.yaml", "S").unwrap();
     let moved = f.store.move_node(&id, "f/s.http.yaml", "", 0).unwrap();
     let deleted = f.store.delete_node(&id, "f").unwrap();
@@ -120,8 +125,10 @@ fn read_and_write_requests_by_location() {
         .unwrap()
         .collection
         .id;
-    f.store.create_request(&id, "", "R").unwrap();
-    let scratch = f.store.create_scratch().unwrap();
+    f.store
+        .create_request(&id, "", "R", RequestKind::Http)
+        .unwrap();
+    let scratch = f.store.create_scratch(RequestKind::Http).unwrap();
     let content = RequestContent {
         method: "PUT".into(),
         url: "https://x".into(),
@@ -148,7 +155,7 @@ fn read_and_write_requests_by_location() {
 fn scratch_crud_through_the_store() {
     let f = fixture();
 
-    let item = f.store.create_scratch().unwrap();
+    let item = f.store.create_scratch(RequestKind::Http).unwrap();
     let renamed = f.store.rename_scratch(&item.id, "Named").unwrap();
     let listed = f.store.list_scratch().unwrap();
     let deleted = f.store.delete_scratch(&item.id).unwrap();
@@ -167,7 +174,7 @@ fn move_scratch_writes_then_removes() {
         .unwrap()
         .collection
         .id;
-    let item = f.store.create_scratch().unwrap();
+    let item = f.store.create_scratch(RequestKind::Http).unwrap();
 
     let change = f
         .store
@@ -192,7 +199,7 @@ fn move_scratch_keeps_the_scratch_file_when_the_write_fails() {
         .unwrap()
         .collection
         .id;
-    let item = f.store.create_scratch().unwrap();
+    let item = f.store.create_scratch(RequestKind::Http).unwrap();
 
     let error = f
         .store
@@ -212,7 +219,9 @@ fn fingerprint_ignores_own_writes_and_sees_outside_ones() {
         .unwrap()
         .collection
         .id;
-    f.store.create_request(&id, "", "R").unwrap();
+    f.store
+        .create_request(&id, "", "R", RequestKind::Http)
+        .unwrap();
 
     let after_own = f.store.refresh_fingerprint(&id);
     fsio::write_atomic(
@@ -262,4 +271,41 @@ fn opening_sweeps_stale_temp_files() {
     f.store.open_collection(&f.work.path().join("c")).unwrap();
 
     assert_eq!(fsio::entry_kind(&stale), None);
+}
+
+#[test]
+fn graphql_and_soap_requests_are_created_with_their_kind() {
+    let mut f = fixture();
+    let id = f
+        .store
+        .create_collection(f.work.path(), "C")
+        .unwrap()
+        .collection
+        .id;
+
+    f.store
+        .create_request(&id, "", "G", RequestKind::Graphql)
+        .unwrap();
+    let change = f
+        .store
+        .create_request(&id, "", "S", RequestKind::Soap)
+        .unwrap();
+    let scratch = f.store.create_scratch(RequestKind::Graphql).unwrap();
+
+    let kinds: Vec<_> = change
+        .tree
+        .children
+        .iter()
+        .map(|n| n.request_kind)
+        .collect();
+    assert_eq!(kinds, [Some(RequestKind::Graphql), Some(RequestKind::Soap)]);
+    assert_eq!(scratch.kind, RequestKind::Graphql);
+    let soap = f
+        .store
+        .read_request(&collection_location(&id, "s.http.yaml"))
+        .unwrap();
+    assert_eq!(soap.content.kind, RequestKind::Soap);
+    assert_eq!(soap.content.method, "POST");
+    let listed = f.store.list_scratch().unwrap();
+    assert_eq!(listed[0].kind, RequestKind::Graphql);
 }

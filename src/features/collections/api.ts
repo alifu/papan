@@ -3,6 +3,7 @@ import type {
   CollectionTree,
   RequestContent,
   RequestDoc,
+  RequestKind,
   RequestLocation,
   ScriptTarget,
   Scripts,
@@ -20,8 +21,12 @@ export const readTree = (collectionId: string): Promise<CollectionTree> =>
   commands.readTree(collectionId);
 export const createFolder = (collectionId: string, parent: string, name: string): Promise<TreeChange> =>
   commands.createFolder(collectionId, parent, name);
-export const createRequest = (collectionId: string, parent: string, name: string): Promise<TreeChange> =>
-  commands.createRequest(collectionId, parent, name);
+export const createRequest = (
+  collectionId: string,
+  parent: string,
+  name: string,
+  kind: RequestKind = "http",
+): Promise<TreeChange> => commands.createRequest(collectionId, parent, name, kind);
 export const renameNode = (collectionId: string, path: string, name: string): Promise<TreeChange> =>
   commands.renameNode(collectionId, path, name);
 export const deleteNode = (collectionId: string, path: string): Promise<TreeChange> =>

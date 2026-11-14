@@ -10,6 +10,7 @@ import type {
 import { isAppError } from "../../ipc/errors";
 import { reportError } from "../../ui/toastStore";
 import { readRequest, writeRequest } from "../collections/api";
+import { runsSubscription } from "../graphql/operations";
 import * as api from "./api";
 import { useOAuthStore } from "./oauthStore";
 import { equalContent } from "./content";
@@ -121,7 +122,7 @@ export const useRequestStore = create<RequestState>()((set, get) => {
     },
     send: async (tabId, location) => {
       const content = currentContent(get().byTab[tabId]);
-      if (!content || tabOf(tabId).sending) return;
+      if (!content || tabOf(tabId).sending || runsSubscription(content)) return;
       const requestId = crypto.randomUUID();
       patch(tabId, { sending: true, requestId, error: null, scripts: [] });
       const superseded = () => tabOf(tabId).requestId !== requestId;

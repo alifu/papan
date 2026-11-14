@@ -10,7 +10,7 @@ import { useScratchStore } from "./scratchStore";
 vi.mock("./api");
 
 const state = () => useScratchStore.getState();
-const item = (id: string, name: string) => ({ id, name, method: "GET" });
+const item = (id: string, name: string) => ({ id, name, method: "GET", kind: "http" as const });
 
 describe("scratchStore", () => {
   beforeEach(() => {

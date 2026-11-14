@@ -1,0 +1,4 @@
+kind: grpc
+method: POST
+name: Newer kind
+url: https://example.com/grpc

@@ -1,5 +1,6 @@
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
+import { graphql } from "cm6-graphql";
 import { describe, expect, it } from "vitest";
 import { baseExtensions, editorKeymap, lineExtensions } from "./setup";
 
@@ -16,6 +17,16 @@ describe("editor setup", () => {
     expect(keys).not.toContain("Mod-Enter");
     expect(keys).not.toContain("Mod-s");
     expect(editorKeymap.length).toBeGreaterThan(10);
+  });
+
+  it("keeps Mod-Enter and Mod-S free with the graphql language loaded", () => {
+    const keys = EditorState.create({ extensions: [baseExtensions(), graphql()] })
+      .facet(keymap)
+      .flat()
+      .flatMap((b) => [b.key, b.mac, b.win, b.linux]);
+    expect(keys).not.toContain("Mod-Enter");
+    expect(keys).not.toContain("Mod-s");
+    expect(keys).not.toContain("Mod-S");
   });
 
   it("strips line breaks from single-line transactions and keeps the cursor after the insert", () => {

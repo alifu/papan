@@ -46,6 +46,7 @@ pub fn run() {
                 std::sync::Arc::clone(&vault),
             )?);
             app.manage(vars::commands::VarsState::new(vault));
+            app.manage(open_graphql(app.handle())?);
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");
@@ -110,6 +111,17 @@ fn open_http_engine(
         engine::http::HttpEngine::new(&cache_dir, &app_data, &version)?
             .with_vault(&app_data, vault),
     )
+}
+
+/// The GraphQL schema cache lives in app data, never in a collection (plan 06 §6).
+fn open_graphql(app: &tauri::AppHandle) -> Result<engine::graphql::GraphqlState, error::AppError> {
+    let app_data = app.path().app_data_dir().map_err(|source| {
+        error::AppError::internal("Could not locate the app data directory.")
+            .with_detail(source.to_string())
+    })?;
+    Ok(engine::graphql::GraphqlState {
+        cache: engine::graphql::SchemaCache::new(&app_data),
+    })
 }
 
 /// Secrets: an encrypted vault whose key is in the OS keychain. Nothing is opened here

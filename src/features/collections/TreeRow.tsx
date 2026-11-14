@@ -2,6 +2,7 @@ import type { DragEvent } from "react";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
 import { menuItemsFor, type RowActions } from "./rowMenu";
+import { kindBadge, kindIcon } from "./requestKind";
 import type { TreeRowModel } from "./treeRows";
 
 export interface TreeRowProps {
@@ -16,7 +17,7 @@ export interface TreeRowProps {
 }
 
 function rowIcon(row: TreeRowModel) {
-  if (row.kind === "request") return "request-http";
+  if (row.kind === "request") return kindIcon(row.requestKind);
   return row.expanded ? "folder-open" : "folder";
 }
 
@@ -34,6 +35,7 @@ export function TreeRow({
   const classes = ["tree-row", `tree-${row.kind}`, !row.available ? "tree-missing" : ""]
     .filter(Boolean)
     .join(" ");
+  const badge = kindBadge(row.requestKind, row.method);
   const label = row.available ? row.name : `${row.name} (missing)`;
   return (
     <div
@@ -54,7 +56,7 @@ export function TreeRow({
     >
       <Icon name={rowIcon(row)} />
       <span className="tree-label">{label}</span>
-      {row.method ? <span className="tree-method">{row.method}</span> : null}
+      {badge ? <span className="tree-method">{badge}</span> : null}
       {/* The menu must not trigger row activation or tree key handling. */}
       <span
         className="tree-menu-slot"

@@ -3,7 +3,7 @@ use serde_json::json;
 use super::*;
 use crate::store::request_emit::{canonical_extra, emit_section, normalise};
 use crate::store::request_model::{parse_sections, validate_content, Extra};
-use crate::store::types::{HttpVersion, RequestContent, Settings};
+use crate::store::types::{HttpVersion, RequestContent, RequestKind, Settings};
 
 fn extra(value: Value) -> Extra {
     value
@@ -60,7 +60,7 @@ fn oauth2_omitted_fields_take_their_defaults() {
         "auth_url": "{{idp}}/authorize", "token_url": "{{idp}}/token",
     }}));
 
-    let content = parse_sections("r", &raw).unwrap();
+    let content = parse_sections("r", RequestKind::Http, &raw).unwrap();
 
     assert_eq!(content.auth, oauth2(OAuthGrant::AuthorizationCode));
 }
@@ -76,7 +76,7 @@ fn explicit_defaults_are_omitted_on_emit() {
         "settings": {"http_version": "auto"},
     }));
 
-    let canonical = canonical_extra("r", &raw).unwrap();
+    let canonical = canonical_extra("r", RequestKind::Http, &raw).unwrap();
 
     assert_eq!(
         canonical["auth"],
@@ -116,8 +116,8 @@ fn digest_and_http_version_round_trip() {
         "settings": {"http_version": "http1"},
     }));
 
-    let content = parse_sections("r", &raw).unwrap();
-    let canonical = canonical_extra("r", &raw).unwrap();
+    let content = parse_sections("r", RequestKind::Http, &raw).unwrap();
+    let canonical = canonical_extra("r", RequestKind::Http, &raw).unwrap();
 
     assert_eq!(
         content.auth,
@@ -154,7 +154,7 @@ fn shape_errors_name_the_field() {
         auth.extend(patch.as_object().unwrap().clone());
         let raw = extra(json!({"auth": auth}));
 
-        let error = parse_sections("r", &raw).unwrap_err();
+        let error = parse_sections("r", RequestKind::Http, &raw).unwrap_err();
 
         assert!(error.message.contains(field), "{field}: {}", error.message);
     }

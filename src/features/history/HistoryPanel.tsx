@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { HistoryEntry } from "../../ipc/bindings";
 import { Button } from "../../ui/Button";
 import { useTabsStore } from "../../shell/tabsStore";
+import { kindBadge } from "../collections/requestKind";
 import { scratchLocation } from "../locations";
 import { useHistoryStore } from "./historyStore";
 import { relativeTime } from "./relativeTime";
@@ -38,7 +39,7 @@ export function HistoryPanel() {
           {entries.map((entry) => (
             <li key={entry.id}>
               <button type="button" className="history-item" onClick={() => void open(entry.id)}>
-                <span>{entry.method}</span>
+                <span>{kindBadge(entry.kind, entry.method)}</span>
                 <span className="history-url" title={entry.url}>{entry.url}</span>
                 <span className={entry.status === null ? "history-error" : undefined}>{outcome(entry)}</span>
                 <span>{relativeTime(entry.sent_at_ms, now)}</span>

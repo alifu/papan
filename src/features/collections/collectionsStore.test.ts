@@ -99,7 +99,8 @@ describe("collectionsStore", () => {
   it("creating inside a folder expands it", async () => {
     useCollectionsStore.setState({ trees: [makeTree("c1")] });
     vi.mocked(api.createRequest).mockResolvedValue({ tree: makeTree("c1"), path: "auth/n.http.yaml" });
-    await state().createRequest("c1", "auth", "n");
+    await state().createRequest("c1", "auth", "n", "soap");
+    expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "n", "soap");
     expect(state().expanded.has(expandKey("c1", "auth"))).toBe(true);
   });
 

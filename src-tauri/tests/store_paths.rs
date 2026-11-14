@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use papan_lib::error::{AppError, ErrorCode};
-use papan_lib::store::types::{RequestContent, RequestLocation, TreeNode};
+use papan_lib::store::types::{RequestContent, RequestKind, RequestLocation, TreeNode};
 use papan_lib::store::Store;
 
 struct World {
@@ -31,7 +31,9 @@ impl World {
             .collection
             .id;
         store.create_folder(&id, "", "Folder").unwrap();
-        store.create_request(&id, "", "Inside").unwrap();
+        store
+            .create_request(&id, "", "Inside", RequestKind::Http)
+            .unwrap();
         Self { temp, store, id }
     }
 
@@ -85,7 +87,7 @@ impl World {
             url: "x".into(),
             ..RequestContent::default()
         };
-        let scratch = self.store.create_scratch().unwrap().id;
+        let scratch = self.store.create_scratch(RequestKind::Http).unwrap().id;
         let location = self.location(path);
         let store = &mut self.store;
         let results = vec![
@@ -95,7 +97,9 @@ impl World {
             ),
             (
                 "create_request",
-                store.create_request(&id, path, "N").map(drop),
+                store
+                    .create_request(&id, path, "N", RequestKind::Http)
+                    .map(drop),
             ),
             ("rename_node", store.rename_node(&id, path, "N").map(drop)),
             ("delete_node", store.delete_node(&id, path).map(drop)),
@@ -216,7 +220,9 @@ mod symlinks {
         symlink(&elsewhere, &root).unwrap();
 
         let tree = world.store.read_tree(&world.id).unwrap();
-        let created = world.store.create_request(&world.id, "", "R");
+        let created = world
+            .store
+            .create_request(&world.id, "", "R", RequestKind::Http);
 
         assert!(!tree.collection.available);
         assert!(world.store.watch_targets().is_empty());

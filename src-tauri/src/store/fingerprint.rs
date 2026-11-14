@@ -88,6 +88,7 @@ fn collect(dir: &Path, rel: &str, depth: usize, max_files: usize, items: &mut Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::types::RequestKind;
 
     fn collection() -> (tempfile::TempDir, Collection) {
         let dir = tempfile::tempdir().unwrap();
@@ -115,7 +116,9 @@ mod tests {
     fn file_cap_stops_collecting_but_stays_deterministic() {
         let (_dir, collection) = collection();
         for name in ["A", "B", "C"] {
-            collection.create_request("", name).unwrap();
+            collection
+                .create_request("", name, RequestKind::Http)
+                .unwrap();
         }
         let one = Limits {
             files: 1,

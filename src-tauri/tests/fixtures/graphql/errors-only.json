@@ -1,0 +1,16 @@
+{
+  "errors": [
+    {
+      "message": "Cannot query field \"nope\" on type \"Query\".",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "extensions": {
+        "code": "GRAPHQL_VALIDATION_FAILED"
+      }
+    }
+  ]
+}

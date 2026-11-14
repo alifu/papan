@@ -110,3 +110,76 @@
   min-height: 140px;
   overflow: auto;
 }
+
+.send-hint {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.graphql-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.graphql-schema-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.graphql-schema-status {
+  color: var(--color-text-muted);
+  margin-right: auto;
+}
+
+.graphql-warning {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.graphql-main {
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+
+.graphql-main > .body-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.schema-explorer {
+  width: 280px;
+  overflow: auto;
+  border-left: 1px solid var(--color-border, currentColor);
+  padding-left: 8px;
+}
+
+.schema-explorer ul {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+}
+
+.schema-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-accent, inherit);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.schema-deprecated {
+  margin-left: 6px;
+  text-decoration: line-through;
+}
+
+.schema-description {
+  margin: 2px 0;
+  color: var(--color-text-muted);
+}

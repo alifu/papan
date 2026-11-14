@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::fsio;
 use super::secrets::redact;
-use super::types::{Body, RequestContent, RequestLocation};
+use super::types::{Body, RequestContent, RequestKind, RequestLocation, SoapSettings};
 use crate::engine::http::types::HistoryEntry;
 use crate::error::{AppError, ErrorCode};
 
@@ -68,6 +68,15 @@ pub fn snapshot(content: &RequestContent) -> RequestContent {
         Body::Text { text } if text.len() > MAX_SNAPSHOT_BODY_BYTES => Body::Text {
             text: String::new(),
         },
+        Body::Graphql {
+            query,
+            variables,
+            operation_name,
+        } if query.len() + variables.len() > MAX_SNAPSHOT_BODY_BYTES => Body::Graphql {
+            query: String::new(),
+            variables: String::new(),
+            operation_name,
+        },
         other => other,
     };
     RequestContent { body, ..redacted }
@@ -94,11 +103,32 @@ impl HistoryRecord {
                 error_code,
                 total_ms,
                 size_bytes,
+                kind: sent.content.kind,
             },
             location: sent.location.clone(),
             content: snapshot(sent.content),
         }
     }
+}
+
+/// Records written before M6 have no `kind` and no `content.kind`/`content.soap`:
+/// they were HTTP sends, so the defaults are filled in. Present values are kept.
+fn with_m6_defaults(mut file: serde_json::Value) -> serde_json::Value {
+    let fill = |object: &mut serde_json::Map<String, serde_json::Value>, key: &str, value| {
+        object.entry(key).or_insert(value);
+    };
+    let entries = file.get_mut("entries").and_then(|e| e.as_array_mut());
+    for entry in entries.into_iter().flatten() {
+        let Some(entry) = entry.as_object_mut() else {
+            continue;
+        };
+        fill(entry, "kind", serde_json::json!(RequestKind::Http));
+        if let Some(content) = entry.get_mut("content").and_then(|c| c.as_object_mut()) {
+            fill(content, "kind", serde_json::json!(RequestKind::Http));
+            fill(content, "soap", serde_json::json!(SoapSettings::default()));
+        }
+    }
+    file
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,10 +150,13 @@ impl History {
         }
         fsio::read_bounded(&self.file)
             .and_then(|bytes| {
-                serde_json::from_slice::<HistoryFile>(&bytes).map_err(|source| {
-                    AppError::invalid_input("history.json is malformed.")
-                        .with_detail(source.to_string())
-                })
+                serde_json::from_slice::<serde_json::Value>(&bytes)
+                    .map(with_m6_defaults)
+                    .and_then(serde_json::from_value::<HistoryFile>)
+                    .map_err(|source| {
+                        AppError::invalid_input("history.json is malformed.")
+                            .with_detail(source.to_string())
+                    })
             })
             .map(|file| file.entries)
             .unwrap_or_else(|error| {
