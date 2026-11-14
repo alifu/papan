@@ -8,7 +8,8 @@ import { readResponseBody, saveResponseBody } from "./api";
 import { availableModes, detectKind, type BodyKind, type BodyMode } from "./detect";
 import { prettyJson, prettyXml } from "./format";
 import { HtmlPreview } from "./HtmlPreview";
-import { JsonTree } from "./JsonTree";
+import { JsonTree, type JsonPath } from "./JsonTree";
+import { SaveToVariableDialog } from "./SaveToVariableDialog";
 import { SearchBar } from "./SearchBar";
 import { findMatches } from "./search";
 import { copyText } from "./clipboard";
@@ -30,18 +31,20 @@ type Load =
 
 export interface BodyViewProps {
   readonly response: ResponseMeta;
+  readonly onInsertScriptLine?: (line: string) => void;
 }
 
 const prettyText = (kind: BodyKind, text: string): string =>
   (kind === "json" ? prettyJson(text) : kind === "xml" ? prettyXml(text) : null) ?? text;
 
 /** The body of one response: loads the capped preview and offers pretty/raw/tree/preview. */
-export function BodyView({ response }: BodyViewProps) {
+export function BodyView({ response, onInsertScriptLine }: BodyViewProps) {
   const { request_id: requestId } = response;
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [mode, setMode] = useState<BodyMode | null>(null);
   const [query, setQuery] = useState("");
   const [current, setCurrent] = useState(0);
+  const [savePath, setSavePath] = useState<JsonPath | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -124,7 +127,12 @@ export function BodyView({ response }: BodyViewProps) {
         </p>
       )}
       {noPreview ? <p className="response-notice">No preview for this content type. Use Save to file.</p> : null}
-      {active === "tree" ? <JsonTree text={text} /> : null}
+      {active === "tree" ? (
+        <JsonTree text={text} onSaveToVariable={onInsertScriptLine ? setSavePath : undefined} />
+      ) : null}
+      {savePath && onInsertScriptLine ? (
+        <SaveToVariableDialog path={savePath} onInsert={onInsertScriptLine} onClose={() => setSavePath(null)} />
+      ) : null}
       {active === "preview" && kind === "html" ? <HtmlPreview html={text} /> : null}
       {active === "preview" && kind === "image" && body.encoding === "base64" ? (
         <img className="body-image" alt="Response" src={`data:${mime};base64,${body.data}`} />

@@ -4,7 +4,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::error::ErrorCode;
+use crate::error::{AppError, ErrorCode};
+use crate::script::ScriptReport;
 use crate::store::types::RequestContent;
 use crate::vars::types::{SecretEdit, SecretStorageStatus};
 
@@ -46,6 +47,18 @@ pub struct ResponseMeta {
     pub tls_verified: bool,
     /// Variable names that were sent as typed because they did not resolve.
     pub unresolved: Vec<String>,
+}
+
+/// What `send_request` returns (plan 05 §5). `meta` is `None` only when the
+/// pre-request chain stopped the send (its report's `error` says why; nothing was sent).
+/// A transport failure is an `Err`, unless a chain already ran: then it is `error` here, with
+/// `meta` `None`, so the pre-request report is not lost. A post-response error keeps `meta`.
+/// `scripts` holds one report per chain that ran, pre-request first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct SendOutcome {
+    pub meta: Option<ResponseMeta>,
+    pub scripts: Vec<ScriptReport>,
+    pub error: Option<AppError>,
 }
 
 /// Where the time of a send went (plan 03b §6.4). `connect_ms` is TCP + TLS (+ proxy

@@ -47,6 +47,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             store::move_node,
             store::read_request,
             store::write_request,
+            store::read_scripts,
+            store::write_scripts,
             store::list_scratch,
             store::create_scratch,
             store::rename_scratch,

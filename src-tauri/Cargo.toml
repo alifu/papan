@@ -60,6 +60,9 @@ keyring = { version = "=3.6.3", default-features = false, features = ["apple-nat
 aws-lc-rs = "1"
 zeroize = "1"
 time = { version = "0.3", features = ["formatting"] }
+# Script sandbox (plan 05 §2). Core only: no module loader, no QuickJS std/os, no bindgen
+# (bindings for macOS, Windows and Linux ship with the crate). `std` is Rust's std.
+rquickjs = { version = "0.14", default-features = false, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 # The loopback listener binds with SO_EXCLUSIVEADDRUSE (already in the tree via hyper-util).

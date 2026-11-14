@@ -1,5 +1,13 @@
 import { commands, events } from "../../ipc/bindings";
-import type { CollectionTree, RequestContent, RequestDoc, RequestLocation, TreeChange } from "../../ipc/bindings";
+import type {
+  CollectionTree,
+  RequestContent,
+  RequestDoc,
+  RequestLocation,
+  ScriptTarget,
+  Scripts,
+  TreeChange,
+} from "../../ipc/bindings";
 
 // Thin wrappers over the generated bindings; unit tests `vi.mock` this module.
 export const listCollections = (): Promise<CollectionTree[]> => commands.listCollections();
@@ -35,3 +43,6 @@ export async function subscribeCollectionChanged(
 ): Promise<() => void> {
   return events.collectionChanged.listen((event) => onChange(event.payload.collection_id));
 }
+export const readScripts = (target: ScriptTarget): Promise<Scripts> => commands.readScripts(target);
+export const writeScripts = (target: ScriptTarget, scripts: Scripts): Promise<null> =>
+  commands.writeScripts(target, scripts);

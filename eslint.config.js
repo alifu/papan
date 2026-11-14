@@ -10,6 +10,8 @@ export default tseslint.config(
       'dist',
       'build',
       'src-tauri/target',
+      // Embedded in the Rust binary and run in QuickJS, not in the webview.
+      'src-tauri/src/script/*.js',
       'coverage',
       'playwright-report',
       'test-results',

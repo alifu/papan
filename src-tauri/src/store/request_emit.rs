@@ -1,4 +1,4 @@
-//! Canonical emit of the five request sections and the merge rule of plan 03 §3:
+//! Canonical emit of the six request sections and the merge rule of plan 03 §3:
 //! defaults are omitted, unknown keys found on disk are kept, an `Unsupported` section is
 //! written back verbatim, and a section the user did not change keeps its on-disk value.
 
@@ -6,6 +6,7 @@ use serde_json::Value;
 
 use super::auth_model;
 use super::request_model::{self, Extra, Fields, AUTH, BODY, DISABLED_PARAMS, HEADERS, SECTIONS};
+use super::script_model::{emit_scripts, SCRIPTS};
 use super::types::{
     ApiKeyPlacement, Auth, Body, ClientAuth, HttpVersion, KeyValue, OAuthGrant, Pair, Part,
     RequestContent, Settings,
@@ -38,7 +39,7 @@ const SETTINGS_KEYS: [&str; 4] = [
 ];
 const TYPE_KEY: &str = "type";
 
-/// `extra` with its five sections in canonical form (the rest untouched).
+/// `extra` with its six sections in canonical form (the rest untouched).
 pub fn canonical_extra(label: &str, extra: &Extra) -> Result<Extra, AppError> {
     let content = request_model::parse_sections(label, extra)?;
     Ok(with_sections(extra, |key| {
@@ -88,6 +89,7 @@ fn section_eq(key: &str, a: &RequestContent, b: &RequestContent) -> bool {
         BODY => a.body == b.body,
         DISABLED_PARAMS => a.disabled_params == b.disabled_params,
         HEADERS => a.headers == b.headers,
+        SCRIPTS => a.scripts == b.scripts,
         _ => a.settings == b.settings,
     }
 }
@@ -108,12 +110,13 @@ pub fn emit_section(key: &str, content: &RequestContent, raw: Option<&Value>) ->
         BODY => emit_body(&content.body, raw),
         DISABLED_PARAMS => list_value(content.disabled_params.iter().map(pair_fields), raw),
         HEADERS => list_value(content.headers.iter().map(key_value_fields), raw),
+        SCRIPTS => emit_scripts(&content.scripts, raw),
         _ => emit_settings(&content.settings, raw),
     }
 }
 
 /// `canonical` plus every key of `raw` that is not one of `known` (or `type`).
-fn overlay(canonical: Fields, raw: Option<&Value>, known: &[&str]) -> Fields {
+pub(super) fn overlay(canonical: Fields, raw: Option<&Value>, known: &[&str]) -> Fields {
     let unknown = raw
         .and_then(Value::as_object)
         .into_iter()

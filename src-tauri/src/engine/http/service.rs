@@ -15,6 +15,7 @@ use super::oauth::flow::token_for_send;
 use super::oauth::OAuth;
 use super::resolve::Resolved;
 use super::responses::{validate_id, Responses, MAX_BODY_BYTES};
+use super::script_flags::{ScriptFlags, ScriptRun};
 use super::send::{execute, Exchange};
 use super::send_guard::{
     redact_error, undefined_in_host, with_digest_secret, with_secret, with_secret_headers,
@@ -39,6 +40,7 @@ pub struct HttpEngine {
     oauth: Arc<OAuth>,
     responses: Responses,
     inflight: Inflight,
+    scripts: ScriptFlags,
     grants: Arc<Grants>,
     max_body_bytes: u64,
 }
@@ -57,6 +59,7 @@ impl HttpEngine {
             network,
             responses: Responses::new(cache_dir)?,
             inflight: Inflight::default(),
+            scripts: ScriptFlags::default(),
             grants: Arc::new(Grants::load(app_data)),
             max_body_bytes: MAX_BODY_BYTES,
         })
@@ -124,6 +127,19 @@ impl HttpEngine {
         location: &RequestLocation,
         resolved: &Resolved,
     ) -> Result<ResponseMeta, AppError> {
+        let meta = self.send_unkept(request_id, location, resolved).await?;
+        self.responses.keep(request_id, meta.content_type.clone());
+        Ok(meta)
+    }
+
+    /// [`Self::send_resolved`] without keeping the response: it takes no slot of the
+    /// response cache. The caller reads the body at [`Self::unkept_body`] and deletes it.
+    pub(super) async fn send_unkept(
+        &self,
+        request_id: &str,
+        location: &RequestLocation,
+        resolved: &Resolved,
+    ) -> Result<ResponseMeta, AppError> {
         if let Some(error) = undefined_in_host(resolved) {
             return Err(error);
         }
@@ -151,9 +167,12 @@ impl HttpEngine {
         if resolved.content.settings.verify_tls {
             self.cookies.changed(&jar_key(location));
         }
-        let meta = sent?;
-        self.responses.keep(&id, meta.content_type.clone());
-        Ok(meta)
+        sent
+    }
+
+    /// Where [`Self::send_unkept`] wrote the body of `request_id`.
+    pub(super) fn unkept_body(&self, request_id: &str) -> Result<PathBuf, AppError> {
+        self.responses.path(request_id)
     }
 
     /// The network settings for one send, read off the async runtime (the first read
@@ -168,9 +187,17 @@ impl HttpEngine {
             })?
     }
 
+    /// Aborts the send with `request_id` and stops its running script, if any.
     pub fn cancel(&self, request_id: &str) -> Result<(), AppError> {
-        self.inflight.cancel(&validate_id(request_id)?);
+        let id = validate_id(request_id)?;
+        self.scripts.cancel(&id);
+        self.inflight.cancel(&id);
         Ok(())
+    }
+
+    /// A cancel flag for the scripts of the send `request_id`, live while the guard is.
+    pub fn script_run(&self, request_id: &str) -> ScriptRun<'_> {
+        self.scripts.register(request_id)
     }
 
     pub fn in_flight(&self) -> usize {

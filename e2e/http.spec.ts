@@ -36,6 +36,17 @@ test.describe("http", () => {
     await expect(page.getByRole("tab", { name: /Headers/ }).last()).toBeVisible();
   });
 
+  test("shows the Tests tab with its counts after a post-response test", async ({ page }) => {
+    await page.getByLabel("URL").fill("http://localhost/scripted");
+    await page.getByLabel("URL").focus();
+    await page.keyboard.press("ControlOrMeta+Enter");
+
+    await page.getByRole("tab", { name: "Tests (1/1)" }).click();
+    await expect(page.getByText("status is 200")).toBeVisible();
+    await page.getByRole("tab", { name: "Console" }).click();
+    await expect(page.getByText("checked status")).toBeVisible();
+  });
+
   test("marks dirty tabs, saves with the shortcut and asks before closing", async ({ page }) => {
     await page.getByLabel("URL").fill("http://localhost/json");
     await expect(page.getByRole("tab", { name: /•.*Quick check|Quick check.*•/ })).toBeVisible();

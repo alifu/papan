@@ -97,8 +97,8 @@ describe("CollectionsPanel", () => {
       await userEvent.keyboard("{Escape}");
       return items;
     };
-    expect(await labels("My API")).toEqual(["New Request", "New Folder", "Close"]);
-    expect(await labels("auth")).toEqual(["New Request", "New Folder", "Rename", "Move Up", "Move Down", "Delete"]);
+    expect(await labels("My API")).toEqual(["New Request", "New Folder", "Scripts…", "Close"]);
+    expect(await labels("auth")).toEqual(["New Request", "New Folder", "Scripts…", "Rename", "Move Up", "Move Down", "Delete"]);
     expect(await labels("login")).toEqual(["Rename", "Move Up", "Move Down", "Delete"]);
     expect(await labels("broken")).toEqual(["Delete"]);
   });

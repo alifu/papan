@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ResponseMeta } from "../../ipc/bindings";
+import type { ResponseMeta, ScriptReport } from "../../ipc/bindings";
 import { useDialogsStore } from "../../shell/dialogsStore";
 import * as api from "./api";
 import { ResponseViewer } from "./ResponseViewer";
@@ -128,5 +128,71 @@ describe("ResponseViewer", () => {
     await userEvent.click(screen.getByRole("tab", { name: /cookies/i }));
     await userEvent.click(screen.getByRole("button", { name: "Manage cookies…" }));
     expect(useDialogsStore.getState().open).toBe("cookies");
+  });
+
+  describe("script reports", () => {
+    const report = (over: Partial<ScriptReport>): ScriptReport => ({
+      phase: "post_response",
+      console: [],
+      console_truncated: false,
+      tests: [],
+      changes: [],
+      error: null,
+      ...over,
+    });
+
+    it("hides script tabs when no script ran", () => {
+      render(<ResponseViewer response={meta} error={null} sending={false} scripts={[]} />);
+      expect(screen.queryByRole("tab", { name: /Console/ })).not.toBeInTheDocument();
+    });
+
+    it("shows a failed send together with the report of the script that ran before it", async () => {
+      const scripts = [report({ phase: "pre_request", console: [{ level: "log", text: "before the failure" }] })];
+      render(<ResponseViewer response={null} error={{ code: "network", message: "Could not connect." }} sending={false} scripts={scripts} />);
+      expect(screen.getByRole("alert")).toHaveTextContent("Could not connect.");
+      await userEvent.click(screen.getByRole("tab", { name: /Console/ }));
+      expect(screen.getByText("before the failure")).toBeInTheDocument();
+    });
+
+    it("lists tests with a pass/total label", async () => {
+      const scripts = [report({ tests: [{ name: "ok", passed: true, error: null }, { name: "bad", passed: false, error: "expected 1" }] })];
+      render(<ResponseViewer response={meta} error={null} sending={false} scripts={scripts} />);
+      await userEvent.click(screen.getByRole("tab", { name: "Tests (1/2)" }));
+      expect(screen.getByText("ok")).toBeInTheDocument();
+      expect(screen.getByText("expected 1")).toBeInTheDocument();
+    });
+
+    it("shows console lines with phase, truncation and secret-safe changes", async () => {
+      const scripts = [
+        report({
+          phase: "pre_request",
+          console: [{ level: "warn", text: "careful" }],
+          console_truncated: true,
+          changes: [
+            { scope: "environment", name: "token", value: "s3cret", secret: true, removed: false },
+            { scope: "globals", name: "n", value: "1", secret: false, removed: false },
+          ],
+        }),
+      ];
+      render(<ResponseViewer response={meta} error={null} sending={false} scripts={scripts} />);
+      await userEvent.click(screen.getByRole("tab", { name: "Console" }));
+      expect(screen.getByText(/careful/)).toBeInTheDocument();
+      expect(screen.getByText("[pre-request]", { selector: ".console-line:first-child .console-phase" })).toBeInTheDocument();
+      expect(screen.getByText("Output truncated.")).toBeInTheDocument();
+      expect(screen.getByText(/variable token$/)).toBeInTheDocument();
+      expect(screen.queryByText(/s3cret/)).not.toBeInTheDocument();
+      expect(screen.getByText(/variable n = 1/)).toBeInTheDocument();
+    });
+
+    it("shows the reports and an error banner when the send was stopped", async () => {
+      const scripts = [
+        report({ phase: "pre_request", error: { kind: "exception", message: "boom", script: "request", line: 3 } }),
+      ];
+      render(<ResponseViewer response={null} error={null} sending={false} scripts={scripts} />);
+      expect(screen.getByRole("alert")).toHaveTextContent("boom");
+      expect(screen.getByRole("alert")).toHaveTextContent("request, line 3");
+      expect(screen.getByRole("tab", { name: "Console" })).toBeInTheDocument();
+      expect(screen.queryByText(/Send a request/)).not.toBeInTheDocument();
+    });
   });
 });

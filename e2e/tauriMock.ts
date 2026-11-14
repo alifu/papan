@@ -286,6 +286,23 @@ export async function mockTauri(page: Page): Promise<void> {
     (window as unknown as Record<string, unknown>).__handlers = handlers;
     window.__failNext = (cmd) => void failing.add(cmd);
 
+    // The real command returns a SendOutcome; `/scripted` URLs report one passing post-response test.
+    const outcome = (a: Args, meta: unknown) => {
+      const path = new URL((a.content as FakeContent).url, "http://localhost").pathname;
+      const scripts =
+        path === "/scripted"
+          ? [{
+              phase: "post_response",
+              console: [{ level: "log", text: "checked status" }],
+              console_truncated: false,
+              tests: [{ name: "status is 200", passed: true, error: null }],
+              changes: [],
+              error: null,
+            }]
+          : [];
+      return { meta, scripts };
+    };
+
     let callbackId = 0;
     const internals = {
       transformCallback: () => ++callbackId,
@@ -296,7 +313,8 @@ export async function mockTauri(page: Page): Promise<void> {
         const handler = handlers[cmd];
         if (!handler) return Promise.reject(new Error(`unmocked command: ${cmd}`));
         try {
-          return Promise.resolve(handler(args));
+          const result = Promise.resolve(handler(args));
+          return cmd === "send_request" ? result.then((meta) => outcome(args, meta)) : result;
         } catch (err) {
           return Promise.reject(err);
         }

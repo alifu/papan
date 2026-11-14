@@ -6,6 +6,7 @@
 pub mod commands;
 pub mod dynamic;
 pub mod local;
+pub mod persist;
 pub mod resolve;
 pub mod scopes;
 pub mod service;

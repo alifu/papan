@@ -3,7 +3,9 @@
 use super::import::{file_not_read, Data, Parsed};
 use crate::engine::http::types::CurlImport;
 use crate::error::AppError;
-use crate::store::types::{Auth, Body, KeyValue, RequestContent, Settings, DEFAULT_TIMEOUT_MS};
+use crate::store::types::{
+    Auth, Body, KeyValue, RequestContent, Scripts, Settings, DEFAULT_TIMEOUT_MS,
+};
 
 /// What cURL sends for `-d`, `--data-raw`, `--data-binary` and `--data-urlencode`.
 const FORM_TYPE: &str = "application/x-www-form-urlencoded";
@@ -122,6 +124,7 @@ pub(super) fn build(mut parsed: Parsed) -> Result<CurlImport, AppError> {
             verify_tls: !parsed.insecure,
             http_version: parsed.http_version,
         },
+        scripts: Scripts::default(),
     };
     Ok(CurlImport {
         content,

@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { JsonTree } from "./JsonTree";
 
 describe("JsonTree", () => {
@@ -27,5 +27,15 @@ describe("JsonTree", () => {
   it("reports invalid JSON", () => {
     render(<JsonTree text="{" />);
     expect(screen.getByText("Not valid JSON.")).toBeInTheDocument();
+  });
+});
+
+describe("JsonTree save to variable", () => {
+  it("reports the path of the right-clicked node", async () => {
+    const onSave = vi.fn();
+    render(<JsonTree text='{"items":[7]}' onSaveToVariable={onSave} />);
+    fireEvent.contextMenu(screen.getByText("0"));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith(["items", 0]);
   });
 });

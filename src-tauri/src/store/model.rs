@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use super::env_model::{self, VarTable};
-use super::types::RequestContent;
+use super::script_model::{self, SCRIPTS};
+use super::types::{RequestContent, Scripts};
 use super::yaml::{self, Node};
 use super::{request_emit, request_model};
 use crate::error::AppError;
@@ -196,7 +197,21 @@ impl FolderFile {
         if let Some(name) = &file.name {
             check_name(label, name)?;
         }
+        file.scripts(label)?;
         Ok(file)
+    }
+
+    /// The folder's scripts (plan 05 §3); kept in `extra`, so `is_empty` counts them.
+    pub fn scripts(&self, label: &str) -> Result<Scripts, AppError> {
+        script_model::parse_scripts(label, self.extra.get(SCRIPTS))
+    }
+
+    #[must_use]
+    pub fn with_scripts(&self, scripts: &Scripts) -> Self {
+        Self {
+            extra: script_model::with_scripts(&self.extra, scripts),
+            ..self.clone()
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -255,7 +270,21 @@ impl CollectionFile {
         if file.version < SUPPORTED_VERSION {
             return Err(yaml::invalid(label, "field `version` must be 1."));
         }
+        file.scripts(label)?;
         Ok(file)
+    }
+
+    /// The collection's scripts (plan 05 §3), kept in `extra`.
+    pub fn scripts(&self, label: &str) -> Result<Scripts, AppError> {
+        script_model::parse_scripts(label, self.extra.get(SCRIPTS))
+    }
+
+    #[must_use]
+    pub fn with_scripts(&self, scripts: &Scripts) -> Self {
+        Self {
+            extra: script_model::with_scripts(&self.extra, scripts),
+            ..self.clone()
+        }
     }
 
     pub fn to_yaml(&self) -> Result<String, AppError> {
@@ -348,5 +377,66 @@ mod tests {
         assert!(older.message.contains("version"));
         assert_eq!(ok.to_yaml().unwrap(), "name: A\nversion: 1\n");
         assert_eq!(CollectionFile::new("A".into()), ok);
+    }
+
+    fn sample_scripts() -> Scripts {
+        Scripts {
+            pre_request: "a();\nb();\n".into(),
+            post_response: String::new(),
+        }
+    }
+
+    #[test]
+    fn folder_scripts_round_trip_count_as_content_and_keep_unknown_keys() {
+        let file = FolderFile::parse("_folder.yaml", b"future: 1\n").unwrap();
+
+        let with = file.with_scripts(&sample_scripts());
+        let text = with.to_yaml().unwrap();
+        let back = FolderFile::parse("_folder.yaml", text.as_bytes()).unwrap();
+
+        assert_eq!(
+            text,
+            "future: 1\nscripts:\n  pre_request: |\n    a();\n    b();\n"
+        );
+        assert_eq!(back.scripts("_folder.yaml").unwrap(), sample_scripts());
+        assert!(!FolderFile::default()
+            .with_scripts(&sample_scripts())
+            .is_empty());
+        assert!(!back
+            .with_scripts(&Scripts::default())
+            .extra
+            .contains_key(SCRIPTS));
+    }
+
+    #[test]
+    fn collection_scripts_round_trip_beside_variables() {
+        let file = CollectionFile::parse("c", b"name: A\nversion: 1\nzz: keep\n").unwrap();
+
+        let text = file.with_scripts(&sample_scripts()).to_yaml().unwrap();
+        let back = CollectionFile::parse("c", text.as_bytes()).unwrap();
+
+        assert_eq!(back.scripts("c").unwrap(), sample_scripts());
+        assert_eq!(back.extra["zz"], serde_json::json!("keep"));
+    }
+
+    #[test]
+    fn invalid_scripts_fail_parse_naming_the_file() {
+        let folder = FolderFile::parse("_folder.yaml", b"scripts: 3\n").unwrap_err();
+        let collection = CollectionFile::parse(
+            "c.yaml",
+            b"name: A\nversion: 1\nscripts:\n  pre_request: [1]\n",
+        )
+        .unwrap_err();
+
+        assert!(
+            folder.message.starts_with("_folder.yaml: "),
+            "{}",
+            folder.message
+        );
+        assert!(
+            collection.message.contains("scripts.pre_request"),
+            "{}",
+            collection.message
+        );
     }
 }

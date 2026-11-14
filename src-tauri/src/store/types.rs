@@ -198,6 +198,23 @@ impl Default for Settings {
     }
 }
 
+/// JavaScript run before the request is sent and after the response arrives (plan 05 §3).
+/// Empty means no script.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct Scripts {
+    pub pre_request: String,
+    pub post_response: String,
+}
+
+/// Where folder or collection scripts live; request scripts travel in `RequestContent`.
+/// `path` is a folder relative to `requests/`, never empty.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+#[serde(tag = "scope", rename_all = "snake_case")]
+pub enum ScriptTarget {
+    Collection { collection_id: String },
+    Folder { collection_id: String, path: String },
+}
+
 /// Everything about a request except its name. Enabled query parameters live only in `url`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct RequestContent {
@@ -208,6 +225,7 @@ pub struct RequestContent {
     pub body: Body,
     pub auth: Auth,
     pub settings: Settings,
+    pub scripts: Scripts,
 }
 
 impl RequestContent {

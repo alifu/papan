@@ -4,8 +4,8 @@
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
-use super::types::{PickedFile, ResponseBody, ResponseMeta};
-use super::variables::send_with_variables;
+use super::scripted::{run_send, SendDeps};
+use super::types::{PickedFile, ResponseBody, SendOutcome};
 use super::HttpEngine;
 use crate::error::AppError;
 use crate::store::types::{RequestContent, RequestLocation};
@@ -32,7 +32,8 @@ pub(super) fn picked_path(
 }
 
 /// Sends the draft `content`; `location` picks the cookie jar and labels history.
-// Variables are resolved first, with the scopes of `location` (plan 04 §6).
+/// Scripts run around the send and variables are resolved with the scopes of
+/// `location` (plans 04 §6, 05 §4.2). See [`SendOutcome`] for a stopped send.
 #[tauri::command]
 #[specta::specta]
 pub async fn send_request(
@@ -42,21 +43,17 @@ pub async fn send_request(
     request_id: String,
     location: RequestLocation,
     content: RequestContent,
-) -> EngineResult<ResponseMeta> {
-    let result = send_with_variables(
-        &engine,
-        &store,
-        &vars.service,
-        vars.dynamics.clone(),
-        &request_id,
-        &location,
-        &content,
-    )
-    .await;
-    logged(result)
+) -> EngineResult<SendOutcome> {
+    let deps = SendDeps {
+        engine: &engine,
+        store: &store,
+        vars: &vars.service,
+        dynamics: vars.dynamics.clone(),
+    };
+    logged(run_send(&deps, &request_id, &location, &content).await)
 }
 
-/// Aborts an in-flight send. An unknown id is a no-op.
+/// Aborts an in-flight send and stops its running script. An unknown id is a no-op.
 #[tauri::command]
 #[specta::specta]
 pub fn cancel_request(engine: State<'_, HttpEngine>, request_id: String) -> EngineResult<()> {

@@ -16,6 +16,8 @@ import { KeyValueTable } from "./KeyValueTable";
 import { OAuthTokenPanel } from "./OAuthTokenPanel";
 import { ParamsEditor } from "./ParamsEditor";
 import { currentContent, useRequestStore } from "./requestStore";
+import { ScriptsEditor, type ScriptPhase } from "./ScriptsEditor";
+import { appendSnippet } from "./snippets";
 import { SettingsEditor } from "./SettingsEditor";
 import { UrlBar } from "./UrlBar";
 import "./request.css";
@@ -51,7 +53,13 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
     }
   };
   const [section, setSection] = useState("params");
+  const [phase, setPhase] = useState<ScriptPhase>("pre_request");
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT);
+  const insertPostResponseLine = (line: string) => {
+    edit(tabId, (c) => ({ ...c, scripts: { ...c.scripts, post_response: appendSnippet(c.scripts.post_response, line) } }));
+    setPhase("post_response");
+    setSection("scripts");
+  };
   const resize = (h: number) => setEditorHeight(Math.min(EDITOR_MAX_HEIGHT, Math.max(EDITOR_MIN_HEIGHT, h)));
 
   useEffect(() => {
@@ -83,6 +91,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
     { id: "headers", label: "Headers", count: countEnabled(content.headers) },
     { id: "body", label: "Body" },
     { id: "auth", label: "Auth" },
+    { id: "scripts", label: "Scripts" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -124,6 +133,14 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
             {content.auth.type === "oauth2" ? <OAuthTokenPanel tabId={tabId} location={location} content={content} /> : null}
           </>
         ) : null}
+        {section === "scripts" ? (
+          <ScriptsEditor
+            scripts={content.scripts}
+            phase={phase}
+            onPhase={setPhase}
+            onChange={(scripts) => edit(tabId, (c) => ({ ...c, scripts }))}
+          />
+        ) : null}
         {section === "settings" ? (
           <SettingsEditor settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
         ) : null}
@@ -139,7 +156,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         onResize={resize}
         onToggle={() => resize(EDITOR_DEFAULT_HEIGHT)}
       />
-      <ResponseViewer response={tab.response} error={tab.error} sending={tab.sending} />
+      <ResponseViewer response={tab.response} error={tab.error} sending={tab.sending} scripts={tab.scripts} onInsertScriptLine={insertPostResponseLine} />
     </div>
   );
 }

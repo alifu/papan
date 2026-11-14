@@ -22,6 +22,8 @@ pub mod request_emit;
 pub mod request_model;
 pub mod scan;
 pub mod scratch;
+pub mod script_model;
+pub mod script_ops;
 pub mod secrets;
 pub mod service;
 pub mod tree_ops;

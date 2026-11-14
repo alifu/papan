@@ -4,6 +4,7 @@ import type { TreeRowModel } from "./treeRows";
 export interface RowActions {
   readonly newRequest: (row: TreeRowModel) => void;
   readonly newFolder: (row: TreeRowModel) => void;
+  readonly scripts: (row: TreeRowModel) => void;
   readonly rename: (row: TreeRowModel) => void;
   readonly remove: (row: TreeRowModel) => void;
   readonly closeCollection: (row: TreeRowModel) => void;
@@ -27,6 +28,7 @@ export function menuItemsFor(row: TreeRowModel, actions: RowActions): readonly M
         ? [
             item("New Request", actions.newRequest),
             item("New Folder", actions.newFolder),
+            item("Scripts…", actions.scripts),
             item("Close", actions.closeCollection),
           ]
         : [item("Close", actions.closeCollection)];
@@ -34,6 +36,7 @@ export function menuItemsFor(row: TreeRowModel, actions: RowActions): readonly M
       return [
         item("New Request", actions.newRequest),
         item("New Folder", actions.newFolder),
+        item("Scripts…", actions.scripts),
         item("Rename", actions.rename),
         ...mover,
         item("Delete", actions.remove),

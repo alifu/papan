@@ -9,7 +9,7 @@ use tauri_specta::Event;
 
 use super::types::{
     CollectionChanged, CollectionTree, RequestContent, RequestDoc, RequestLocation, ScratchItem,
-    TreeChange,
+    ScriptTarget, Scripts, TreeChange,
 };
 use super::{model, watcher, Store, StoreState};
 use crate::engine::http::types::HistoryEntry;
@@ -212,6 +212,23 @@ pub fn write_request(
     content: RequestContent,
 ) -> StoreResult<()> {
     with_store(&state, |store| store.write_request(&location, &content))
+}
+
+/// Folder or collection scripts (plan 05 §5); request scripts travel in `RequestContent`.
+#[tauri::command]
+#[specta::specta]
+pub fn read_scripts(state: State<'_, StoreState>, target: ScriptTarget) -> StoreResult<Scripts> {
+    with_store(&state, |store| store.read_scripts(&target))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn write_scripts(
+    state: State<'_, StoreState>,
+    target: ScriptTarget,
+    scripts: Scripts,
+) -> StoreResult<()> {
+    with_store(&state, |store| store.write_scripts(&target, &scripts))
 }
 
 #[tauri::command]

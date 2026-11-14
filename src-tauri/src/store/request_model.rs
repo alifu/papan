@@ -1,6 +1,6 @@
-//! The five request sections of plan 03 §3 (`auth`, `body`, `disabled_params`, `headers`,
-//! `settings`): parsing from the raw YAML values and validation of the typed content.
-//! Emitting and the merge rule live in `request_emit`.
+//! The six request sections of plan 03 §3 and plan 05 §3 (`auth`, `body`,
+//! `disabled_params`, `headers`, `scripts`, `settings`): parsing from the raw YAML values
+//! and validation of the typed content. Emitting and the merge rule live in `request_emit`.
 
 use std::collections::BTreeMap;
 
@@ -8,6 +8,7 @@ use serde_json::{Map, Value};
 
 use super::auth_model::{parse_auth, validate_auth};
 use super::model;
+use super::script_model::{parse_scripts, validate_scripts, SCRIPTS};
 use super::types::{
     Body, HttpVersion, KeyValue, Pair, Part, RequestContent, Settings, DEFAULT_TIMEOUT_MS,
 };
@@ -19,7 +20,7 @@ pub const BODY: &str = "body";
 pub const DISABLED_PARAMS: &str = "disabled_params";
 pub const HEADERS: &str = "headers";
 pub const SETTINGS: &str = "settings";
-pub const SECTIONS: [&str; 5] = [AUTH, BODY, DISABLED_PARAMS, HEADERS, SETTINGS];
+pub const SECTIONS: [&str; 6] = [AUTH, BODY, DISABLED_PARAMS, HEADERS, SCRIPTS, SETTINGS];
 
 pub const MAX_ENTRIES: usize = 200;
 pub const MAX_PARTS: usize = 100;
@@ -52,6 +53,7 @@ pub fn parse_sections(label: &str, extra: &Extra) -> Result<RequestContent, AppE
         body: parse_body(label, extra.get(BODY))?,
         auth: parse_auth(label, extra.get(AUTH))?,
         settings: parse_settings(label, extra.get(SETTINGS))?,
+        scripts: parse_scripts(label, extra.get(SCRIPTS))?,
     };
     validate_sections(label, &content)?;
     Ok(content)
@@ -262,7 +264,7 @@ fn validate_sections(label: &str, content: &RequestContent) -> Result<(), AppErr
     if content.settings.timeout_ms > MAX_TIMEOUT_MS {
         return Err(timeout_error(label));
     }
-    Ok(())
+    validate_scripts(label, &content.scripts)
 }
 
 fn validate_body(label: &str, body: &Body) -> Result<(), AppError> {

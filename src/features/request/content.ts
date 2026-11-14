@@ -17,6 +17,7 @@ export function emptyContent(): RequestContent {
     body: { type: "none" },
     auth: { type: "none" },
     settings: DEFAULT_SETTINGS,
+    scripts: { pre_request: "", post_response: "" },
   };
 }
 

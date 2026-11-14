@@ -1,3 +1,4 @@
+import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { xml } from "@codemirror/lang-xml";
 import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
@@ -26,6 +27,7 @@ const external = Annotation.define<boolean>();
 function languageExtension(language: EditorLanguage): Extension {
   if (language === "json") return json();
   if (language === "xml") return xml();
+  if (language === "javascript") return javascript();
   return [];
 }
 

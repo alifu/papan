@@ -57,27 +57,48 @@ describe("requestStore", () => {
   });
 
   it("sends the draft with a request id, then stores the meta", async () => {
-    vi.mocked(api.sendRequest).mockResolvedValue(meta);
+    vi.mocked(api.sendRequestOutcome).mockResolvedValue({ meta, scripts: [], error: null });
     await state().load("t", loc);
     state().editUrl("t", "http://y");
     await state().send("t", loc);
 
-    const [id, l, content] = vi.mocked(api.sendRequest).mock.calls[0];
+    const [id, l, content] = vi.mocked(api.sendRequestOutcome).mock.calls[0];
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
     expect(l).toBe(loc);
     expect(content.url).toBe("http://y");
     expect(state().byTab.t).toMatchObject({ sending: false, response: meta });
   });
 
+  it("keeps script reports, and a null meta leaves no response", async () => {
+    const report = { phase: "pre_request", console: [], console_truncated: false, tests: [], changes: [], error: { kind: "exception", message: "boom", script: "request", line: 2 } };
+    vi.mocked(api.sendRequestOutcome).mockResolvedValue({ meta: null, scripts: [report], error: null } as never);
+    await state().load("t", loc);
+    await state().send("t", loc);
+    expect(state().byTab.t).toMatchObject({ response: null, error: null, scripts: [report] });
+
+    vi.mocked(api.sendRequestOutcome).mockRejectedValue({ code: "network", message: "x" });
+    await state().send("t", loc);
+    expect(state().byTab.t.scripts).toEqual([]);
+  });
+
+  it("keeps the pre-request report next to a transport failure", async () => {
+    const report = { phase: "pre_request", console: [{ level: "log", text: "hi" }], console_truncated: false, tests: [], changes: [], error: null };
+    const error = { code: "network", message: "connection refused" };
+    vi.mocked(api.sendRequestOutcome).mockResolvedValue({ meta: null, scripts: [report], error } as never);
+    await state().load("t", loc);
+    await state().send("t", loc);
+    expect(state().byTab.t).toMatchObject({ response: null, error, scripts: [report], sending: false });
+  });
+
   it("cancel aborts the in-flight id and a rejection becomes the error", async () => {
     let reject: (e: unknown) => void = () => {};
-    vi.mocked(api.sendRequest).mockReturnValue(new Promise((_, r) => (reject = r)));
+    vi.mocked(api.sendRequestOutcome).mockReturnValue(new Promise((_, r) => (reject = r)));
     vi.mocked(api.cancelRequest).mockResolvedValue(null);
     await state().load("t", loc);
     const pending = state().send("t", loc);
     state().cancel("t");
     const id = vi.mocked(api.cancelRequest).mock.calls[0][0];
-    expect(id).toBe(vi.mocked(api.sendRequest).mock.calls[0][0]);
+    expect(id).toBe(vi.mocked(api.sendRequestOutcome).mock.calls[0][0]);
     reject({ code: "cancelled", message: "Cancelled" });
     await pending;
 
@@ -87,12 +108,12 @@ describe("requestStore", () => {
 
   it("ignores a late result after the tab was dropped", async () => {
     let resolve: (m: never) => void = () => {};
-    vi.mocked(api.sendRequest).mockReturnValue(new Promise((r) => (resolve = r)));
+    vi.mocked(api.sendRequestOutcome).mockReturnValue(new Promise((r) => (resolve = r)));
     vi.mocked(api.cancelRequest).mockResolvedValue(null);
     await state().load("t", loc);
     const pending = state().send("t", loc);
     state().drop("t");
-    resolve(meta);
+    resolve({ meta, scripts: [], error: null } as never);
     await pending;
 
     expect(state().byTab.t).toBeUndefined();

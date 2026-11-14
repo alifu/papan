@@ -4,15 +4,16 @@ import type {
   RequestContent,
   RequestLocation,
   ResponseBody,
-  ResponseMeta,
+  SendOutcome,
 } from "../../ipc/bindings";
 
 // Thin wrappers over the generated bindings; unit tests `vi.mock` this module.
-export const sendRequest = (
+// Full outcome with script reports; `meta` is null when a pre-request script stopped the send.
+export const sendRequestOutcome = (
   requestId: string,
   location: RequestLocation,
   content: RequestContent,
-): Promise<ResponseMeta> => commands.sendRequest(requestId, location, content);
+): Promise<SendOutcome> => commands.sendRequest(requestId, location, content);
 export const cancelRequest = (requestId: string): Promise<null> => commands.cancelRequest(requestId);
 export const readResponseBody = (requestId: string): Promise<ResponseBody> =>
   commands.readResponseBody(requestId);

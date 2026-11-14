@@ -70,6 +70,8 @@ pub enum VarSource {
     Collection,
     Environment,
     Dynamic,
+    /// Set by a script for one send only (plan 05 §4.1); the highest layer.
+    Runtime,
 }
 
 /// A variable after layering. `value` is "" when secret; dynamic names are listed too.

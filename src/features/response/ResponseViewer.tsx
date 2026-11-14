@@ -1,10 +1,11 @@
 import { useState } from "react";
-import type { AppError, ResponseMeta } from "../../ipc/bindings";
+import type { AppError, ResponseMeta, ScriptReport } from "../../ipc/bindings";
 import { toUserMessage } from "../../ipc/errors";
 import { useDialogsStore } from "../../shell/dialogsStore";
 import { Button } from "../../ui/Button";
 import { Tabs } from "../../ui/Tabs";
 import { BodyView } from "./BodyView";
+import { ConsolePane, firstScriptError, ScriptErrorBanner, testCounts, TestsPane } from "./scriptReports";
 import { formatSize } from "./size";
 import { TimingBar } from "./TimingBar";
 import "./viewer.css";
@@ -13,9 +14,13 @@ export interface ResponseViewerProps {
   readonly response: ResponseMeta | null;
   readonly error: AppError | null;
   readonly sending: boolean;
+  /** Script reports of the last send, pre-request first; empty when no script ran. */
+  readonly scripts?: readonly ScriptReport[];
+  /** Receives a post-response script line ("Save to variable…"); omit to hide the action. */
+  readonly onInsertScriptLine?: (line: string) => void;
 }
 
-type PaneId = "body" | "headers" | "cookies";
+type PaneId = "body" | "headers" | "cookies" | "console" | "tests";
 
 /** `network`, `timeout` and `cancelled` carry user-ready messages from the engine. */
 export const errorText = (error: AppError): string =>
@@ -39,7 +44,39 @@ function PairTable({ label, rows }: { readonly label: string; readonly rows: rea
   );
 }
 
-function Loaded({ response }: { readonly response: ResponseMeta }) {
+const scriptTabs = (scripts: readonly ScriptReport[]) => {
+  if (scripts.length === 0) return [];
+  const { passed, total } = testCounts(scripts);
+  return [
+    { id: "console", label: "Console" },
+    { id: "tests", label: total > 0 ? `Tests (${passed}/${total})` : "Tests" },
+  ];
+};
+
+function ScriptPane({ pane, scripts }: { readonly pane: PaneId; readonly scripts: readonly ScriptReport[] }) {
+  if (pane === "console") return <ConsolePane scripts={scripts} />;
+  if (pane === "tests") return <TestsPane scripts={scripts} />;
+  return null;
+}
+
+function ScriptsOnly({ scripts }: { readonly scripts: readonly ScriptReport[] }) {
+  const [pane, setPane] = useState<PaneId>("console");
+  return (
+    <Tabs label="Script output" selectedId={pane} onSelect={(id) => setPane(id as PaneId)} tabs={scriptTabs(scripts)}>
+      <ScriptPane pane={pane} scripts={scripts} />
+    </Tabs>
+  );
+}
+
+function Loaded({
+  response,
+  scripts,
+  onInsertScriptLine,
+}: {
+  readonly response: ResponseMeta;
+  readonly scripts: readonly ScriptReport[];
+  readonly onInsertScriptLine?: (line: string) => void;
+}) {
   const [pane, setPane] = useState<PaneId>("body");
   const [showTiming, setShowTiming] = useState(false);
   const manageCookies = () => useDialogsStore.getState().show("cookies");
@@ -88,12 +125,14 @@ function Loaded({ response }: { readonly response: ResponseMeta }) {
           { id: "body", label: "Body" },
           { id: "headers", label: "Headers", count: response.headers.length },
           { id: "cookies", label: "Cookies", count: response.cookies.length },
+          ...scriptTabs(scripts),
         ]}
       >
-        {pane === "body" ? <BodyView response={response} /> : null}
+        {pane === "body" ? <BodyView response={response} onInsertScriptLine={onInsertScriptLine} /> : null}
         {pane === "headers" ? (
           <PairTable label="Response headers" rows={response.headers.map((h) => [h.name, h.value] as const)} />
         ) : null}
+        <ScriptPane pane={pane} scripts={scripts} />
         {pane === "cookies" ? (
           <>
             <Button label="Manage cookies…" onClick={manageCookies} />
@@ -119,11 +158,29 @@ function cookieDetail(c: ResponseMeta["cookies"][number]): string {
   return [c.value, ...attrs].join("; ");
 }
 
-export function ResponseViewer({ response, error, sending }: ResponseViewerProps) {
+export function ResponseViewer({ response, error, sending, scripts = [], onInsertScriptLine }: ResponseViewerProps) {
   let content;
+  const scriptError = firstScriptError(scripts);
+  const banner = scriptError ? <ScriptErrorBanner error={scriptError} /> : null;
   if (sending) content = <p className="response-notice">Sending...</p>;
-  else if (error) content = <p className="response-error" role="alert">{errorText(error)}</p>;
-  else if (response) content = <Loaded key={response.request_id} response={response} />;
-  else content = <p className="response-empty">Send a request to see the response.</p>;
+  else if (error) {
+    const failure = <p className="response-error" role="alert">{errorText(error)}</p>;
+    // A failed send keeps the report of the pre-request chain that ran before it.
+    content = scripts.length > 0 ? <>{failure}{banner}<ScriptsOnly scripts={scripts} /></> : failure;
+  } else if (response) {
+    content = (
+      <>
+        {banner}
+        <Loaded key={response.request_id} response={response} scripts={scripts} onInsertScriptLine={onInsertScriptLine} />
+      </>
+    );
+  } else if (scripts.length > 0) {
+    content = (
+      <>
+        {banner}
+        <ScriptsOnly scripts={scripts} />
+      </>
+    );
+  } else content = <p className="response-empty">Send a request to see the response.</p>;
   return <section className="response-viewer" aria-label="Response">{content}</section>;
 }

@@ -61,3 +61,25 @@
 }
 .history-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-error { color: var(--color-error-text); }
+
+.script-error {
+  margin: 0;
+  padding: 8px;
+  color: var(--color-error-text);
+}
+
+.script-error-where { opacity: 0.8; }
+
+.script-console,
+.script-tests {
+  margin: 0;
+  padding: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  list-style: none;
+}
+
+.console-error { color: var(--color-error-text); }
+.console-phase { opacity: 0.6; }
+.test-fail { color: var(--color-error-text); }
+.test-error { padding-left: 8px; opacity: 0.8; }

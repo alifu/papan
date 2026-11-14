@@ -1,4 +1,5 @@
-//! Variable layers in precedence order (plan 04 §5): global, collection, environment.
+//! Variable layers in precedence order (plan 04 §5): global, collection, environment,
+//! then the runtime layer a script chain adds for one send (plan 05 §4.2).
 //! Disabled variables are never put in a layer, so a lower layer shows through.
 
 use std::collections::BTreeMap;

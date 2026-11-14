@@ -326,3 +326,69 @@ fn normalise_matches_what_a_write_reads_back() {
 
     assert_eq!(crate::store::request_emit::normalise(&content), read_back);
 }
+
+fn with_scripts(pre: &str, post: &str) -> RequestContent {
+    RequestContent {
+        scripts: crate::store::types::Scripts {
+            pre_request: pre.into(),
+            post_response: post.into(),
+        },
+        ..RequestContent::new("GET", "https://x")
+    }
+}
+
+#[test]
+fn scripts_section_parses_merges_and_is_omitted_when_empty() {
+    let content = with_scripts("pm.a();\n", "");
+
+    let written = merge("r", &Extra::new(), &content).unwrap();
+    let cleared = merge("r", &written, &RequestContent::new("GET", "https://x")).unwrap();
+
+    assert_eq!(written["scripts"], json!({"pre_request": "pm.a();\n"}));
+    assert_eq!(
+        parse_sections("r", &written).unwrap().scripts,
+        content.scripts
+    );
+    assert!(!cleared.contains_key("scripts"));
+}
+
+#[test]
+fn scripts_section_keeps_unknown_keys_until_it_changes() {
+    let raw = extra(json!({"scripts": {"pre_request": "a", "future": true}}));
+
+    let canonical = canonical_extra("r", &raw).unwrap();
+    let rewritten = merge("r", &raw, &with_scripts("b", "c")).unwrap();
+
+    assert_eq!(
+        canonical["scripts"],
+        json!({"pre_request": "a", "future": true})
+    );
+    assert_eq!(
+        rewritten["scripts"],
+        json!({"pre_request": "b", "post_response": "c"})
+    );
+}
+
+#[test]
+fn oversized_or_malformed_request_scripts_name_file_and_field() {
+    let big = "x".repeat(crate::store::script_model::MAX_SCRIPT_BYTES + 1);
+    let too_big = error_of(&with_scripts(&big, ""));
+    let malformed = parse_sections(
+        "a.http.yaml",
+        &extra(json!({"scripts": {"post_response": 1}})),
+    )
+    .unwrap_err();
+
+    assert!(
+        too_big.message.contains("`scripts.pre_request`"),
+        "{}",
+        too_big.message
+    );
+    assert_eq!(malformed.code, ErrorCode::InvalidInput);
+    assert!(
+        malformed.message.starts_with("a.http.yaml: ")
+            && malformed.message.contains("`scripts.post_response`"),
+        "{}",
+        malformed.message
+    );
+}

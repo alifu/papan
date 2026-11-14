@@ -5,6 +5,7 @@ import type {
   RequestDoc,
   RequestLocation,
   ResponseMeta,
+  ScriptReport,
 } from "../../ipc/bindings";
 import { isAppError } from "../../ipc/errors";
 import { reportError } from "../../ui/toastStore";
@@ -23,6 +24,8 @@ export interface TabRequest {
   readonly requestId: string | null;
   readonly response: ResponseMeta | null;
   readonly error: AppError | null;
+  /** Script reports of the last send (pre-request first); cleared on a new send or failure. */
+  readonly scripts: readonly ScriptReport[];
   /** Session-only view of the params table (keeps disabled rows in place). */
   readonly paramRows: readonly ParamRow[];
 }
@@ -49,6 +52,7 @@ const EMPTY_TAB: TabRequest = {
   requestId: null,
   response: null,
   error: null,
+  scripts: [],
   paramRows: [],
 };
 
@@ -119,15 +123,15 @@ export const useRequestStore = create<RequestState>()((set, get) => {
       const content = currentContent(get().byTab[tabId]);
       if (!content || tabOf(tabId).sending) return;
       const requestId = crypto.randomUUID();
-      patch(tabId, { sending: true, requestId, error: null });
+      patch(tabId, { sending: true, requestId, error: null, scripts: [] });
       const superseded = () => tabOf(tabId).requestId !== requestId;
       try {
-        const response = await api.sendRequest(requestId, location, content);
+        const outcome = await api.sendRequestOutcome(requestId, location, content);
         if (superseded()) return;
-        patch(tabId, { response, sending: false });
+        patch(tabId, { response: outcome.meta, scripts: outcome.scripts, error: outcome.error, sending: false });
       } catch (err) {
         if (superseded()) return;
-        patch(tabId, { sending: false, response: null, error: isAppError(err) ? err : INTERNAL_ERROR });
+        patch(tabId, { sending: false, response: null, scripts: [], error: isAppError(err) ? err : INTERNAL_ERROR });
       }
     },
     cancel: (tabId) => {

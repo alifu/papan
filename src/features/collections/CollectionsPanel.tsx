@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ScriptTarget } from "../../ipc/bindings";
 import { useTabsStore } from "../../shell/tabsStore";
 import { Button } from "../../ui/Button";
 import { collectionLocation } from "../locations";
@@ -6,6 +7,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { useCollectionsStore } from "./collectionsStore";
 import { NameDialog } from "./NameDialog";
 import type { RowActions } from "./rowMenu";
+import { ScriptsDialog } from "./ScriptsDialog";
 import { TreeView } from "./TreeView";
 import type { TreeRowModel } from "./treeRows";
 import "./collections.css";
@@ -13,7 +15,8 @@ import "./collections.css";
 type DialogState =
   | { readonly kind: "newCollection" }
   | { readonly kind: "newFolder" | "newRequest" | "rename"; readonly row: TreeRowModel }
-  | { readonly kind: "delete"; readonly row: TreeRowModel };
+  | { readonly kind: "delete"; readonly row: TreeRowModel }
+  | { readonly kind: "scripts"; readonly row: TreeRowModel };
 
 const EMPTY_TEXT = "No collections yet.";
 
@@ -35,7 +38,7 @@ export function CollectionsPanel() {
   const submitName = async (state: DialogState, name: string): Promise<boolean> => {
     const s = store.getState();
     if (state.kind === "newCollection") return (await s.create(name)) !== null;
-    if (state.kind === "delete") return false;
+    if (state.kind === "delete" || state.kind === "scripts") return false;
     const { collectionId, path } = state.row;
     if (state.kind === "newFolder") return (await s.createFolder(collectionId, path, name)) !== null;
     if (state.kind === "newRequest") {
@@ -75,6 +78,7 @@ export function CollectionsPanel() {
   const actions: RowActions = {
       newRequest: (row) => setDialog({ kind: "newRequest", row }),
       newFolder: (row) => setDialog({ kind: "newFolder", row }),
+      scripts: (row) => setDialog({ kind: "scripts", row }),
       rename: (row) => setDialog({ kind: "rename", row }),
       remove: (row) => setDialog({ kind: "delete", row }),
       closeCollection: (row) => {
@@ -106,12 +110,19 @@ export function CollectionsPanel() {
           onMove={(row, folder, index) => void move(row, folder, index)}
         />
       )}
-      {dialog && dialog.kind !== "delete" ? (
+      {dialog && dialog.kind !== "delete" && dialog.kind !== "scripts" ? (
         <NameDialog
           title={dialogTitle(dialog)}
           initialName={dialog.kind === "rename" ? dialog.row.name : ""}
           submitLabel={dialog.kind === "rename" ? "Rename" : "Create"}
           onSubmit={(name) => submitName(dialog, name)}
+          onClose={closeDialog}
+        />
+      ) : null}
+      {dialog?.kind === "scripts" ? (
+        <ScriptsDialog
+          title={`Scripts: ${dialog.row.name}`}
+          target={scriptTarget(dialog.row)}
           onClose={closeDialog}
         />
       ) : null}
@@ -127,7 +138,12 @@ export function CollectionsPanel() {
   );
 }
 
-function dialogTitle(dialog: Exclude<DialogState, { kind: "delete" }>): string {
+const scriptTarget = (row: TreeRowModel): ScriptTarget =>
+  row.kind === "collection"
+    ? { scope: "collection", collection_id: row.collectionId }
+    : { scope: "folder", collection_id: row.collectionId, path: row.path };
+
+function dialogTitle(dialog: Exclude<DialogState, { kind: "delete" | "scripts" }>): string {
   switch (dialog.kind) {
     case "newCollection":
       return "New Collection";

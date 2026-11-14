@@ -90,3 +90,23 @@
 
 .oauth-panel { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
 .oauth-actions { display: flex; gap: 6px; }
+
+.scripts-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.scripts-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scripts-body {
+  flex: 1;
+  min-height: 140px;
+  overflow: auto;
+}

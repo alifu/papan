@@ -50,7 +50,7 @@ describe("RequestEditor", () => {
     await userEvent.type(url, "z");
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 
-    vi.mocked(api.sendRequest).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.sendRequestOutcome).mockReturnValue(new Promise(() => {}));
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
   });
@@ -116,5 +116,23 @@ describe("RequestEditor", () => {
     expect(screen.getByText(/Made by a newer Papan/)).toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: "Body" }));
     expect(screen.getByText(/Made by a newer Papan/)).toBeVisible();
+  });
+});
+
+describe("RequestEditor scripts", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    useRequestStore.setState({ byTab: {} });
+    vi.mocked(collections.readRequest).mockResolvedValue({ name: "R", content });
+  });
+
+  it("edits the post-response script into the draft", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("tab", { name: "Scripts" }));
+    await userEvent.click(screen.getByRole("button", { name: "Post-response" }));
+    await userEvent.type(screen.getByLabelText("Post-response script"), "a");
+    const tab = useRequestStore.getState().byTab.t;
+    expect(tab?.draft?.scripts).toEqual({ pre_request: "", post_response: "a" });
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 });

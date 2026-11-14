@@ -179,6 +179,51 @@ mod tests {
         assert_eq!(text, "alpha:\n  - a\n  - true\nmid: null\nzeta: z\n");
     }
 
+    fn script_map(script: &str) -> BTreeMap<String, Node> {
+        let inner = BTreeMap::from([("pre_request".to_string(), Node::String(script.into()))]);
+        BTreeMap::from([("scripts".to_string(), Node::Map(inner))])
+    }
+
+    #[test]
+    fn multi_line_scripts_emit_as_block_scalars() {
+        let script = "const a = 1;\nif (a) {\n  pm.environment.set(\"k\", a);\n}\n";
+
+        let text = emit(&script_map(script)).unwrap();
+
+        assert_eq!(
+            text,
+            "scripts:\n  pre_request: |\n    const a = 1;\n    if (a) {\n      \
+             pm.environment.set(\"k\", a);\n    }\n"
+        );
+        assert_eq!(emit(&script_map(script)).unwrap(), text);
+    }
+
+    #[test]
+    fn script_edge_cases_round_trip_exactly() {
+        let cases = [
+            "no trailing newline\nsecond",
+            "  leading indent\nnext\n",
+            "trailing blank lines\n\n\n",
+            "\nleading newline\n",
+            "tab\there\n# not a comment\n",
+            "key: value # looks like yaml\n- item\n",
+            "trailing spaces   \nend\n",
+            "\"quoted\" and 'single'\n",
+            "one line",
+            "unicode é ✓\r\nwindows\n",
+        ];
+        for script in cases {
+            let text = emit(&script_map(script)).unwrap();
+            let back: serde_json::Value = parse("s", text.as_bytes()).unwrap();
+            assert_eq!(
+                back["scripts"]["pre_request"].as_str(),
+                Some(script),
+                "{text}"
+            );
+            assert_eq!(emit(&script_map(script)).unwrap(), text);
+        }
+    }
+
     #[test]
     fn node_from_json_keeps_structure() {
         let value = serde_json::json!({"b": [1, null], "a": {"c": false}});

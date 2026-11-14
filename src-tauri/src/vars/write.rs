@@ -162,7 +162,11 @@ fn new_current(scope: &VarScope, table: &VarTable, inputs: &[VariableInput]) -> 
         .collect()
 }
 
-fn save_current(store: &Store, scope: &VarScope, current: &local::Values) -> Result<(), AppError> {
+pub(super) fn save_current(
+    store: &Store,
+    scope: &VarScope,
+    current: &local::Values,
+) -> Result<(), AppError> {
     let (collection_id, env) = match scope {
         VarScope::Global => return Ok(()),
         VarScope::Collection { collection_id } => (collection_id, None),
@@ -184,7 +188,11 @@ fn save_current(store: &Store, scope: &VarScope, current: &local::Values) -> Res
     local::save(store.app_data(), collection_id, &state)
 }
 
-fn save_table(store: &mut Store, scope: &VarScope, table: VarTable) -> Result<(), AppError> {
+pub(super) fn save_table(
+    store: &mut Store,
+    scope: &VarScope,
+    table: VarTable,
+) -> Result<(), AppError> {
     match scope {
         VarScope::Global => store.write_globals(table),
         VarScope::Collection { collection_id } => {

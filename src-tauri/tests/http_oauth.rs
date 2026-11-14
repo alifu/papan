@@ -13,8 +13,8 @@ use std::time::Duration;
 use app::{capture_logs, draft, key_of, logs, FakeBrowser};
 use papan_lib::engine::http::oauth::flow::NO_TOKEN_MESSAGE;
 use papan_lib::engine::http::resolve::Resolved;
+use papan_lib::engine::http::scripted::{run_send, SendDeps};
 use papan_lib::engine::http::types::ResponseMeta;
-use papan_lib::engine::http::variables::send_with_variables;
 use papan_lib::engine::http::HttpEngine;
 use papan_lib::error::{AppError, ErrorCode};
 use papan_lib::store::types::{KeyValue, OAuthGrant, RequestContent, RequestLocation};
@@ -85,16 +85,15 @@ impl Fixture {
 
     async fn send(&self, content: &RequestContent) -> (String, Result<ResponseMeta, AppError>) {
         let id = uuid::Uuid::new_v4().to_string();
-        let result = send_with_variables(
-            &self.engine,
-            &self.store,
-            &self.vars,
-            Arc::new(SystemDynamics),
-            &id,
-            &self.location,
-            content,
-        )
-        .await;
+        let deps = SendDeps {
+            engine: &self.engine,
+            store: &self.store,
+            vars: &self.vars,
+            dynamics: Arc::new(SystemDynamics),
+        };
+        let result = run_send(&deps, &id, &self.location, content)
+            .await
+            .map(|outcome| outcome.meta.expect("no script stops these sends"));
         (id, result)
     }
 

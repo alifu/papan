@@ -19,14 +19,21 @@ export const commands = {
 	moveNode: (collectionId: string, path: string, targetFolder: string, index: number) => __TAURI_INVOKE<TreeChange>("move_node", { collectionId, path, targetFolder, index }),
 	readRequest: (location: RequestLocation) => __TAURI_INVOKE<RequestDoc>("read_request", { location }),
 	writeRequest: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<null>("write_request", { location, content }),
+	/**  Folder or collection scripts (plan 05 §5); request scripts travel in `RequestContent`. */
+	readScripts: (target: ScriptTarget) => __TAURI_INVOKE<Scripts>("read_scripts", { target }),
+	writeScripts: (target: ScriptTarget, scripts: Scripts) => __TAURI_INVOKE<null>("write_scripts", { target, scripts }),
 	listScratch: () => __TAURI_INVOKE<ScratchItem[]>("list_scratch"),
 	createScratch: () => __TAURI_INVOKE<ScratchItem>("create_scratch"),
 	renameScratch: (id: string, name: string) => __TAURI_INVOKE<ScratchItem[]>("rename_scratch", { id, name }),
 	deleteScratch: (id: string) => __TAURI_INVOKE<ScratchItem[]>("delete_scratch", { id }),
 	moveScratchToCollection: (id: string, collectionId: string, targetFolder: string) => __TAURI_INVOKE<TreeChange>("move_scratch_to_collection", { id, collectionId, targetFolder }),
-	/**  Sends the draft `content`; `location` picks the cookie jar and labels history. */
-	sendRequest: (requestId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<ResponseMeta>("send_request", { requestId, location, content }),
-	/**  Aborts an in-flight send. An unknown id is a no-op. */
+	/**
+	 *  Sends the draft `content`; `location` picks the cookie jar and labels history.
+	 *  Scripts run around the send and variables are resolved with the scopes of
+	 *  `location` (plans 04 §6, 05 §4.2). See [`SendOutcome`] for a stopped send.
+	 */
+	sendRequest: (requestId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<SendOutcome>("send_request", { requestId, location, content }),
+	/**  Aborts an in-flight send and stops its running script. An unknown id is a no-op. */
 	cancelRequest: (requestId: string) => __TAURI_INVOKE<null>("cancel_request", { requestId }),
 	/**  The capped body preview; `not_found` once the response file is evicted. */
 	readResponseBody: (requestId: string) => __TAURI_INVOKE<ResponseBody>("read_response_body", { requestId }),
@@ -157,6 +164,14 @@ export type CollectionSummary = {
 export type CollectionTree = {
 	collection: CollectionSummary,
 	children: TreeNode[],
+};
+
+export type ConsoleLevel = "log" | "info" | "warn" | "error";
+
+/**  One `console.*` call, or a warning from the host (level `warn`). */
+export type ConsoleLine = {
+	level: ConsoleLevel,
+	text: string,
 };
 
 /**  Deletes every cookie of `domain`, or the one cookie named by domain + path + name. */
@@ -331,6 +346,7 @@ export type RequestContent = {
 	body: Body,
 	auth: Auth,
 	settings: Settings,
+	scripts: Scripts,
 };
 
 export type RequestDoc = {
@@ -385,6 +401,69 @@ export type ScratchItem = {
 	method: string,
 };
 
+/**  Why a chain stopped early. */
+export type ScriptError = {
+	kind: ScriptErrorKind,
+	message: string,
+	/**  Label of the script that failed (e.g. "collection", "request"). */
+	script: string | null,
+	/**  1-based line in that script, when known. */
+	line: number | null,
+};
+
+export type ScriptErrorKind = 
+/**  The script threw, or did not parse. */
+"exception" | 
+/**  The chain ran past its wall-clock limit. */
+"timeout" | 
+/**  The chain used more memory than allowed. */
+"memory" | 
+/**  Recursion went deeper than the stack limit. */
+"stack_overflow" | 
+/**  The user cancelled the send. */
+"cancelled" | 
+/**  The engine itself failed. */
+"internal";
+
+/**  Which chain ran. */
+export type ScriptPhase = "pre_request" | "post_response";
+
+export type ScriptReport = {
+	phase: ScriptPhase,
+	console: ConsoleLine[],
+	/**  `console` lost lines to the output limit. */
+	console_truncated: boolean,
+	tests: TestResult[],
+	changes: ScriptVarChange[],
+	error: ScriptError | null,
+};
+
+export type ScriptScope = "globals" | "collection" | "environment" | "runtime";
+
+/**
+ *  Where folder or collection scripts live; request scripts travel in `RequestContent`.
+ *  `path` is a folder relative to `requests/`, never empty.
+ */
+export type ScriptTarget = { scope: "collection"; collection_id: string } | { scope: "folder"; collection_id: string; path: string };
+
+/**  A variable the chain changed. `value` is `None` for an unset and for a secret. */
+export type ScriptVarChange = {
+	scope: ScriptScope,
+	name: string,
+	value: string | null,
+	secret: boolean,
+	removed: boolean,
+};
+
+/**
+ *  JavaScript run before the request is sent and after the response arrives (plan 05 §3).
+ *  Empty means no script.
+ */
+export type Scripts = {
+	pre_request: string,
+	post_response: string,
+};
+
 /**  What to do with a variable's stored secret value on write. */
 export type SecretEdit = { op: "keep" } | { op: "set"; value: string } | { op: "clear" };
 
@@ -394,6 +473,19 @@ export type SecretStorageMode = "keychain" | "session_only" | "damaged";
 export type SecretStorageStatus = {
 	mode: SecretStorageMode,
 	message: string | null,
+};
+
+/**
+ *  What `send_request` returns (plan 05 §5). `meta` is `None` only when the
+ *  pre-request chain stopped the send (its report's `error` says why; nothing was sent).
+ *  A transport failure is an `Err`, unless a chain already ran: then it is `error` here, with
+ *  `meta` `None`, so the pre-request report is not lost. A post-response error keeps `meta`.
+ *  `scripts` holds one report per chain that ran, pre-request first.
+ */
+export type SendOutcome = {
+	meta: ResponseMeta | null,
+	scripts: ScriptReport[],
+	error: AppError | null,
 };
 
 /**  Per-request send settings. `timeout_ms` 0 means no timeout. */
@@ -419,6 +511,13 @@ export type StoredCookie = {
 export type TemplatePreview = {
 	text: string,
 	unresolved: string[],
+};
+
+/**  One `pm.test(name, fn)`. */
+export type TestResult = {
+	name: string,
+	passed: boolean,
+	error: string | null,
 };
 
 /**
@@ -454,7 +553,9 @@ export type TreeNode = {
 export type VarScope = { scope: "global" } | { scope: "collection"; collection_id: string } | { scope: "environment"; collection_id: string; env: string };
 
 /**  Where an effective variable's value comes from. */
-export type VarSource = "global" | "collection" | "environment" | "dynamic";
+export type VarSource = "global" | "collection" | "environment" | "dynamic" | 
+/**  Set by a script for one send only (plan 05 §4.1); the highest layer. */
+"runtime";
 
 /**  A variable as the editor shows it. For a secret, `value` is "" and `current` None. */
 export type Variable = {

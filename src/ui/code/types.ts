@@ -2,7 +2,7 @@
 export interface EditorVariable {
   readonly name: string;
   readonly value: string;
-  readonly source: "global" | "collection" | "environment" | "dynamic";
+  readonly source: "global" | "collection" | "environment" | "dynamic" | "runtime";
   readonly secret: boolean;
   readonly resolved: boolean;
 }
@@ -18,4 +18,4 @@ export interface EditorMarks {
   readonly current: number | null;
 }
 
-export type EditorLanguage = "json" | "xml" | "text";
+export type EditorLanguage = "json" | "xml" | "javascript" | "text";
