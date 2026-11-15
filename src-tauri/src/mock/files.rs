@@ -1,6 +1,7 @@
 //! File bodies for mock responses (plan 11 §9): a response can send a file from inside the
 //! collection. The path is checked at save time and again here after links are resolved.
 
+use std::io::Read as _;
 use std::path::Path;
 
 use super::model::check_file;
@@ -17,17 +18,37 @@ pub fn read(root: &Path, relative: &str) -> Result<Vec<u8>, String> {
         .join(relative)
         .canonicalize()
         .map_err(|_| format!("File \"{relative}\" was not found in the collection."))?;
-    if !target.starts_with(&base) {
-        return Err(format!("File \"{relative}\" is outside the collection."));
+    // The resolved path decides, not the requested text: a link inside the collection must
+    // not lead into a hidden folder such as `.git`.
+    let inside = target
+        .strip_prefix(&base)
+        .map_err(|_| format!("File \"{relative}\" is outside the collection."))?;
+    if inside
+        .components()
+        .any(|part| part.as_os_str().to_string_lossy().starts_with('.'))
+    {
+        return Err(format!("File \"{relative}\" is not available."));
     }
-    let meta = std::fs::metadata(&target).map_err(|_| "The file is not readable.".to_string())?;
+    // One open handle for the checks and the read, so the file cannot change in between.
+    let mut file =
+        std::fs::File::open(&target).map_err(|_| "The file is not readable.".to_string())?;
+    let meta = file
+        .metadata()
+        .map_err(|_| "The file is not readable.".to_string())?;
     if !meta.is_file() {
         return Err(format!("\"{relative}\" is not a file."));
     }
     if meta.len() > MAX_FILE_BYTES {
         return Err(format!("File \"{relative}\" is over 10 MiB."));
     }
-    std::fs::read(&target).map_err(|_| "The file is not readable.".to_string())
+    let mut bytes = Vec::new();
+    std::io::Read::take(&mut file, MAX_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "The file is not readable.".to_string())?;
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        return Err(format!("File \"{relative}\" is over 10 MiB."));
+    }
+    Ok(bytes)
 }
 
 /// A content type from the extension; unknown files are sent as bytes.
@@ -93,6 +114,16 @@ mod tests {
         std::fs::write(outside.path().join("s.txt"), b"secret").unwrap();
         std::os::unix::fs::symlink(outside.path(), dir.path().join("files/out")).unwrap();
         assert!(read(dir.path(), "files/out/s.txt").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_link_that_leads_into_a_hidden_folder() {
+        let dir = collection();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        std::fs::write(dir.path().join(".git/config"), b"url = x").unwrap();
+        std::os::unix::fs::symlink(dir.path().join(".git"), dir.path().join("pub")).unwrap();
+        assert!(read(dir.path(), "pub/config").is_err());
     }
 
     #[test]

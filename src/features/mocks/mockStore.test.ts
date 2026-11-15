@@ -30,6 +30,8 @@ describe("mockStore", () => {
     const store = useMockStore.getState();
     for (let id = 1; id <= MAX_LOG_IN_UI + 5; id += 1)
       store.handleLogged({ collection_id: "c", file: "f", entry: entry(id) });
+    expect(useMockStore.getState().logs[mockKey("c", "f")]).toBeUndefined();
+    useMockStore.getState().flushLogged();
     const log = useMockStore.getState().logs[mockKey("c", "f")]!;
     expect(log).toHaveLength(MAX_LOG_IN_UI);
     expect(log[log.length - 1]?.id).toBe(MAX_LOG_IN_UI + 5);
@@ -51,5 +53,23 @@ describe("mockStore", () => {
     });
     vi.mocked(api.listMocks).mockResolvedValue([]);
     expect(await useMockStore.getState().start("c", "f")).toBe(false);
+  });
+
+  it("applies a burst of events as one update after the flush delay", () => {
+    vi.useFakeTimers();
+    try {
+      let updates = 0;
+      const stop = useMockStore.subscribe(() => (updates += 1));
+      const store = useMockStore.getState();
+      for (let id = 1; id <= 50; id += 1)
+        store.handleLogged({ collection_id: "c", file: "f", entry: entry(id) });
+      expect(updates).toBe(0);
+      vi.advanceTimersByTime(150);
+      expect(updates).toBe(1);
+      expect(useMockStore.getState().logs[mockKey("c", "f")]).toHaveLength(50);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

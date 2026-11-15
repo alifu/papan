@@ -1,6 +1,9 @@
 //! Rules and response modes (plan 11 §3).
 
-use regex::RegexBuilder;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock, PoisonError};
+
+use regex::{Regex, RegexBuilder};
 use serde_json::Value;
 
 use super::model::{
@@ -35,13 +38,34 @@ fn actual(rule: &Rule, ctx: &RequestCtx) -> Option<Value> {
     }
 }
 
+const REGEX_CACHE_ENTRIES: usize = 256;
+
+type RegexCache = Mutex<HashMap<(String, bool), Option<Regex>>>;
+
+/// Patterns are compiled once and shared by every request (a bad pattern is remembered too).
+fn compiled_regex(pattern: &str, ignore_case: bool) -> Option<Regex> {
+    static CACHE: OnceLock<RegexCache> = OnceLock::new();
+    let mut cache = CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if cache.len() >= REGEX_CACHE_ENTRIES {
+        cache.clear();
+    }
+    cache
+        .entry((pattern.to_string(), ignore_case))
+        .or_insert_with(|| {
+            RegexBuilder::new(pattern)
+                .case_insensitive(ignore_case)
+                .size_limit(REGEX_SIZE_LIMIT)
+                .build()
+                .ok()
+        })
+        .clone()
+}
+
 fn regex_matches(pattern: &str, ignore_case: bool, text: &str) -> bool {
-    RegexBuilder::new(pattern)
-        .case_insensitive(ignore_case)
-        .size_limit(REGEX_SIZE_LIMIT)
-        .build()
-        .map(|re| re.is_match(text))
-        .unwrap_or(false)
+    compiled_regex(pattern, ignore_case).is_some_and(|re| re.is_match(text))
 }
 
 fn holds(rule: &Rule, ctx: &RequestCtx) -> bool {

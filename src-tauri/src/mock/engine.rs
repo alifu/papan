@@ -58,9 +58,13 @@ fn has_header(headers: &[(String, String)], name: &str) -> bool {
 }
 
 fn cors_headers(headers: &mut Vec<(String, String)>, ctx: &RequestCtx) {
-    set_header(headers, "Access-Control-Allow-Origin", "*".into());
-    set_header(
-        headers,
+    let mut default = |name: &str, value: String| {
+        if !has_header(headers, name) {
+            set_header(headers, name, value);
+        }
+    };
+    default("Access-Control-Allow-Origin", "*".into());
+    default(
         "Access-Control-Allow-Methods",
         "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS".into(),
     );
@@ -68,7 +72,7 @@ fn cors_headers(headers: &mut Vec<(String, String)>, ctx: &RequestCtx) {
         .header("access-control-request-headers")
         .unwrap_or("Content-Type, Authorization")
         .to_string();
-    set_header(headers, "Access-Control-Allow-Headers", allowed);
+    default("Access-Control-Allow-Headers", allowed);
 }
 
 fn looks_like_json(body: &str) -> bool {
@@ -87,6 +91,11 @@ fn error_reply(status: u16, message: &str) -> Reply {
         file: None,
         forward: false,
     }
+}
+
+/// What a request gets when the engine itself failed (a panic in a helper).
+pub fn failed_reply() -> Reply {
+    error_reply(500, "The mock could not build a response.")
 }
 
 fn forward_reply() -> Reply {
@@ -232,6 +241,24 @@ mod tests {
         let c = compiled(mock);
         assert_eq!(respond(&c, request("GET", "/api/users/1")).status, 200);
         assert_eq!(respond(&c, request("GET", "/users/1")).status, 404);
+    }
+
+    #[test]
+    fn a_user_set_cors_header_is_kept() {
+        let mut mock = sample();
+        mock.headers = vec![KeyValue {
+            name: "Access-Control-Allow-Origin".into(),
+            value: "https://app.test".into(),
+            enabled: true,
+        }];
+        let reply = respond(&compiled(mock), request("GET", "/users/1"));
+        let origins: Vec<_> = reply
+            .headers
+            .iter()
+            .filter(|(n, _)| n.eq_ignore_ascii_case("access-control-allow-origin"))
+            .collect();
+        assert_eq!(origins.len(), 1);
+        assert_eq!(origins[0].1, "https://app.test");
     }
 
     #[test]

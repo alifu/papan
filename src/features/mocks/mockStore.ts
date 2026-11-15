@@ -6,6 +6,9 @@ import * as api from "./api";
 /** Entries kept per mock in the UI; matches the Rust ring. */
 export const MAX_LOG_IN_UI = 500;
 
+/** Live entries are applied together this often, so a request flood costs one update. */
+export const LOG_FLUSH_MS = 100;
+
 export const mockKey = (collectionId: string, file: string): string =>
   `${collectionId}/${file}`;
 
@@ -20,6 +23,8 @@ export interface MockState {
   stop: (collectionId: string, file: string) => Promise<void>;
   remove: (collectionId: string, file: string) => Promise<boolean>;
   handleLogged: (event: MockLogged) => void;
+  /** Applies the entries waiting for the next batch. */
+  flushLogged: () => void;
   subscribe: () => Promise<() => void>;
 }
 
@@ -32,6 +37,8 @@ export const useMockStore = create<MockState>()((set, get) => {
       return null;
     }
   };
+  const pending = new Map<string, MockLogEntry[]>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
   return {
     byCollection: {},
     logs: {},
@@ -70,8 +77,22 @@ export const useMockStore = create<MockState>()((set, get) => {
     },
     handleLogged: ({ collection_id, file, entry }) => {
       const key = mockKey(collection_id, file);
-      const kept = [...(get().logs[key] ?? []), entry].slice(-MAX_LOG_IN_UI);
-      set({ logs: { ...get().logs, [key]: kept } });
+      pending.set(
+        key,
+        [...(pending.get(key) ?? []), entry].slice(-MAX_LOG_IN_UI),
+      );
+      timer ??= setTimeout(() => get().flushLogged(), LOG_FLUSH_MS);
+    },
+    flushLogged: () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (pending.size === 0) return;
+      const logs = { ...get().logs };
+      for (const [key, entries] of pending) {
+        logs[key] = [...(logs[key] ?? []), ...entries].slice(-MAX_LOG_IN_UI);
+      }
+      pending.clear();
+      set({ logs });
     },
     subscribe: () => api.subscribeLogged((event) => get().handleLogged(event)),
   };

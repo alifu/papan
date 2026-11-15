@@ -42,6 +42,20 @@ fn root_of(state: &StoreState, collection_id: &str) -> MockResult<PathBuf> {
     state.lock_store().collection_root(collection_id)
 }
 
+/// Mocks from a cloned collection may not expose the network or read files until the user
+/// trusts the collection (the same switch as for its scripts).
+fn check_trust(state: &StoreState, collection_id: &str, mock: &MockEnvironment) -> MockResult<()> {
+    let Some(reason) = super::risky_features(mock) else {
+        return Ok(());
+    };
+    if state.lock_store().scripts_trusted(collection_id) {
+        return Ok(());
+    }
+    Err(AppError::invalid_input(format!(
+        "This mock {reason}. It is in a collection that came from a Git repository, so it will not start until you trust the collection (collection menu, Trust scripts…)."
+    )))
+}
+
 fn logged<T>(result: MockResult<T>) -> MockResult<T> {
     if let Err(error) = &result {
         tracing::warn!(code = ?error.code, detail = ?error.detail, "{error}");
@@ -107,6 +121,7 @@ pub async fn save_mock(
     let saved = mock.clone();
     let name = logged(disk::write(&root, file.as_deref(), &mock))?;
     if service.url_of(&collection_id, &name).await.is_some() {
+        logged(check_trust(&state, &collection_id, &saved))?;
         service.stop(&collection_id, &name).await;
         logged(
             service
@@ -141,6 +156,7 @@ pub async fn start_mock(
 ) -> MockResult<String> {
     let root = root_of(&state, &collection_id)?;
     let mock = logged(disk::read(&root, &file))?;
+    logged(check_trust(&state, &collection_id, &mock))?;
     logged(service.start(&collection_id, &file, root, mock).await)?;
     service
         .url_of(&collection_id, &file)

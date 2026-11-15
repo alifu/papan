@@ -241,6 +241,8 @@ fn check_response(file: &str, at: &str, response: &MockResponse) -> Result<(), A
         return Err(invalid(file, &format!("{at}.rules"), "has too many rules"));
     }
     check_file(file, &format!("{at}.file"), &response.file)?;
+    super::template::check_depth(&response.body)
+        .map_err(|problem| invalid(file, &format!("{at}.body"), &problem))?;
     check_text(
         file,
         &format!("{at}.label"),

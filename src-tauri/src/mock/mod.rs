@@ -27,6 +27,23 @@ use model::MockEnvironment;
 use server::{RunningServer, Shared};
 use types::MockLogEntry;
 
+/// What makes a mock more than a loopback toy, or `None` when it has none of it.
+pub fn risky_features(mock: &MockEnvironment) -> Option<&'static str> {
+    if mock.bind == model::MockBind::AllInterfaces {
+        Some("listens on all network interfaces")
+    } else if !mock.proxy.is_empty() {
+        Some("forwards requests to another server")
+    } else if mock
+        .routes
+        .iter()
+        .any(|r| r.responses.iter().any(|s| !s.file.is_empty()))
+    {
+        Some("sends files from the collection")
+    } else {
+        None
+    }
+}
+
 /// Where served requests are announced: the Tauri event bridge in the app, nothing in tests.
 pub trait MockSink: Send + Sync {
     fn logged(&self, collection_id: &str, file: &str, entry: &MockLogEntry);

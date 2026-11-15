@@ -16,6 +16,15 @@ use super::request::{json_path, RequestCtx};
 /// `repeat` and `lorem` are capped so one template cannot exhaust memory.
 const MAX_REPEAT: u64 = 1_000;
 const MAX_LOREM_WORDS: u64 = 500;
+/// All `repeat` iterations of one render share this budget, so nesting cannot multiply.
+const REPEAT_BUDGET: u64 = 10_000;
+/// Deeper nesting is refused before rendering: the engine recurses per level.
+pub const MAX_BLOCK_DEPTH: usize = 16;
+pub const MAX_EXPR_DEPTH: usize = 16;
+
+thread_local! {
+    static REPEATS_LEFT: std::cell::Cell<u64> = const { std::cell::Cell::new(REPEAT_BUDGET) };
+}
 const LOREM: [&str; 16] = [
     "lorem",
     "ipsum",
@@ -184,6 +193,9 @@ fn float_helper(
 ) -> HelperResult {
     let low = number_param(h, 0).unwrap_or(0.0);
     let high = number_param(h, 1).unwrap_or(1.0);
+    if !(low.is_finite() && high.is_finite() && (high - low).is_finite()) {
+        return Err(fail("float needs finite bounds"));
+    }
     let (low, high) = if low <= high {
         (low, high)
     } else {
@@ -342,6 +354,14 @@ fn repeat<'reg, 'rc>(
     let Some(template) = h.template() else {
         return Ok(());
     };
+    let granted = REPEATS_LEFT.with(|left| {
+        let allowed = count.min(left.get());
+        left.set(left.get() - allowed);
+        allowed
+    });
+    if granted < count {
+        return Err(fail("the template repeats too many times"));
+    }
     for index in 0..count {
         let mut block = BlockContext::new();
         block.set_local_var("index", json!(index));
@@ -420,13 +440,82 @@ pub fn render(template: &str, ctx: &RequestCtx) -> Result<String, String> {
     if !template.contains("{{") {
         return Ok(template.to_string());
     }
-    let text = registry()
-        .render_template(template, &data_of(ctx))
-        .map_err(|error| error.to_string())?;
-    if text.len() > MAX_BODY_BYTES {
-        return Err("the rendered body is over 1 MiB".into());
+    check_depth(template)?;
+    REPEATS_LEFT.with(|left| left.set(REPEAT_BUDGET));
+    let mut sink = CappedWriter::default();
+    registry()
+        .render_template_to_write(template, &data_of(ctx), &mut sink)
+        .map_err(|error| {
+            if sink.overflowed {
+                "the rendered body is over 1 MiB".to_string()
+            } else {
+                error.to_string()
+            }
+        })?;
+    String::from_utf8(sink.bytes).map_err(|_| "the rendered body is not valid text".into())
+}
+
+/// Collects output and fails the render the moment it passes the body cap.
+#[derive(Default)]
+struct CappedWriter {
+    bytes: Vec<u8>,
+    overflowed: bool,
+}
+
+impl std::io::Write for CappedWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.bytes.len() + buf.len() > MAX_BODY_BYTES {
+            self.overflowed = true;
+            return Err(std::io::Error::other("body too large"));
+        }
+        self.bytes.extend_from_slice(buf);
+        Ok(buf.len())
     }
-    Ok(text)
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Refuses templates nested deeper than the engine can safely recurse.
+pub fn check_depth(template: &str) -> Result<(), String> {
+    let (mut blocks, mut parens, mut max_parens) = (0usize, 0usize, 0usize);
+    let bytes = template.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' && bytes.get(i + 1) == Some(&b'{') {
+            let mut at = i + 2;
+            while matches!(bytes.get(at), Some(b'{' | b'~')) {
+                at += 1;
+            }
+            match bytes.get(at) {
+                Some(b'#') => {
+                    blocks += 1;
+                    if blocks > MAX_BLOCK_DEPTH {
+                        return Err("blocks are nested too deeply".into());
+                    }
+                }
+                Some(b'/') => blocks = blocks.saturating_sub(1),
+                _ => {}
+            }
+            parens = 0;
+            i = at;
+            continue;
+        }
+        match bytes[i] {
+            b'(' => {
+                parens += 1;
+                max_parens = max_parens.max(parens);
+            }
+            b')' => parens = parens.saturating_sub(1),
+            _ => {}
+        }
+        i += 1;
+    }
+    if max_parens > MAX_EXPR_DEPTH {
+        return Err("expressions are nested too deeply".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -533,5 +622,41 @@ mod tests {
     fn oversized_output_is_refused() {
         let huge = format!("{{{{#repeat 1000}}}}{}{{{{/repeat}}}}", "x".repeat(2_000));
         assert!(render(&huge, &ctx()).is_err());
+    }
+
+    #[test]
+    fn nested_repeats_share_one_budget() {
+        let nested =
+            "{{#repeat 1000}}{{#repeat 1000}}{{#repeat 1000}}x{{/repeat}}{{/repeat}}{{/repeat}}";
+        assert!(render(nested, &ctx()).is_err());
+    }
+
+    #[test]
+    fn output_past_the_cap_stops_the_render() {
+        let t = "{{#repeat 1000}}{{#repeat 5}}".to_string()
+            + &"x".repeat(1000)
+            + "{{/repeat}}{{/repeat}}";
+        let error = render(&t, &ctx()).unwrap_err();
+        assert!(error.contains("1 MiB"), "{error}");
+    }
+
+    #[test]
+    fn deep_nesting_is_refused_before_rendering() {
+        let blocks = "{{#if 1}}".repeat(3000) + &"{{/if}}".repeat(3000);
+        assert!(render(&blocks, &ctx()).unwrap_err().contains("nested"));
+        let parens = format!(
+            "{{{{lowercase {}x{}}}}}",
+            "(lowercase ".repeat(100),
+            ")".repeat(100)
+        );
+        assert!(render(&parens, &ctx()).unwrap_err().contains("nested"));
+        assert!(render("{{#if 1}}{{#if 1}}ok{{/if}}{{/if}}", &ctx()).is_ok());
+    }
+
+    #[test]
+    fn float_with_non_finite_bounds_is_an_error_not_a_panic() {
+        assert!(render("{{float 'NaN' 1}}", &ctx()).is_err());
+        assert!(render("{{float '-1e308' '1e308'}}", &ctx()).is_err());
+        assert!(render("{{float 1 2}}", &ctx()).is_ok());
     }
 }

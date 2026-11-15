@@ -18,6 +18,16 @@ fn dir_of(root: &Path) -> PathBuf {
     root.join(MOCKS_DIR)
 }
 
+/// A `mocks` link could lead outside the collection; reads and writes refuse it.
+fn check_dir(root: &Path) -> Result<(), AppError> {
+    if fsio::entry_kind(&dir_of(root)) == Some(EntryKind::Symlink) {
+        return Err(AppError::invalid_input(
+            "The mocks folder is a link. Replace it with a real folder.",
+        ));
+    }
+    Ok(())
+}
+
 /// A mock file name: safe segment ending in `.mock.yaml`.
 pub fn check_file(file: &str) -> Result<&str, AppError> {
     let valid = file.len() > SUFFIX.len() && file.ends_with(SUFFIX) && is_valid_segment(file);
@@ -35,6 +45,7 @@ fn path_of(root: &Path, file: &str) -> Result<PathBuf, AppError> {
 }
 
 pub fn read(root: &Path, file: &str) -> Result<MockEnvironment, AppError> {
+    check_dir(root)?;
     let path = path_of(root, file)?;
     let bytes = fsio::read_bounded(&path)?;
     let mock: MockEnvironment = yaml::parse(file, &bytes)?;
@@ -86,6 +97,7 @@ pub fn write(root: &Path, file: Option<&str>, mock: &MockEnvironment) -> Result<
         None => new_file_name(root, &mock.name)?,
     };
     validate(&name, mock)?;
+    check_dir(root)?;
     let text = emit(mock)?;
     fsio::create_dir_all(&dir_of(root))?;
     fsio::write_atomic(&path_of(root, &name)?, text.as_bytes())?;
@@ -108,6 +120,17 @@ pub fn delete(root: &Path, file: &str) -> Result<(), AppError> {
 mod tests {
     use super::super::model::tests_support::sample;
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_mocks_folder_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("mocks")).unwrap();
+        assert!(write(dir.path(), None, &sample()).is_err());
+        assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
+        assert!(read(dir.path(), "users.mock.yaml").is_err());
+    }
 
     #[test]
     fn writes_reads_and_lists_with_stable_output() {

@@ -1,8 +1,9 @@
 //! The HTTP/1 listener for one running mock (plan 11 §5): the same accept-loop shape as
 //! the webhook listener, answering from the mock engine.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -19,7 +20,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{watch, Semaphore};
 use tokio::task::JoinSet;
 
-use super::engine::{respond, Compiled, Reply};
+use super::engine::{failed_reply, respond, Compiled, Reply};
 use super::model::{MockBind, MockEnvironment};
 use super::request::{parse_cookies, parse_pairs, RequestCtx};
 use super::types::MockLogEntry;
@@ -36,10 +37,14 @@ const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_HEADERS: usize = 100;
 const MAX_HEAD_BYTES: usize = 64 * 1024;
 const MAX_CONNECTIONS: usize = 32;
+/// One client cannot hold more than this many of the connections.
+const MAX_PER_CLIENT: usize = 8;
+/// A connection is closed after this long however it is used (slow readers, endless keep-alive).
+const MAX_CONNECTION_LIFETIME: Duration = Duration::from_secs(300);
 /// Requests larger than this get a 413 and are not matched.
 pub const MAX_REQUEST_BODY: usize = 1024 * 1024;
 /// Body text kept in the log per request.
-const MAX_LOGGED_BODY: usize = 64 * 1024;
+const MAX_LOGGED_BODY: usize = 16 * 1024;
 pub const MAX_LOG_ENTRIES: usize = 500;
 
 /// What one running mock has served; shared with the connection tasks.
@@ -136,6 +141,7 @@ pub async fn start(shared: Arc<Shared>) -> Result<RunningServer, AppError> {
         AppError::internal("Could not start the mock server.").with_detail(source.to_string())
     })?;
     refuse_own_port(&shared.compiled.mock.proxy, port)?;
+    refuse_exposed_internal_proxy(mock)?;
     let acceptor = if shared.compiled.mock.tls {
         Some(tls::acceptor()?)
     } else {
@@ -151,16 +157,119 @@ pub(crate) fn refuse_own_port(target: &str, port: u16) -> Result<(), AppError> {
     let Ok(url) = url::Url::parse(target) else {
         return Ok(());
     };
-    let local = matches!(
-        url.host_str(),
-        Some("localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0")
-    );
+    let local = url.host_str().is_some_and(|host| {
+        let host = host.trim_start_matches('[').trim_end_matches(']');
+        host.eq_ignore_ascii_case("localhost")
+            || host
+                .parse::<IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    });
     if local && url.port_or_known_default() == Some(port) {
         return Err(AppError::invalid_input(
             "The proxy target is this mock itself. Point it at another server.",
         ));
     }
     Ok(())
+}
+
+/// Open connections per client address.
+#[derive(Clone, Default)]
+struct Clients(Arc<Mutex<HashMap<IpAddr, usize>>>);
+
+struct ClientSlot {
+    clients: Clients,
+    ip: IpAddr,
+}
+
+impl Clients {
+    fn admit(&self, ip: IpAddr) -> Option<ClientSlot> {
+        let mut open = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let count = open.entry(ip).or_insert(0);
+        if *count >= MAX_PER_CLIENT {
+            return None;
+        }
+        *count += 1;
+        Some(ClientSlot {
+            clients: self.clone(),
+            ip,
+        })
+    }
+}
+
+impl Drop for ClientSlot {
+    fn drop(&mut self) {
+        let mut open = self
+            .clients
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some(count) = open.get_mut(&self.ip) {
+            *count -= 1;
+            if *count == 0 {
+                open.remove(&self.ip);
+            }
+        }
+    }
+}
+
+/// A host on this machine or a private network: never a good proxy target for a mock that
+/// other computers can reach.
+pub(crate) fn is_internal_host(host: &str) -> bool {
+    let host = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    if host == "localhost"
+        || host.ends_with(".localhost")
+        || host.ends_with(".local")
+        || host.ends_with(".internal")
+        || !host.contains('.') && host.parse::<IpAddr>().is_err()
+    {
+        return true;
+    }
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => {
+            ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified()
+        }
+        Ok(IpAddr::V6(ip)) => {
+            let first = ip.segments()[0];
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || first & 0xfe00 == 0xfc00
+                || first & 0xffc0 == 0xfe80
+                || ip
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_loopback() || v4.is_private() || v4.is_link_local())
+        }
+        Err(_) => false,
+    }
+}
+
+pub(crate) fn refuse_exposed_internal_proxy(mock: &MockEnvironment) -> Result<(), AppError> {
+    if mock.bind != MockBind::AllInterfaces || mock.proxy.is_empty() {
+        return Ok(());
+    }
+    let internal = url::Url::parse(&mock.proxy)
+        .ok()
+        .and_then(|url| url.host_str().map(is_internal_host))
+        .unwrap_or(true);
+    if internal {
+        return Err(AppError::invalid_input(
+            "A mock that listens on all interfaces cannot proxy to this computer or a private network. Listen on this computer only, or proxy to a public server.",
+        ));
+    }
+    Ok(())
+}
+
+/// A name a browser on this computer uses for the mock; anything else is a rebound domain.
+fn is_loopback_host(host_header: &str) -> bool {
+    let host = if let Some(rest) = host_header.strip_prefix('[') {
+        rest.split(']').next().unwrap_or("")
+    } else {
+        host_header.split(':').next().unwrap_or("")
+    };
+    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
 }
 
 async fn accept_loop(
@@ -170,6 +279,7 @@ async fn accept_loop(
     mut stopped: watch::Receiver<bool>,
 ) {
     let permits = Arc::new(Semaphore::new(MAX_CONNECTIONS));
+    let clients = Clients::default();
     let mut connections: JoinSet<()> = JoinSet::new();
     loop {
         let permit = tokio::select! {
@@ -189,19 +299,27 @@ async fn accept_loop(
         };
         match accepted {
             Ok((stream, remote)) => {
+                let Some(slot) = clients.admit(remote.ip()) else {
+                    drop(stream);
+                    continue;
+                };
                 let (shared, stopped) = (Arc::clone(&shared), stopped.clone());
                 let acceptor = acceptor.clone();
                 connections.spawn(async move {
-                    match acceptor {
-                        Some(acceptor) => {
-                            let handshake =
-                                tokio::time::timeout(HEADER_TIMEOUT, acceptor.accept(stream));
-                            if let Ok(Ok(secure)) = handshake.await {
-                                serve(secure, remote, shared, stopped).await;
+                    let work = async {
+                        match acceptor {
+                            Some(acceptor) => {
+                                let handshake =
+                                    tokio::time::timeout(HEADER_TIMEOUT, acceptor.accept(stream));
+                                if let Ok(Ok(secure)) = handshake.await {
+                                    serve(secure, remote, shared, stopped).await;
+                                }
                             }
+                            None => serve(stream, remote, shared, stopped).await,
                         }
-                        None => serve(stream, remote, shared, stopped).await,
-                    }
+                    };
+                    let _ = tokio::time::timeout(MAX_CONNECTION_LIFETIME, work).await;
+                    drop(slot);
                     drop(permit);
                 });
             }
@@ -243,6 +361,18 @@ async fn serve<S>(
             let _ = connection.as_mut().await;
         }
     }
+}
+
+/// `text` cut to at most `max` bytes at a character boundary.
+fn truncate_utf8(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let mut end = max;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
 }
 
 fn now_ms() -> f64 {
@@ -328,6 +458,9 @@ async fn resolve(
     body: Vec<u8>,
 ) -> Outgoing {
     if reply.forward {
+        if ctx.header(proxy::HOPS_HEADER).is_some() {
+            return problem(508, "Proxy loop detected.");
+        }
         let Some(client) = &shared.upstream else {
             return problem(502, "Proxy mode is not available.");
         };
@@ -360,8 +493,8 @@ async fn resolve(
     }
 }
 
-fn to_response(out: &Outgoing) -> Response<Full<Bytes>> {
-    let mut response = Response::new(Full::new(Bytes::from(out.body.clone())));
+fn to_response(out: Outgoing) -> Response<Full<Bytes>> {
+    let mut response = Response::new(Full::new(Bytes::from(out.body)));
     *response.status_mut() = http::StatusCode::from_u16(out.status).unwrap_or(http::StatusCode::OK);
     for (name, value) in &out.headers {
         let parsed = (
@@ -369,7 +502,7 @@ fn to_response(out: &Outgoing) -> Response<Full<Bytes>> {
             http::HeaderValue::from_str(value),
         );
         if let (Ok(name), Ok(value)) = parsed {
-            response.headers_mut().insert(name, value);
+            response.headers_mut().append(name, value);
         }
     }
     response
@@ -389,6 +522,12 @@ async fn handle(
         BodyRead::Failed => return Ok(plain(400, "Bad request.")),
     };
     let ctx = context_of(&parts, remote, &bytes);
+    if shared.compiled.mock.bind == MockBind::Loopback
+        && !is_loopback_host(&ctx.host)
+        && !ctx.host.is_empty()
+    {
+        return Ok(plain(421, "Misdirected request."));
+    }
     let logged = (
         ctx.method.clone(),
         ctx.path.clone(),
@@ -403,15 +542,25 @@ async fn handle(
             enabled: true,
         })
         .collect();
-    let body_text: String = ctx.body_text.chars().take(MAX_LOGGED_BODY).collect();
+    let body_text = truncate_utf8(&ctx.body_text, MAX_LOGGED_BODY).to_string();
     let body_truncated = body_text.len() < ctx.body_text.len();
 
-    let reply = respond(&shared.compiled, ctx.clone());
+    // Templates and regex rules run off the async workers.
+    let (engine, request) = (Arc::clone(&shared), ctx.clone());
+    let reply = match tokio::task::spawn_blocking(move || respond(&engine.compiled, request)).await
+    {
+        Ok(reply) => reply,
+        Err(source) => {
+            tracing::warn!(mock = %shared.file, %source, "mock engine failed");
+            failed_reply()
+        }
+    };
     if !reply.delay.is_zero() {
         tokio::time::sleep(reply.delay).await;
     }
     let outgoing = resolve(&shared, &reply, &ctx, &logged.2, bytes.to_vec()).await;
     let duration_ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
+    let status = outgoing.status;
     shared.record(MockLogEntry {
         id: 0,
         at_ms: now_ms(),
@@ -424,8 +573,52 @@ async fn handle(
         remote: remote.to_string(),
         route_id: reply.route_id.clone(),
         response_id: reply.response_id.clone(),
-        status: outgoing.status,
+        status,
         duration_ms,
     });
-    Ok(to_response(&outgoing))
+    Ok(to_response(outgoing))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncation_never_splits_a_character() {
+        assert_eq!(truncate_utf8("héllo", 2), "h");
+        assert_eq!(truncate_utf8("héllo", 3), "hé");
+        assert_eq!(truncate_utf8("abc", 10), "abc");
+    }
+
+    #[test]
+    fn internal_hosts_are_recognised() {
+        for host in [
+            "localhost",
+            "a.local",
+            "10.1.2.3",
+            "192.168.0.9",
+            "172.16.0.1",
+            "169.254.169.254",
+            "[::1]",
+            "fd00::1",
+            "fe80::1",
+            "intranet",
+            "::ffff:127.0.0.1",
+        ] {
+            assert!(is_internal_host(host), "{host}");
+        }
+        for host in ["api.example.com", "8.8.8.8", "2606:4700::1111"] {
+            assert!(!is_internal_host(host), "{host}");
+        }
+    }
+
+    #[test]
+    fn only_local_names_pass_the_host_check() {
+        for host in ["localhost", "localhost:3000", "127.0.0.1:80", "[::1]:80"] {
+            assert!(is_loopback_host(host), "{host}");
+        }
+        for host in ["evil.example", "127.0.0.1.evil.example", "192.168.1.5:80"] {
+            assert!(!is_loopback_host(host), "{host}");
+        }
+    }
 }

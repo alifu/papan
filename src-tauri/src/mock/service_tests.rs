@@ -301,3 +301,159 @@ async fn an_unreachable_proxy_target_is_a_502_and_a_self_proxy_is_refused() {
     assert!(error.message.contains("itself"));
     service.stop_all().await;
 }
+
+#[tokio::test]
+async fn a_request_with_a_foreign_host_name_is_refused_on_loopback() {
+    let (service, base, _) = start(sample()).await;
+    let client = reqwest::Client::new();
+    let rebound = client
+        .get(format!("{base}/users/1"))
+        .header("host", "evil.example")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rebound.status(), 421);
+    let named = client
+        .get(format!("{base}/users/1"))
+        .header("host", "localhost:1234")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(named.status(), 200);
+    service.stop_all().await;
+}
+
+#[tokio::test]
+async fn one_client_cannot_hold_every_connection() {
+    let (service, base, _) = start(sample()).await;
+    let address = base.trim_start_matches("http://").to_string();
+    let mut held = Vec::new();
+    for _ in 0..8 {
+        held.push(tokio::net::TcpStream::connect(&address).await.unwrap());
+    }
+    // The ninth connection is closed by the server without an answer.
+    let mut ninth = tokio::net::TcpStream::connect(&address).await.unwrap();
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let _ = ninth
+        .write_all(b"GET /users/1 HTTP/1.1\r\nhost: 127.0.0.1\r\n\r\n")
+        .await;
+    let mut buffer = [0u8; 16];
+    let read = tokio::time::timeout(std::time::Duration::from_secs(2), ninth.read(&mut buffer))
+        .await
+        .expect("the server closes the extra connection");
+    assert!(matches!(read, Ok(0) | Err(_)));
+    drop(held);
+    service.stop_all().await;
+}
+
+#[tokio::test]
+async fn a_proxy_loop_between_mocks_ends_in_508() {
+    let sink = Arc::new(Collect::default());
+    let service = MockService::new(sink);
+    let mut a = sample();
+    a.routes.clear();
+    let mut b = a.clone();
+    // B first (no target yet); A forwards to B; then B is restarted forwarding to A.
+    service
+        .start("c1", "b.mock.yaml", ".".into(), b.clone())
+        .await
+        .unwrap();
+    let b_url = service.url_of("c1", "b.mock.yaml").await.unwrap();
+    a.proxy = b_url;
+    service
+        .start("c1", "a.mock.yaml", ".".into(), a)
+        .await
+        .unwrap();
+    let a_url = service.url_of("c1", "a.mock.yaml").await.unwrap();
+    service.stop("c1", "b.mock.yaml").await;
+    b.proxy = a_url.clone();
+    // B's old port is gone, so the loop is closed by asking A for a path: A -> (B down) is a 502,
+    // and a request that already carries the hop header is refused outright.
+    let looped = reqwest::Client::new()
+        .get(format!("{a_url}/x"))
+        .header(super::proxy::HOPS_HEADER, "1")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(looped.status(), 508);
+    service.stop_all().await;
+}
+
+#[tokio::test]
+async fn forwarded_requests_carry_the_client_address_and_keep_every_set_cookie() {
+    let mut upstream = sample();
+    upstream.routes[0].responses[0].headers = vec![];
+    let (up, up_base, _) = start(upstream).await;
+    let mut front = sample();
+    front.routes.clear();
+    front.proxy = up_base;
+    let sink = Arc::new(Collect::default());
+    let service = MockService::new(sink);
+    service
+        .start("c1", "front.mock.yaml", ".".into(), front)
+        .await
+        .unwrap();
+    let base = service.url_of("c1", "front.mock.yaml").await.unwrap();
+    reqwest::get(format!("{base}/users/1")).await.unwrap();
+    let seen = up.log("c1", "m.mock.yaml").await;
+    let header = |name: &str| {
+        seen[0]
+            .headers
+            .iter()
+            .find(|h| h.name == name)
+            .map(|h| h.value.clone())
+    };
+    assert_eq!(header("x-forwarded-for").as_deref(), Some("127.0.0.1"));
+    assert_eq!(header(super::proxy::HOPS_HEADER).as_deref(), Some("1"));
+    service.stop_all().await;
+    up.stop_all().await;
+}
+
+#[tokio::test]
+async fn a_mock_on_all_interfaces_cannot_proxy_to_a_private_host() {
+    for target in [
+        "http://127.0.0.1:9",
+        "http://localhost:9",
+        "http://10.0.0.5",
+        "http://169.254.169.254",
+        "http://[::1]:9",
+        "http://db",
+    ] {
+        let mut mock = sample();
+        mock.bind = super::model::MockBind::AllInterfaces;
+        mock.proxy = target.into();
+        let service = MockService::new(Arc::new(Collect::default()));
+        let error = service
+            .start("c1", "m.mock.yaml", ".".into(), mock)
+            .await
+            .unwrap_err();
+        assert!(
+            error.message.contains("all interfaces"),
+            "{target}: {}",
+            error.message
+        );
+    }
+    let mut ok = sample();
+    ok.bind = super::model::MockBind::AllInterfaces;
+    ok.proxy = "https://api.example.com".into();
+    let service = MockService::new(Arc::new(Collect::default()));
+    service
+        .start("c1", "m.mock.yaml", ".".into(), ok)
+        .await
+        .unwrap();
+    service.stop_all().await;
+}
+
+#[test]
+fn risky_features_name_what_needs_trust() {
+    assert_eq!(super::risky_features(&sample()), None);
+    let mut all = sample();
+    all.bind = super::model::MockBind::AllInterfaces;
+    assert!(super::risky_features(&all).unwrap().contains("interfaces"));
+    let mut proxy = sample();
+    proxy.proxy = "https://x.test".into();
+    assert!(super::risky_features(&proxy).unwrap().contains("forwards"));
+    assert!(super::risky_features(&response_with_file("a.json"))
+        .unwrap()
+        .contains("files"));
+}
