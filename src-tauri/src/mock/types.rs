@@ -46,6 +46,21 @@ impl MockSummary {
     }
 }
 
+/// What a mock import reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum MockImportFormat {
+    Mockoon,
+    Openapi,
+}
+
+/// A mock made from a file, with what could not be carried over.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ImportedMock {
+    pub summary: MockSummary,
+    pub notes: Vec<String>,
+}
+
 /// One request the mock served.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct MockLogEntry {

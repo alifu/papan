@@ -111,6 +111,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             mock::mock_log,
             mock::clear_mock_log,
             mock::mock_from_collection,
+            mock::import_mock,
+            mock::export_mock,
             git::git_status,
             git::git_init,
             git::git_clone,

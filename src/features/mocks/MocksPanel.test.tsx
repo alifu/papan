@@ -115,4 +115,54 @@ describe("MocksPanel", () => {
     );
     expect(useTabsStore.getState().tabs).toHaveLength(0);
   });
+  it("imports a Mockoon file, opens it and reports what was left out", async () => {
+    vi.mocked(api.importMock).mockResolvedValue({
+      summary: { ...listed()[0]!, file: "shop.mock.yaml", name: "Shop" },
+      notes: ["A rule was left out."],
+    });
+    render(<MocksPanel />);
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Import a mock into My API" }),
+    );
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Mockoon file…" }),
+    );
+    await vi.waitFor(() =>
+      expect(useTabsStore.getState().tabs).toHaveLength(1),
+    );
+    expect(api.importMock).toHaveBeenCalledWith("c1", "mockoon");
+    expect(useToastStore.getState().toasts[0]?.message).toMatch(
+      /A rule was left out/,
+    );
+  });
+
+  it("does nothing when the file dialog is cancelled", async () => {
+    vi.mocked(api.importMock).mockResolvedValue(null);
+    render(<MocksPanel />);
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Import a mock into My API" }),
+    );
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "OpenAPI file…" }),
+    );
+    await vi.waitFor(() => expect(api.importMock).toHaveBeenCalled());
+    expect(api.importMock).toHaveBeenCalledWith("c1", "openapi");
+    expect(useTabsStore.getState().tabs).toHaveLength(0);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  it("exports a mock as a Mockoon file", async () => {
+    vi.mocked(api.exportMock).mockResolvedValue("users.mockoon.json");
+    render(<MocksPanel />);
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Actions for Users" }),
+    );
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Export as Mockoon…" }),
+    );
+    await vi.waitFor(() =>
+      expect(useToastStore.getState().toasts).toHaveLength(1),
+    );
+    expect(api.exportMock).toHaveBeenCalledWith("c1", "users.mock.yaml");
+  });
 });

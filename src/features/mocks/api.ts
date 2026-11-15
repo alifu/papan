@@ -1,6 +1,8 @@
 import { commands, events } from "../../ipc/bindings";
 import type {
+  ImportedMock,
   MockEnvironment,
+  MockImportFormat,
   MockLogEntry,
   MockLogged,
   MockSummary,
@@ -21,6 +23,14 @@ export const saveMock = (
 export const mockFromCollection = (
   collectionId: string,
 ): Promise<MockSummary> => commands.mockFromCollection(collectionId);
+export const importMock = (
+  collectionId: string,
+  format: MockImportFormat,
+): Promise<ImportedMock | null> => commands.importMock(collectionId, format);
+export const exportMock = (
+  collectionId: string,
+  file: string,
+): Promise<string | null> => commands.exportMock(collectionId, file);
 export const deleteMock = (collectionId: string, file: string): Promise<null> =>
   commands.deleteMock(collectionId, file);
 export const startMock = (

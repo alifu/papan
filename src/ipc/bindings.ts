@@ -113,6 +113,16 @@ export const commands = {
 	clearMockLog: (collectionId: string, file: string) => __TAURI_INVOKE<null>("clear_mock_log", { collectionId, file }),
 	/**  Writes a new mock with one route per HTTP, GraphQL and SOAP request of the collection. */
 	mockFromCollection: (collectionId: string) => __TAURI_INVOKE<MockSummary>("mock_from_collection", { collectionId }),
+	/**
+	 *  Picks a Mockoon or OpenAPI file, converts it and saves it as a new mock; `None` when the
+	 *  file dialog is cancelled.
+	 */
+	importMock: (collectionId: string, format: MockImportFormat) => __TAURI_INVOKE<ImportedMock | null>("import_mock", { collectionId, format }),
+	/**
+	 *  Saves the mock as a Mockoon environment file; returns the saved file's name, or `None` when
+	 *  the save dialog is cancelled.
+	 */
+	exportMock: (collectionId: string, file: string) => __TAURI_INVOKE<string | null>("export_mock", { collectionId, file }),
 	gitStatus: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_status", { collectionId }),
 	gitInit: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_init", { collectionId }),
 	/**
@@ -572,6 +582,12 @@ export type ImportOptions = {
 
 export type ImportTarget = { type: "new_collection" } | { type: "collection"; collection_id: string };
 
+/**  A mock made from a file, with what could not be carried over. */
+export type ImportedMock = {
+	summary: MockSummary,
+	notes: string[],
+};
+
 /**  A header, form field or other name/value row that can be switched off. */
 export type KeyValue = {
 	name: string,
@@ -600,6 +616,9 @@ export type MockEnvironment = {
 	/**  Answer for requests that match no route (before the built-in 404); `rules` are ignored. */
 	fallback?: MockResponse | null,
 };
+
+/**  What a mock import reads. */
+export type MockImportFormat = "mockoon" | "openapi";
 
 /**  One request the mock served. */
 export type MockLogEntry = {

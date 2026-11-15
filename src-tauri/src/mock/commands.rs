@@ -4,10 +4,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::model::MockEnvironment;
-use super::types::{MockLogEntry, MockLogged, MockSummary};
+use super::types::{ImportedMock, MockImportFormat, MockLogEntry, MockLogged, MockSummary};
 use super::{disk, MockService, MockSink};
 use crate::error::AppError;
 use crate::store::StoreState;
@@ -271,6 +272,92 @@ pub async fn mock_from_collection(
         AppError::internal("Could not create the mock.").with_detail(source.to_string())
     })?;
     logged(made)
+}
+
+async fn dialog<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> MockResult<T> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|source| {
+            AppError::internal("The file dialog failed.").with_detail(source.to_string())
+        })
+}
+
+fn picked_path(picked: tauri_plugin_dialog::FilePath) -> MockResult<PathBuf> {
+    picked.into_path().map_err(|source| {
+        AppError::invalid_input("That file cannot be used.").with_detail(source.to_string())
+    })
+}
+
+/// Picks a Mockoon or OpenAPI file, converts it and saves it as a new mock; `None` when the
+/// file dialog is cancelled.
+#[tauri::command]
+#[specta::specta]
+pub async fn import_mock(
+    app: AppHandle,
+    state: State<'_, StoreState>,
+    collection_id: String,
+    format: MockImportFormat,
+) -> MockResult<Option<ImportedMock>> {
+    let root = root_of(&state, &collection_id)?;
+    let picked = dialog(move || {
+        app.dialog()
+            .file()
+            .add_filter("Mockoon or OpenAPI", &["json", "yaml", "yml"])
+            .blocking_pick_file()
+    })
+    .await?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = logged(picked_path(picked))?;
+    let made = tauri::async_runtime::spawn_blocking(move || {
+        let bytes = crate::store::fsio::read_bounded(&path)?;
+        let text = String::from_utf8(bytes)
+            .map_err(|_| AppError::invalid_input("That file is not valid UTF-8 text."))?;
+        let converted = match format {
+            MockImportFormat::Mockoon => super::mockoon::import(&text)?,
+            MockImportFormat::Openapi => super::openapi::import(&text)?,
+        };
+        let file = disk::write(&root, None, &converted.mock)?;
+        Ok(ImportedMock {
+            summary: MockSummary::of(&file, &converted.mock),
+            notes: converted.notes,
+        })
+    })
+    .await
+    .map_err(|source| {
+        AppError::internal("Could not import the mock.").with_detail(source.to_string())
+    })?;
+    logged(made).map(Some)
+}
+
+/// Saves the mock as a Mockoon environment file; returns the saved file's name, or `None` when
+/// the save dialog is cancelled.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_mock(
+    app: AppHandle,
+    state: State<'_, StoreState>,
+    collection_id: String,
+    file: String,
+) -> MockResult<Option<String>> {
+    let root = root_of(&state, &collection_id)?;
+    let mock = logged(disk::read(&root, &file))?;
+    let text = logged(super::mockoon::export(&mock))?;
+    let name = format!("{}.mockoon.json", file.trim_end_matches(disk::SUFFIX));
+    let picked =
+        dialog(move || app.dialog().file().set_file_name(name).blocking_save_file()).await?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let target = logged(picked_path(picked))?;
+    let saved = target.file_name().map(|n| n.to_string_lossy().into_owned());
+    logged(
+        tokio::fs::write(&target, text)
+            .await
+            .map_err(AppError::from),
+    )?;
+    Ok(saved)
 }
 
 #[cfg(test)]

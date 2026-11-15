@@ -1,8 +1,9 @@
 import { useEffect } from "react";
+import type { MockImportFormat } from "../../ipc/bindings";
 import { useTabsStore } from "../../shell/tabsStore";
 import { Button } from "../../ui/Button";
 import { Menu } from "../../ui/Menu";
-import { reportError } from "../../ui/toastStore";
+import { reportError, showToast } from "../../ui/toastStore";
 import { useCollectionsStore } from "../collections/collectionsStore";
 import * as api from "./api";
 import { newMock } from "./mockModel";
@@ -47,6 +48,33 @@ export function MocksPanel() {
     }
   };
 
+  const importFile = async (collectionId: string, format: MockImportFormat) => {
+    try {
+      const done = await api.importMock(collectionId, format);
+      if (!done) return; // the file dialog was cancelled
+      await useMockStore.getState().load(collectionId);
+      useTabsStore
+        .getState()
+        .openMock(collectionId, done.summary.file, done.summary.name);
+      if (done.notes.length > 0)
+        showToast({
+          kind: "info",
+          message: `Imported with changes: ${done.notes.join(" ")}`,
+        });
+    } catch (err) {
+      reportError(err);
+    }
+  };
+
+  const exportFile = async (collectionId: string, file: string) => {
+    try {
+      const saved = await api.exportMock(collectionId, file);
+      if (saved) showToast({ kind: "info", message: `Saved ${saved}.` });
+    } catch (err) {
+      reportError(err);
+    }
+  };
+
   const available = trees.filter((t) => t.collection.available);
   if (available.length === 0)
     return (
@@ -76,6 +104,20 @@ export function MocksPanel() {
                 label="From Requests"
                 aria-label={`Mock from the requests of ${collection.name}`}
                 onClick={() => void fromRequests(collection.id)}
+              />
+              <Menu
+                label={`Import a mock into ${collection.name}`}
+                icon="chevron-down"
+                items={[
+                  {
+                    label: "Mockoon file…",
+                    onSelect: () => void importFile(collection.id, "mockoon"),
+                  },
+                  {
+                    label: "OpenAPI file…",
+                    onSelect: () => void importFile(collection.id, "openapi"),
+                  },
+                ]}
               />
             </div>
             {mocks.length === 0 ? (
@@ -129,6 +171,12 @@ export function MocksPanel() {
                     icon="chevron-down"
                     className="tree-menu"
                     items={[
+                      {
+                        label: "Export as Mockoon…",
+                        disabled: Boolean(mock.error),
+                        onSelect: () =>
+                          void exportFile(collection.id, mock.file),
+                      },
                       {
                         label: "Delete",
                         onSelect: () =>
