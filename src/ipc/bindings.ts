@@ -676,6 +676,8 @@ export type MockRoute = {
 	bucket?: string,
 	/**  The item field that identifies an item (CRUD routes). */
 	id_key?: string,
+	/**  WebSocket routes: a message sent as soon as a client connects; empty = none. */
+	greeting?: string,
 	responses?: MockResponse[],
 };
 
@@ -892,7 +894,9 @@ export type ResponseMeta = {
 export type ResponseMode = "rules" | "sequential" | "random" | "disable_rules";
 
 /**  What a route does: answer from its responses, or serve a data bucket as a REST resource. */
-export type RouteKind = "http" | "crud";
+export type RouteKind = "http" | "crud" | 
+/**  A WebSocket endpoint: `greeting` is sent on connect and `responses` answer each message. */
+"ws";
 
 export type Rule = {
 	target: RuleTarget,

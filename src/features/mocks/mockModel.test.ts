@@ -8,6 +8,7 @@ import {
   newFallback,
   newMock,
   newRoute,
+  newWsRoute,
   normalizeMock,
   removeAt,
   replaceAt,
@@ -243,5 +244,16 @@ describe("draftProblem for 11d", () => {
       url: "https://a.test",
     }));
     expect(draftProblem(mockWith(six))).toMatch(/too many/);
+  });
+
+  it("keeps a WebSocket route's greeting and lets it lose its last reply", () => {
+    const route = { ...newWsRoute(), endpoint: "chat", greeting: "hi" };
+    const mock = normalizeMock({ ...newMock("M"), routes: [route] });
+    expect(mock.routes[0]).toMatchObject({ kind: "ws", greeting: "hi" });
+    expect(endpointLabel(route)).toBe("WS /chat");
+    const one = { ...route, responses: [newRoute().responses[0]!] };
+    expect(withoutResponse(one, 0).responses).toEqual([]);
+    expect(withoutResponse(newRoute(), 0).responses).toHaveLength(1);
+    expect(draftProblem({ ...newMock("M"), routes: [one] })).toBeNull();
   });
 });

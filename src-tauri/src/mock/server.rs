@@ -17,7 +17,7 @@ use hyper::{Request, Response};
 use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
-use tokio::sync::{watch, Semaphore};
+use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinSet;
 
 use super::engine::{failed_reply, respond, Compiled, PreparedCallback, Reply};
@@ -25,7 +25,7 @@ use super::model::{MockBind, MockEnvironment};
 use super::request::{parse_cookies, parse_pairs, RequestCtx};
 use super::types::MockLogEntry;
 use super::MockSink;
-use super::{files, proxy, tls};
+use super::{files, proxy, tls, ws};
 use crate::engine::http::oauth::listener::bind_exclusive;
 use crate::error::AppError;
 use crate::store::types::KeyValue;
@@ -137,7 +137,11 @@ impl Shared {
         self.log.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn record(&self, mut entry: MockLogEntry) {
+    pub(super) fn compiled(&self) -> &Compiled {
+        &self.compiled
+    }
+
+    pub(super) fn record(&self, mut entry: MockLogEntry) {
         entry.id = self.next_id.fetch_add(1, Ordering::Relaxed);
         {
             let mut log = self.log();
@@ -264,6 +268,13 @@ impl Drop for ClientSlot {
     }
 }
 
+/// Holds a connection's slots (global permit, per-client count) for as long as the connection
+/// or the WebSocket session it turned into is alive.
+struct ConnGuard {
+    _slot: ClientSlot,
+    _permit: OwnedSemaphorePermit,
+}
+
 /// A host on this machine or a private network: never a good proxy target for a mock that
 /// other computers can reach.
 pub(crate) fn is_internal_host(host: &str) -> bool {
@@ -369,22 +380,26 @@ async fn accept_loop(
                 };
                 let (shared, stopped) = (Arc::clone(&shared), stopped.clone());
                 let acceptor = acceptor.clone();
+                let guard = Arc::new(ConnGuard {
+                    _slot: slot,
+                    _permit: permit,
+                });
                 connections.spawn(async move {
+                    let held = Arc::clone(&guard);
                     let work = async {
                         match acceptor {
                             Some(acceptor) => {
                                 let handshake =
                                     tokio::time::timeout(HEADER_TIMEOUT, acceptor.accept(stream));
                                 if let Ok(Ok(secure)) = handshake.await {
-                                    serve(secure, remote, shared, stopped).await;
+                                    serve(secure, remote, shared, stopped, held).await;
                                 }
                             }
-                            None => serve(stream, remote, shared, stopped).await,
+                            None => serve(stream, remote, shared, stopped, held).await,
                         }
                     };
                     let _ = tokio::time::timeout(MAX_CONNECTION_LIFETIME, work).await;
-                    drop(slot);
-                    drop(permit);
+                    drop(guard);
                 });
             }
             Err(source) => {
@@ -406,17 +421,24 @@ async fn serve<S>(
     remote: SocketAddr,
     shared: Arc<Shared>,
     mut stopped: watch::Receiver<bool>,
+    guard: Arc<ConnGuard>,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    let service = service_fn(move |request| handle(request, remote, Arc::clone(&shared)));
+    let upgrades = Upgrades {
+        stopped: stopped.clone(),
+        guard,
+    };
+    let service =
+        service_fn(move |request| handle(request, remote, Arc::clone(&shared), upgrades.clone()));
     let connection = http1::Builder::new()
         .timer(TokioTimer::new())
         .header_read_timeout(HEADER_TIMEOUT)
         .max_headers(MAX_HEADERS)
         .max_buf_size(MAX_HEAD_BYTES)
         .keep_alive(true)
-        .serve_connection(TokioIo::new(stream), service);
+        .serve_connection(TokioIo::new(stream), service)
+        .with_upgrades();
     tokio::pin!(connection);
     tokio::select! {
         _ = connection.as_mut() => {}
@@ -439,7 +461,7 @@ fn truncate_utf8(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
-fn now_ms() -> f64 {
+pub(super) fn now_ms() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0.0, |d| d.as_secs_f64() * 1000.0)
@@ -594,12 +616,116 @@ fn to_response(out: Outgoing) -> Response<Full<Bytes>> {
     response
 }
 
+/// What a WebSocket session keeps from its connection: the stop signal and the slots.
+#[derive(Clone)]
+struct Upgrades {
+    stopped: watch::Receiver<bool>,
+    guard: Arc<ConnGuard>,
+}
+
+fn header_has(parts: &http::request::Parts, name: &str, word: &str) -> bool {
+    parts
+        .headers
+        .get_all(name)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .any(|token| token.trim().eq_ignore_ascii_case(word))
+}
+
+fn wants_websocket(parts: &http::request::Parts) -> bool {
+    parts.method == http::Method::GET
+        && header_has(parts, "upgrade", "websocket")
+        && header_has(parts, "connection", "upgrade")
+}
+
+/// Without CORS a mock answers only pages of its own origin; WebSockets have no CORS, so the
+/// `Origin` header is checked here.
+fn origin_refused(mock: &MockEnvironment, ctx: &RequestCtx) -> bool {
+    let Some(origin) = ctx.header("origin") else {
+        return false;
+    };
+    let authority = origin.split_once("://").map_or(origin, |(_, rest)| rest);
+    !mock.cors && !authority.eq_ignore_ascii_case(&ctx.host)
+}
+
+/// Completes the WebSocket handshake for a matched route and hands the connection to a session.
+fn accept_websocket(
+    plan: ws::WsPlan,
+    parts: &http::request::Parts,
+    upgrade: hyper::upgrade::OnUpgrade,
+    shared: &Arc<Shared>,
+    remote: SocketAddr,
+    upgrades: Upgrades,
+) -> Response<Full<Bytes>> {
+    let version_ok = parts
+        .headers
+        .get("sec-websocket-version")
+        .is_some_and(|v| v.as_bytes() == b"13");
+    let Some(key) = parts
+        .headers
+        .get("sec-websocket-key")
+        .filter(|_| version_ok)
+    else {
+        let mut response = plain(400, "Bad WebSocket handshake.");
+        response.headers_mut().insert(
+            "Sec-WebSocket-Version",
+            http::HeaderValue::from_static("13"),
+        );
+        return response;
+    };
+    let accept = tokio_tungstenite::tungstenite::handshake::derive_accept_key(key.as_bytes());
+    shared.record(MockLogEntry {
+        id: 0,
+        at_ms: now_ms(),
+        method: "GET".into(),
+        path: plan.ctx.path.clone(),
+        query: parts.uri.query().unwrap_or("").to_string(),
+        headers: Vec::new(),
+        body_text: String::new(),
+        body_truncated: false,
+        remote: remote.to_string(),
+        route_id: Some(plan.route_id.clone()),
+        response_id: None,
+        status: 101,
+        duration_ms: 0,
+    });
+    let engine = Arc::clone(shared);
+    tokio::spawn(async move {
+        match upgrade.await {
+            Ok(upgraded) => {
+                ws::session(
+                    TokioIo::new(upgraded),
+                    engine,
+                    plan,
+                    remote,
+                    upgrades.stopped.clone(),
+                )
+                .await;
+            }
+            Err(source) => tracing::debug!(%source, "websocket upgrade failed"),
+        }
+        drop(upgrades.guard);
+    });
+    let mut response = Response::new(Full::new(Bytes::new()));
+    *response.status_mut() = http::StatusCode::SWITCHING_PROTOCOLS;
+    let headers = response.headers_mut();
+    headers.insert("Upgrade", http::HeaderValue::from_static("websocket"));
+    headers.insert("Connection", http::HeaderValue::from_static("Upgrade"));
+    if let Ok(value) = http::HeaderValue::from_str(&accept) {
+        headers.insert("Sec-WebSocket-Accept", value);
+    }
+    response
+}
+
 async fn handle(
-    request: Request<Incoming>,
+    mut request: Request<Incoming>,
     remote: SocketAddr,
     shared: Arc<Shared>,
+    upgrades: Upgrades,
 ) -> Result<Response<Full<Bytes>>, std::convert::Infallible> {
     let started = Instant::now();
+    let upgrade = hyper::upgrade::on(&mut request);
     let (parts, body) = request.into_parts();
     let bytes = match collect_body(body, MAX_REQUEST_BODY, BODY_TIMEOUT).await {
         BodyRead::Complete(bytes) => bytes,
@@ -613,6 +739,16 @@ async fn handle(
         && !ctx.host.is_empty()
     {
         return Ok(plain(421, "Misdirected request."));
+    }
+    if wants_websocket(&parts) {
+        if let Some(plan) = ws::find(&shared.compiled, &ctx) {
+            if origin_refused(&shared.compiled.mock, &ctx) {
+                return Ok(plain(403, "Cross-origin WebSocket refused."));
+            }
+            return Ok(accept_websocket(
+                plan, &parts, upgrade, &shared, remote, upgrades,
+            ));
+        }
     }
     let logged = (
         ctx.method.clone(),

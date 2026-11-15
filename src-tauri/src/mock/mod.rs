@@ -19,6 +19,9 @@ mod service_tests;
 pub mod template;
 pub mod tls;
 pub mod types;
+pub mod ws;
+#[cfg(test)]
+mod ws_tests;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

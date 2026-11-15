@@ -133,6 +133,7 @@ fn route_for(source: &Source, method: String, endpoint: String) -> MockRoute {
         kind: RouteKind::Http,
         bucket: String::new(),
         id_key: default_id_key(),
+        greeting: String::new(),
         responses: vec![MockResponse {
             id: new_id(),
             label: source.name.chars().take(MAX_NAME_CHARS).collect(),

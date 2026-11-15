@@ -6,6 +6,9 @@ use regex::Regex;
 
 use super::model::{MockRoute, RouteKind};
 
+/// The "method" of a WebSocket upgrade: matches only WebSocket routes, and they match nothing else. It holds a NUL so no HTTP method can equal it.
+pub const WS_METHOD: &str = "\0ws";
+
 #[derive(Debug, Clone)]
 pub struct CompiledRoute {
     method: String,
@@ -62,10 +65,10 @@ impl CompiledRoute {
         let crud = route.kind == RouteKind::Crud;
         let (pattern, params) = compile_endpoint(&route.endpoint, crud)?;
         Some(Self {
-            method: if crud {
-                "any".into()
-            } else {
-                route.method.clone()
+            method: match route.kind {
+                RouteKind::Crud => "any".into(),
+                RouteKind::Ws => WS_METHOD.into(),
+                RouteKind::Http => route.method.clone(),
             },
             pattern,
             params,
@@ -114,7 +117,9 @@ pub fn find_route(
         .iter()
         .zip(compiled)
         .enumerate()
-        .filter(|(_, (route, _))| route.enabled)
+        .filter(|(_, (route, _))| {
+            route.enabled && (route.kind == RouteKind::Ws) == method.eq_ignore_ascii_case(WS_METHOD)
+        })
         .find_map(|(index, (_, compiled))| {
             let params = compiled.as_ref()?.matches(method, &path)?;
             Some(Matched { index, params })
@@ -149,6 +154,7 @@ mod tests {
             kind: super::super::model::RouteKind::Http,
             bucket: String::new(),
             id_key: "id".into(),
+            greeting: String::new(),
             responses: vec![MockResponse {
                 id: "r".into(),
                 label: String::new(),

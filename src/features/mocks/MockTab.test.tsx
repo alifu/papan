@@ -342,4 +342,32 @@ describe("MockTab data, fallback and callbacks", () => {
     );
     expect(screen.queryByLabelText("Response 1 callback 1 URL")).toBeNull();
   });
+
+  it("adds a WebSocket route with a greeting and replies and saves them", async () => {
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add WebSocket route" }),
+    );
+    expect(screen.getByRole("button", { name: /^WS \// })).toBeVisible();
+    await userEvent.type(screen.getByLabelText("Endpoint"), "chat/:room");
+    await userEvent.type(screen.getByLabelText("Greeting"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Add reply" }));
+    await userEvent.type(screen.getByLabelText("Reply 1 message"), "pong");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const sent = vi.mocked(api.saveMock).mock.calls[0]![2];
+    expect(sent.routes?.[1]).toMatchObject({
+      kind: "ws",
+      endpoint: "chat/:room",
+      greeting: "hello",
+    });
+    expect(sent.routes?.[1]?.responses).toHaveLength(1);
+    expect(sent.routes?.[1]?.responses?.[0]).toMatchObject({
+      body: "pong",
+      default: true,
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove reply 1" }),
+    );
+    expect(screen.queryByLabelText("Reply 1 message")).toBeNull();
+  });
 });

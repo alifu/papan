@@ -13,6 +13,7 @@ import {
   draftProblem,
   endpointLabel,
   newDataRoute,
+  newWsRoute,
   newRoute,
   newBucket,
   removeAt,
@@ -128,6 +129,11 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
     setSelected(draft.routes.length);
   };
 
+  const addWsRoute = () => {
+    setDraft({ ...draft, routes: [...draft.routes, newWsRoute()] });
+    setSelected(draft.routes.length);
+  };
+
   const removeRoute = () => {
     setDraft({ ...draft, routes: [...removeAt(draft.routes, selected)] });
     setSelected(Math.max(0, selected - 1));
@@ -225,6 +231,13 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
                     icon="plus"
                     label="Add data route"
                     onClick={addDataRoute}
+                  />
+                </li>
+                <li>
+                  <Button
+                    icon="plus"
+                    label="Add WebSocket route"
+                    onClick={addWsRoute}
                   />
                 </li>
               </ul>

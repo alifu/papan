@@ -170,6 +170,7 @@ mod tests {
             kind: super::super::model::RouteKind::Http,
             bucket: String::new(),
             id_key: "id".into(),
+            greeting: String::new(),
             responses,
         }
     }

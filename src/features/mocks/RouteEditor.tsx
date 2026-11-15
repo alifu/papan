@@ -13,6 +13,7 @@ import {
   type MRoute,
 } from "./mockModel";
 import { RulesEditor } from "./RulesEditor";
+import { WsRouteEditor } from "./WsRouteEditor";
 
 export const MAX_RESPONSES = 50;
 
@@ -134,6 +135,9 @@ export function RouteEditor({ route, buckets, onChange }: RouteEditorProps) {
     return (
       <DataRouteEditor route={route} buckets={buckets} onChange={onChange} />
     );
+  }
+  if (route.kind === "ws") {
+    return <WsRouteEditor route={route} onChange={onChange} />;
   }
   return (
     <div className="mock-route">

@@ -78,6 +78,7 @@ export const normalizeMock = (mock: MockEnvironment): MEnv => ({
     kind: route.kind ?? "http",
     bucket: route.bucket ?? "",
     id_key: route.id_key ?? "id",
+    greeting: route.greeting ?? "",
     responses: (route.responses ?? []).map(normalizeResponse),
   })),
 });
@@ -175,6 +176,7 @@ export const newRoute = (): MRoute => ({
   kind: "http",
   bucket: "",
   id_key: "id",
+  greeting: "",
   responses: [newResponse(true)],
 });
 
@@ -200,6 +202,13 @@ export const newDataRoute = (bucketId: string): MRoute => ({
   ...newRoute(),
   kind: "crud",
   bucket: bucketId,
+  responses: [],
+});
+
+/** A WebSocket endpoint: a greeting on connect, and replies to the messages that follow. */
+export const newWsRoute = (): MRoute => ({
+  ...newRoute(),
+  kind: "ws",
   responses: [],
 });
 
@@ -253,11 +262,11 @@ export function withDefault(route: MRoute, index: number): MRoute {
   };
 }
 
-/** Removes a response; the route keeps one, and a default if it had one. */
+/** Removes a response; a route keeps one (a WebSocket route may have none), and a default if it had one. */
 export function withoutResponse(route: MRoute, index: number): MRoute {
-  if (route.responses.length <= 1) return route;
+  if (route.kind !== "ws" && route.responses.length <= 1) return route;
   const rest = removeAt(route.responses, index);
-  const hasDefault = rest.some((r) => r.default);
+  const hasDefault = rest.length === 0 || rest.some((r) => r.default);
   return {
     ...route,
     responses: hasDefault
@@ -381,8 +390,15 @@ export function draftProblem(mock: MEnv): string | null {
   return null;
 }
 
+const routeVerb = (route: MRoute): string =>
+  route.kind === "crud"
+    ? "DATA"
+    : route.kind === "ws"
+      ? "WS"
+      : route.method.toUpperCase();
+
 export const endpointLabel = (route: MRoute): string =>
-  `${route.kind === "crud" ? "DATA" : route.method.toUpperCase()} /${route.endpoint.replace(/^\/+/, "")}`;
+  `${routeVerb(route)} /${route.endpoint.replace(/^\/+/, "")}`;
 
 const slashes = /^\/+|\/+$/g;
 

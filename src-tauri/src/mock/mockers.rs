@@ -217,6 +217,7 @@ fn route_of(
         } else {
             crud_key
         },
+        greeting: String::new(),
         responses,
     }
 }
@@ -397,9 +398,14 @@ fn route_json(route: &MockRoute) -> Value {
 
 /// The mock as the environment object Mockers opens.
 pub fn export(mock: &MockEnvironment) -> Result<String, AppError> {
-    let routes: Vec<Value> = mock.routes.iter().map(route_json).collect();
-    let children: Vec<Value> = mock
+    // Mockers files have no WebSocket routes.
+    let http_routes: Vec<&MockRoute> = mock
         .routes
+        .iter()
+        .filter(|r| r.kind != RouteKind::Ws)
+        .collect();
+    let routes: Vec<Value> = http_routes.iter().map(|r| route_json(r)).collect();
+    let children: Vec<Value> = http_routes
         .iter()
         .map(|r| json!({ "type": "route", "uuid": r.id }))
         .collect();
@@ -551,5 +557,14 @@ mod tests {
         assert_eq!(b.routes[1].bucket, b.data[0].id);
         assert_eq!(b.routes[1].id_key, "pk");
         assert_eq!(b.data[0].value, a.data[0].value);
+    }
+
+    #[test]
+    fn export_leaves_out_websocket_routes() {
+        let mut mock = import(SAMPLE).unwrap().mock;
+        mock.routes[0].kind = RouteKind::Ws;
+        let back = import(&export(&mock).unwrap()).unwrap().mock;
+        assert_eq!(back.routes.len(), 1);
+        assert_eq!(back.routes[0].kind, RouteKind::Crud);
     }
 }

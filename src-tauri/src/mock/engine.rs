@@ -22,6 +22,10 @@ pub struct Compiled {
 }
 
 impl Compiled {
+    pub(super) fn routes(&self) -> &[Option<CompiledRoute>] {
+        &self.routes
+    }
+
     pub fn new(mock: MockEnvironment) -> Self {
         let routes = mock.routes.iter().map(CompiledRoute::new).collect();
         let counters = mock.routes.iter().map(|_| AtomicU64::new(0)).collect();
@@ -122,7 +126,7 @@ fn forward_reply() -> Reply {
     }
 }
 
-fn capped_delay(milliseconds: u32) -> Duration {
+pub(super) fn capped_delay(milliseconds: u32) -> Duration {
     Duration::from_millis(u64::from(milliseconds.min(MAX_LATENCY_MS)))
 }
 

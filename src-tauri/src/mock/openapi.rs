@@ -327,6 +327,7 @@ pub fn import(source: &str) -> Result<Converted, AppError> {
                 kind: RouteKind::Http,
                 bucket: String::new(),
                 id_key: default_id_key(),
+                greeting: String::new(),
                 responses: responses_of(&root, operation, &mut budget),
             });
         }

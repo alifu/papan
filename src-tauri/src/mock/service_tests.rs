@@ -8,7 +8,7 @@ use super::types::MockLogEntry;
 use super::{MockService, MockSink};
 
 #[derive(Default)]
-struct Collect(Mutex<Vec<u32>>);
+pub(super) struct Collect(Mutex<Vec<u32>>);
 
 impl MockSink for Collect {
     fn logged(&self, _: &str, _: &str, entry: &MockLogEntry) {
@@ -30,7 +30,9 @@ async fn start_at(
     (service, base, sink)
 }
 
-async fn start(mock: super::model::MockEnvironment) -> (MockService, String, Arc<Collect>) {
+pub(super) async fn start(
+    mock: super::model::MockEnvironment,
+) -> (MockService, String, Arc<Collect>) {
     start_at(std::path::Path::new("."), mock).await
 }
 
@@ -481,6 +483,7 @@ fn with_users_bucket() -> super::model::MockEnvironment {
         kind: RouteKind::Crud,
         bucket: "b1".into(),
         id_key: "id".into(),
+        greeting: String::new(),
         responses: vec![],
     }];
     mock

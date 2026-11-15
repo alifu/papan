@@ -111,6 +111,13 @@ fn body_helper(
 ) -> HelperResult {
     let path = text_param(h, 0);
     let request = request_of(ctx);
+    if path.is_empty() {
+        // `{{body}}` alone is the whole body as text.
+        let whole = request.get("body").and_then(Value::as_str).unwrap_or("");
+        if !whole.is_empty() {
+            return out.write(whole).map_err(Into::into);
+        }
+    }
     let found = match request.get("bodyJson").filter(|v| !v.is_null()) {
         Some(json) => json_path(json, &path),
         None => request.get("form").and_then(|f| f.get(&path)),

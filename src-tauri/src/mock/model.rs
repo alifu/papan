@@ -87,6 +87,8 @@ pub enum RouteKind {
     #[default]
     Http,
     Crud,
+    /// A WebSocket endpoint: `greeting` is sent on connect and `responses` answer each message.
+    Ws,
 }
 
 /// A request sent after a response (plan 11 §11). The URL is fixed text, never templated, so a
@@ -162,6 +164,9 @@ pub struct MockRoute {
     /// The item field that identifies an item (CRUD routes).
     #[serde(default = "default_id_key")]
     pub id_key: String,
+    /// WebSocket routes: a message sent as soon as a client connects; empty = none.
+    #[serde(default)]
+    pub greeting: String,
     #[serde(default)]
     pub responses: Vec<MockResponse>,
 }
@@ -424,6 +429,25 @@ fn check_crud(
     Ok(())
 }
 
+/// A WebSocket route answers with plain messages: no files, callbacks or headers to carry.
+fn check_ws(file: &str, at: &str, route: &MockRoute) -> Result<(), AppError> {
+    if route.greeting.len() > MAX_BODY_BYTES {
+        return Err(invalid(file, &format!("{at}.greeting"), "is over 1 MiB"));
+    }
+    super::template::check_depth(&route.greeting)
+        .map_err(|problem| invalid(file, &format!("{at}.greeting"), &problem))?;
+    for (n, response) in route.responses.iter().enumerate() {
+        if !response.file.is_empty() || !response.callbacks.is_empty() {
+            return Err(invalid(
+                file,
+                &format!("{at}.responses[{n}]"),
+                "cannot use a file or callbacks on a WebSocket route",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Checks everything the server relies on; `file` names the file in messages.
 pub fn validate(file: &str, mock: &MockEnvironment) -> Result<(), AppError> {
     if mock.name.trim().is_empty() {
@@ -460,6 +484,9 @@ pub fn validate(file: &str, mock: &MockEnvironment) -> Result<(), AppError> {
         )?;
         if route.kind == RouteKind::Crud {
             check_crud(file, &at, route, &mock.data)?;
+        }
+        if route.kind == RouteKind::Ws {
+            check_ws(file, &at, route)?;
         }
         let needs_responses = route.kind == RouteKind::Http;
         if (needs_responses && route.responses.is_empty()) || route.responses.len() > MAX_RESPONSES
@@ -503,6 +530,7 @@ pub mod tests_support {
                 kind: RouteKind::Http,
                 bucket: String::new(),
                 id_key: default_id_key(),
+                greeting: String::new(),
                 responses: vec![MockResponse {
                     id: "s1".into(),
                     label: String::new(),
@@ -655,5 +683,21 @@ mod tests {
         fallback.status = 99;
         with_fallback.fallback = Some(fallback);
         assert!(validate("f", &with_fallback).is_err());
+    }
+
+    #[test]
+    fn websocket_routes_allow_no_responses_but_no_files_or_callbacks() {
+        let mut mock = sample();
+        mock.routes[0].kind = RouteKind::Ws;
+        mock.routes[0].greeting = "hi {{now}}".into();
+        mock.routes[0].responses.clear();
+        assert!(validate("f", &mock).is_ok());
+        mock.routes[0].responses = sample().routes[0].responses.clone();
+        assert!(validate("f", &mock).is_ok());
+        mock.routes[0].responses[0].file = "a.json".into();
+        assert!(validate("f", &mock).is_err());
+        mock.routes[0].responses[0].file = String::new();
+        mock.routes[0].greeting = "{{#if a}}".repeat(40);
+        assert!(validate("f", &mock).is_err());
     }
 }
