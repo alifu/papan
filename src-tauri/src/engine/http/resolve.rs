@@ -4,7 +4,8 @@
 
 use super::mask::mask_secrets;
 use crate::store::types::{
-    Auth, Body, KeyValue, Part, RequestContent, SoapSettings, SoapVersion, SubscriptionSettings,
+    Auth, Body, GrpcSettings, KeyValue, Part, RequestContent, SoapSettings, SoapVersion,
+    SubscriptionSettings,
 };
 use crate::vars::dynamic::Dynamics;
 use crate::vars::resolve::{resolve_text, Report};
@@ -174,6 +175,15 @@ impl Resolver<'_> {
         }
     }
 
+    /// Only the message is resolved; service, method and proto paths pick files and
+    /// methods, so a variable must not choose them.
+    fn grpc(&mut self, grpc: &GrpcSettings) -> GrpcSettings {
+        GrpcSettings {
+            message: self.text(&grpc.message),
+            ..grpc.clone()
+        }
+    }
+
     fn auth(&mut self, auth: &Auth) -> Auth {
         match auth {
             Auth::Basic { username, password } => Auth::Basic {
@@ -242,6 +252,7 @@ pub fn resolve_content(
         auth: resolver.auth(&content.auth),
         soap: resolver.soap(&content.soap),
         subscription: resolver.subscription(&content.subscription),
+        grpc: resolver.grpc(&content.grpc),
         ..content.clone()
     };
     Resolved {

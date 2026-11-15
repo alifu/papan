@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::types::{ApiKeyPlacement, ClientAuth, OAuthGrant, Pair};
+use crate::store::types::{ApiKeyPlacement, ClientAuth, OAuthGrant, Pair, RequestKind};
 use crate::vars::dynamic::FixedDynamics;
 use crate::vars::scopes::{Layer, Value};
 use crate::vars::types::VarSource;
@@ -280,5 +280,39 @@ fn resolves_the_subscription_section_and_records_secrets() {
         resolved.content.subscription.init_payload,
         "{ \"token\": \"S E\" }"
     );
+    assert!(resolved.secret_values.contains(&"S E".to_string()));
+}
+
+#[test]
+fn resolves_the_grpc_message_and_metadata_but_not_the_service_or_paths() {
+    let content = RequestContent {
+        url: "https://{{v}}:443".into(),
+        headers: vec![
+            row("x-token", "{{s}}", true),
+            row("trace-bin", "{{v}}", true),
+        ],
+        grpc: GrpcSettings {
+            service: "{{v}}.S".into(),
+            method: "{{v}}".into(),
+            protos: vec!["{{v}}.proto".into()],
+            message: "{ \"name\": \"{{v}}\", \"key\": \"{{s}}\" }".into(),
+            ..GrpcSettings::default()
+        },
+        kind: RequestKind::Grpc,
+        ..RequestContent::default()
+    };
+
+    let resolved = resolve_content(&content, &scopes(), &FixedDynamics::default());
+
+    let grpc = &resolved.content.grpc;
+    assert_eq!(grpc.message, "{ \"name\": \"V\", \"key\": \"S E\" }");
+    assert_eq!(
+        (grpc.service.as_str(), grpc.method.as_str()),
+        ("{{v}}.S", "{{v}}")
+    );
+    assert_eq!(grpc.protos, ["{{v}}.proto"]);
+    assert_eq!(resolved.content.headers[0].value, "S E");
+    assert_eq!(resolved.content.headers[1].value, "V");
+    assert_eq!(resolved.secret_headers, ["x-token"]);
     assert!(resolved.secret_values.contains(&"S E".to_string()));
 }

@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as collections from "../collections/api";
 import * as graphqlApi from "../graphql/api";
+import * as grpcApi from "../grpc/api";
+import { useGrpcStore } from "../grpc/grpcStore";
 import * as wsApi from "../ws/api";
 import { useWsStore } from "../ws/wsStore";
 import { scratchLocation } from "../locations";
@@ -15,6 +17,7 @@ vi.mock("../collections/api");
 vi.mock("./api");
 vi.mock("../graphql/api");
 vi.mock("../ws/api");
+vi.mock("../grpc/api");
 vi.mock("../environments/api");
 vi.mock("../../ui/code/CodeEditor", () => import("../../ui/code/CodeEditor.mock"));
 vi.mock("../response/ResponseViewer", () => ({ ResponseViewer: () => <div>viewer</div> }));
@@ -85,6 +88,76 @@ describe("RequestEditor by kind", () => {
     await userEvent.click(screen.getByRole("tab", { name: "SOAP" }));
     await userEvent.click(screen.getByRole("button", { name: "soap-panel" }));
     expect(useRequestStore.getState().byTab.t?.draft?.url).toBe("http://soap");
+  });
+
+  describe("gRPC", () => {
+    const grpc = (over: Partial<ReturnType<typeof emptyContent>> = {}) => ({
+      ...emptyContent(),
+      kind: "grpc" as const,
+      method: "POST",
+      url: "https://h:443",
+      grpc: { source: "protos" as const, protos: ["a.proto"], import_paths: [], service: "a.G", method: "Say", message: "", deadline_ms: 0 },
+      ...over,
+    });
+    const schema = {
+      source: "protos" as const,
+      services: [{ full_name: "a.G", methods: [{ name: "Say", kind: "unary" as const, input_type: "a.In", output_type: "a.Out", template: '{"name":""}' }] }],
+      files: [],
+      warnings: [],
+      fetched_at_ms: null,
+    };
+    beforeEach(() => {
+      useGrpcStore.getState().reset();
+      vi.mocked(grpcApi.grpcLog).mockResolvedValue([]);
+      vi.mocked(grpcApi.grpcSchema).mockResolvedValue(schema);
+    });
+
+    it("shows the gRPC sections, Start instead of Send and no method verb", async () => {
+      await open(grpc());
+      expect(tabNames().slice(0, 5)).toEqual(["Message", "Metadata", "Protos", "Auth", "Settings"]);
+      expect(await screen.findByRole("button", { name: "Start" })).toBeVisible();
+      expect(screen.queryByLabelText("Method verb")).toBeNull();
+      expect(screen.getByRole("textbox", { name: "Message" })).toBeVisible();
+    });
+
+    it("fills the template through the picker into the draft and starts with it", async () => {
+      vi.mocked(grpcApi.grpcStart).mockResolvedValue({ call_id: "c", attempt: 1, path: "/a.G/Say", kind: "unary", url: "https://h:443" });
+      vi.mocked(grpcApi.listenGrpcEvents).mockResolvedValue(() => {});
+      await open(grpc());
+      await screen.findByRole("option", { name: "Say (unary)" });
+      await userEvent.selectOptions(screen.getByLabelText("Method"), "a.G/Say");
+      expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue('{"name":""}');
+      await userEvent.click(screen.getByRole("button", { name: "Start" }));
+      expect(grpcApi.grpcStart).toHaveBeenCalledWith(
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+        loc,
+        expect.objectContaining({ kind: "grpc", grpc: expect.objectContaining({ message: '{"name":""}' }) }),
+      );
+    });
+
+    it("edits the deadline into the draft and hides redirect settings", async () => {
+      await open(grpc());
+      await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
+      expect(screen.queryByLabelText("HTTP version")).toBeNull();
+      await userEvent.clear(screen.getByLabelText("Deadline"));
+      await userEvent.type(screen.getByLabelText("Deadline"), "5000");
+      expect(useRequestStore.getState().byTab.t?.draft?.grpc?.deadline_ms).toBe(5000);
+    });
+
+    it("rejects a bad deadline", async () => {
+      await open(grpc());
+      await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
+      await userEvent.type(screen.getByLabelText("Deadline"), "x");
+      expect(screen.getByRole("alert")).toHaveTextContent("Deadline must be");
+    });
+
+    it("shows the -bin hint and edits metadata into the draft headers", async () => {
+      await open(grpc());
+      await userEvent.click(screen.getByRole("tab", { name: "Metadata" }));
+      expect(screen.getByText(/-bin/)).toBeVisible();
+      await userEvent.type(screen.getByLabelText("Name 1"), "x");
+      expect(useRequestStore.getState().byTab.t?.draft?.headers[0]?.name).toBe("x");
+    });
   });
 
   describe("WebSocket", () => {

@@ -4,6 +4,7 @@
 
 use serde_json::Value;
 
+use super::grpc_model;
 use super::model::RequestFile;
 use super::request_emit::overlay;
 use super::request_model::{
@@ -32,19 +33,21 @@ pub fn kind_name(kind: RequestKind) -> &'static str {
         RequestKind::Graphql => "graphql",
         RequestKind::Soap => "soap",
         RequestKind::Ws => "ws",
+        RequestKind::Grpc => "grpc",
     }
 }
 
-/// The on-disk `kind`; a newer kind (`grpc`) is invalid.
+/// The on-disk `kind`; an unknown kind is invalid.
 pub fn parse_kind(label: &str, kind: &str) -> Result<RequestKind, AppError> {
     match kind {
         "http" => Ok(RequestKind::Http),
         "graphql" => Ok(RequestKind::Graphql),
         "soap" => Ok(RequestKind::Soap),
         "ws" => Ok(RequestKind::Ws),
+        "grpc" => Ok(RequestKind::Grpc),
         _ => Err(yaml::invalid(
             label,
-            "field `kind` must be `http`, `graphql`, `soap` or `ws`.",
+            "field `kind` must be `http`, `graphql`, `soap`, `ws` or `grpc`.",
         )),
     }
 }
@@ -68,6 +71,10 @@ pub fn starter_content(kind: RequestKind) -> RequestContent {
         RequestKind::Ws => RequestContent {
             kind,
             ..RequestContent::new("GET", "")
+        },
+        RequestKind::Grpc => RequestContent {
+            kind,
+            ..RequestContent::new("POST", "")
         },
     }
 }
@@ -172,6 +179,7 @@ pub fn validate(label: &str, content: &RequestContent) -> Result<(), AppError> {
         return Err(soap_outside(label));
     }
     ws_model::validate(label, content)?;
+    grpc_model::validate(label, content)?;
     subscription_model::validate(label, content)?;
     validate_soap(label, &content.soap)
 }
@@ -188,15 +196,19 @@ pub fn check_method(label: &str, kind: RequestKind, method: &str) -> Result<(), 
     if kind == RequestKind::Ws {
         ws_model::check_method(label, method)?;
     }
+    if kind == RequestKind::Grpc {
+        grpc_model::check_method(label, method)?;
+    }
     Ok(())
 }
 
 /// The URL rule of a WebSocket request; other kinds accept any URL here.
 pub fn check_url(label: &str, kind: RequestKind, url: &str) -> Result<(), AppError> {
-    if kind == RequestKind::Ws {
-        return ws_model::check_url(label, url);
+    match kind {
+        RequestKind::Ws => ws_model::check_url(label, url),
+        RequestKind::Grpc => grpc_model::check_url(label, url),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// The kind is fixed when the request is created (plan 06 §13 D8).
@@ -216,7 +228,7 @@ fn check_body_kind(label: &str, kind: RequestKind, body: &Body) -> Result<(), Ap
         RequestKind::Graphql => matches!(body, Body::Graphql { .. }),
         RequestKind::Soap => matches!(body, Body::Xml { .. } | Body::None),
         RequestKind::Http => !matches!(body, Body::Graphql { .. }),
-        RequestKind::Ws => matches!(body, Body::None),
+        RequestKind::Ws | RequestKind::Grpc => matches!(body, Body::None),
     };
     if allowed {
         return Ok(());
@@ -226,6 +238,7 @@ fn check_body_kind(label: &str, kind: RequestKind, body: &Body) -> Result<(), Ap
         RequestKind::Soap => "must be `xml` in a SOAP request.",
         RequestKind::Http => "`graphql` needs `kind: graphql`.",
         RequestKind::Ws => "must be `none` in a WebSocket request.",
+        RequestKind::Grpc => "must be `none` in a gRPC request.",
     };
     Err(invalid(label, "body.type", problem))
 }

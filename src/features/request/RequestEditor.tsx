@@ -35,6 +35,13 @@ import { TemplatesEditor } from "../ws/TemplatesEditor";
 import { WsPanel } from "../ws/WsPanel";
 import { wsSettingsOf } from "../ws/wsModel";
 import { useWsStore } from "../ws/wsStore";
+import { CallPanel } from "../grpc/CallPanel";
+import { DeadlineField } from "../grpc/DeadlineField";
+import { GrpcBar } from "../grpc/GrpcBar";
+import { findMethod, grpcSettingsOf } from "../grpc/grpcModel";
+import { useGrpcStore } from "../grpc/grpcStore";
+import { MessageEditor } from "../grpc/MessageEditor";
+import { ProtoSourcesEditor } from "../grpc/ProtoSourcesEditor";
 import "./request.css";
 
 export interface RequestEditorProps {
@@ -55,6 +62,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   const tab = useRequestStore((s) => s.byTab[tabId]);
   const { load, edit, editUrl, editParams, save, send, cancel } = useRequestStore.getState();
   const variables = useEffectiveVariables(location);
+  const grpcSchema = useGrpcStore((s) => s.byTab[tabId]?.schema ?? null);
   const proxyActive = useNetworkStore((s) => s.proxyMode === "custom");
 
   const applyCurl = async (text: string) => {
@@ -103,13 +111,14 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
 
   const kind = content.kind;
   const isWs = kind === "ws";
+  const isGrpc = kind === "grpc";
   const isSubscription = runsSubscription(content);
   const wsSettings = wsSettingsOf(content);
   const sections = sectionsFor(kind, {
     params: tab.paramRows.filter((r) => r.enabled && r.name !== "").length,
     headers: countEnabled(content.headers),
   });
-  const shown = sections.some((s) => s.id === section) ? section : "params";
+  const shown = sections.some((s) => s.id === section) ? section : (sections[0]?.id ?? "params");
 
   return (
     <div className="request-editor">
@@ -122,6 +131,17 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
           variables={variables}
           dirty={tab.draft !== null}
           onUrl={(url) => editUrl(tabId, url)}
+          onSave={() => void save(tabId, location)}
+        />
+      ) : isGrpc ? (
+        <GrpcBar
+          tabId={tabId}
+          location={location}
+          content={content}
+          variables={variables}
+          dirty={tab.draft !== null}
+          onUrl={(url) => editUrl(tabId, url)}
+          onChange={(update) => edit(tabId, update)}
           onSave={() => void save(tabId, location)}
         />
       ) : isWs ? (
@@ -162,6 +182,28 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
             rows={toRows(content.headers)}
             onChange={(rows) => edit(tabId, (c) => ({ ...c, headers: fromRows(rows) }))}
           />
+        ) : null}
+        {shown === "metadata" ? (
+          <>
+            <p className="grpc-hint">Metadata keys ending in -bin take base64 values.</p>
+            <KeyValueTable
+              label="Metadata"
+              variables={variables}
+              rows={toRows(content.headers)}
+              onChange={(rows) => edit(tabId, (c) => ({ ...c, headers: fromRows(rows) }))}
+            />
+          </>
+        ) : null}
+        {shown === "grpc-message" ? (
+          <MessageEditor
+            message={grpcSettingsOf(content).message}
+            method={findMethod(grpcSchema, grpcSettingsOf(content).service, grpcSettingsOf(content).method)}
+            variables={variables}
+            onChange={(message) => edit(tabId, (c) => ({ ...c, grpc: { ...grpcSettingsOf(c), message } }))}
+          />
+        ) : null}
+        {shown === "protos" ? (
+          <ProtoSourcesEditor tabId={tabId} location={location} content={content} onChange={(update) => edit(tabId, update)} />
         ) : null}
         {shown === "body" ? (
           <BodyEditor
@@ -205,7 +247,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         ) : null}
         {shown === "auth" ? (
           <>
-            <AuthEditor location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
+            <AuthEditor grpc={isGrpc} location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
             {content.auth.type === "oauth2" ? <OAuthTokenPanel tabId={tabId} location={location} content={content} /> : null}
           </>
         ) : null}
@@ -218,7 +260,10 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
           />
         ) : null}
         {shown === "settings" ? (
-          <SettingsEditor connectionOnly={isWs} settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
+          <>
+            <SettingsEditor connectionOnly={isWs || isGrpc} settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
+            {isGrpc ? <DeadlineField content={content} onChange={(update) => edit(tabId, update)} /> : null}
+          </>
         ) : null}
       </Tabs>
       </div>
@@ -234,6 +279,8 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
       />
       {isSubscription ? (
         <SubscriptionPanel tabId={tabId} location={location} />
+      ) : isGrpc ? (
+        <CallPanel tabId={tabId} location={location} />
       ) : isWs ? (
         <WsPanel tabId={tabId} location={location} content={content} variables={variables} onChange={(update) => edit(tabId, update)} />
       ) : (

@@ -8,7 +8,9 @@ use papan_lib::error::ErrorCode;
 use papan_lib::store::collection::Collection;
 use papan_lib::store::env_model::{EnvFile, GlobalsFile};
 use papan_lib::store::model::{CollectionFile, RequestFile};
-use papan_lib::store::types::{Body, NodeKind, RequestContent, RequestKind, SoapVersion, TreeNode};
+use papan_lib::store::types::{
+    Body, GrpcSource, NodeKind, RequestContent, RequestKind, SoapVersion, TreeNode,
+};
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -449,4 +451,60 @@ fn m6b_subscription_requests_are_fixed_points_and_keep_the_section() {
     let content = RequestFile::parse("f", &full).unwrap().content().unwrap();
     assert_eq!(content.subscription.url, "wss://{{host}}/graphql/ws");
     assert!(content.subscription.init_payload.contains("authToken"));
+}
+
+#[test]
+fn m8_grpc_requests_are_fixed_points() {
+    let files = files_in(&fixtures().join("canonical/m8"), ".http.yaml");
+    assert!(files.len() >= 3, "fixtures missing");
+
+    for path in &files {
+        assert_fixed_point(path, canonical);
+    }
+}
+
+#[test]
+fn m8_grpc_requests_parse_to_their_section_and_round_trip_through_content() {
+    let read = |name: &str| {
+        let bytes = fs::read(fixtures().join("canonical/m8").join(name)).unwrap();
+        RequestFile::parse(name, &bytes).unwrap()
+    };
+    let full = read("grpc-full.http.yaml");
+    let reflection = read("grpc-reflection.http.yaml");
+
+    let content = full.content().unwrap();
+    let reflected = reflection.content().unwrap();
+
+    assert_eq!(content.kind, RequestKind::Grpc);
+    assert_eq!(content.grpc.service, "greeter.v1.Greeter");
+    assert_eq!(content.grpc.import_paths, [".", "third_party"]);
+    assert_eq!(content.grpc.deadline_ms, 30000);
+    assert_eq!(content.headers[1].name, "trace-bin");
+    assert_eq!(reflected.grpc.source, GrpcSource::Reflection);
+    for (file, content) in [(&full, &content), (&reflection, &reflected)] {
+        let written = file.with_content(content).unwrap();
+        assert_eq!(written.to_yaml().unwrap(), file.to_yaml().unwrap());
+    }
+}
+
+#[test]
+fn m8_invalid_grpc_files_are_refused_naming_the_field() {
+    let cases = [
+        ("bad-body-present.http.yaml", "body.type"),
+        ("bad-get-method.http.yaml", "method"),
+        ("bad-metadata-bin-base64.http.yaml", "headers.value"),
+        ("bad-proto-absolute.http.yaml", "grpc.protos"),
+        ("bad-proto-escape.http.yaml", "grpc.protos"),
+        ("bad-service-name.http.yaml", "grpc.service"),
+    ];
+
+    for (name, field) in cases {
+        let bytes = fs::read(fixtures().join("grpc_files").join(name)).unwrap();
+        let outcome = RequestFile::parse(name, &bytes).and_then(|file| file.content());
+
+        let error = outcome.unwrap_err();
+
+        assert!(error.message.contains(field), "{name}: {}", error.message);
+        assert!(error.message.contains(name), "{name}: {}", error.message);
+    }
 }

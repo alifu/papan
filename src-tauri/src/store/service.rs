@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::collection::Collection;
 use super::fsio;
+use super::grpc_protos::copy_protos;
 use super::history::{History, HistoryRecord, Sent};
 use super::model::RequestFile;
 use super::registry::{Registry, RegistryEntry};
@@ -297,6 +298,16 @@ impl Store {
         let change = self.mutate(collection_id, |c| {
             c.add_request(target_folder, &redacted).map(Some)
         })?;
+        if full.kind == RequestKind::Grpc {
+            // Copied only once the request is in: a failed add leaves no protos behind,
+            // and a failed copy takes the request out again.
+            if let Err(error) = self.copy_scratch_protos(id, collection_id) {
+                if let Some(path) = &change.path {
+                    let _ = self.delete_node(collection_id, path);
+                }
+                return Err(error);
+            }
+        }
         self.scratch.delete(id)?;
         if let Some(path) = &change.path {
             let location = RequestLocation::Collection {
@@ -306,6 +317,23 @@ impl Store {
             self.secrets.remember(&location, normalise(&full));
         }
         Ok(change)
+    }
+
+    fn copy_scratch_protos(&self, id: &str, collection_id: &str) -> Result<(), AppError> {
+        let (_, collection) = self.open_entry(collection_id)?;
+        copy_protos(&self.scratch.protos_dir(id)?, &collection.protos_root())?;
+        Ok(())
+    }
+
+    /// The folder of the proto files of `location`: `<collection>/protos` or the scratch
+    /// request's own folder. Not created; every path inside goes through `paths::resolve`.
+    pub fn protos_root(&self, location: &RequestLocation) -> Result<PathBuf, AppError> {
+        match location {
+            RequestLocation::Scratch { id } => self.scratch.protos_dir(id),
+            RequestLocation::Collection { collection_id, .. } => {
+                Ok(self.open_entry(collection_id)?.1.protos_root())
+            }
+        }
     }
 
     /// The display name of the request at `location`, for history labels.

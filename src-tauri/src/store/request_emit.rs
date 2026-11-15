@@ -5,6 +5,7 @@
 use serde_json::Value;
 
 use super::auth_model;
+use super::grpc_model::{self, GRPC};
 use super::protocol_model::{self, SOAP};
 use super::request_model::{self, Extra, Fields, AUTH, BODY, DISABLED_PARAMS, HEADERS, SECTIONS};
 use super::script_model::{emit_scripts, SCRIPTS};
@@ -97,6 +98,7 @@ fn section_eq(key: &str, a: &RequestContent, b: &RequestContent) -> bool {
         AUTH => a.auth == b.auth,
         BODY => a.body == b.body,
         DISABLED_PARAMS => a.disabled_params == b.disabled_params,
+        GRPC => a.grpc == b.grpc,
         HEADERS => a.headers == b.headers,
         SCRIPTS => a.scripts == b.scripts,
         SOAP => a.soap == b.soap,
@@ -126,6 +128,7 @@ pub fn emit_section(key: &str, content: &RequestContent, raw: Option<&Value>) ->
         SOAP => protocol_model::emit_soap(&content.soap, raw),
         SUBSCRIPTION => subscription_model::emit_subscription(&content.subscription, raw),
         WS => ws_model::emit_ws(&content.ws, raw),
+        GRPC => grpc_model::emit_grpc(&content.grpc, raw),
         _ => emit_settings(&content.settings, raw),
     }
 }

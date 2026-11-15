@@ -94,10 +94,10 @@ impl WsConnectSpec {
 
 /// The network settings of one connection, read off the async runtime (the first read
 /// may open the vault).
-struct Network {
-    config: Arc<NetConfig>,
-    proxy: ProxySettings,
-    identity: Option<(String, Zeroizing<String>)>,
+pub(crate) struct Network {
+    pub(crate) config: Arc<NetConfig>,
+    pub(crate) proxy: ProxySettings,
+    pub(crate) identity: Option<(String, Zeroizing<String>)>,
 }
 
 async fn blocking<T: Send + 'static>(
@@ -110,7 +110,7 @@ async fn blocking<T: Send + 'static>(
 
 /// `url` is the typed one; an unparsable URL selects no certificate (the handshake
 /// reports it).
-async fn network_of(http: &HttpEngine, url: Option<Url>) -> Result<Network, AppError> {
+pub(crate) async fn network_of(http: &HttpEngine, url: Option<Url>) -> Result<Network, AppError> {
     let network = http.network();
     let twin = url.and_then(|mut url| url.set_scheme("https").ok().map(|()| url));
     blocking(move || {

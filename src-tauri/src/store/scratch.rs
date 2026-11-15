@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use super::fsio::{self, EntryKind};
+use super::grpc_protos::scratch_protos_dir;
 use super::model::{self, RequestFile};
 use super::paths::REQUEST_SUFFIX;
 use super::protocol_model;
@@ -17,6 +18,7 @@ const DEFAULT_METHOD: &str = "GET";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scratch {
     dir: PathBuf,
+    app_data: PathBuf,
 }
 
 /// The id when `text` is a lowercase hyphenated UUID, as we generate them.
@@ -32,7 +34,10 @@ impl Scratch {
     pub fn new(app_data: &Path) -> Result<Self, AppError> {
         let dir = app_data.join(SCRATCH_DIR);
         fsio::create_dir_all(&dir)?;
-        Ok(Self { dir })
+        Ok(Self {
+            dir,
+            app_data: app_data.to_path_buf(),
+        })
     }
 
     fn path_of(&self, id: &str) -> Result<PathBuf, AppError> {
@@ -42,6 +47,12 @@ impl Scratch {
                 AppError::invalid_input("That scratch request id is not valid.")
                     .with_detail(format!("{id:?}"))
             })
+    }
+
+    /// The folder holding the proto files of scratch request `id` (not created).
+    pub fn protos_dir(&self, id: &str) -> Result<PathBuf, AppError> {
+        self.path_of(id)?;
+        Ok(scratch_protos_dir(&self.app_data, id))
     }
 
     /// Valid scratch requests, sorted by name (case-insensitive), then id.
@@ -107,7 +118,17 @@ impl Scratch {
             return Err(AppError::not_found("That scratch request does not exist."));
         }
         fsio::remove_file(&path)?;
+        self.remove_protos(id)?;
         self.list()
+    }
+
+    fn remove_protos(&self, id: &str) -> Result<(), AppError> {
+        let dir = self.protos_dir(id)?;
+        match fsio::entry_kind(&dir) {
+            None => Ok(()),
+            Some(EntryKind::Dir) => fsio::remove_dir_all(&dir),
+            Some(_) => fsio::remove_file(&dir),
+        }
     }
 
     fn save(&self, id: &str, file: &RequestFile) -> Result<(), AppError> {
@@ -161,6 +182,34 @@ mod tests {
         assert_eq!(
             scratch.delete(&created.id).unwrap_err().code,
             ErrorCode::NotFound
+        );
+    }
+
+    #[test]
+    fn deleting_a_request_deletes_its_protos_folder_only() {
+        let (dir, scratch) = scratch();
+        let (gone, kept) = (
+            scratch.create(RequestKind::Grpc).unwrap(),
+            scratch.create(RequestKind::Grpc).unwrap(),
+        );
+        for item in [&gone, &kept] {
+            let folder = scratch.protos_dir(&item.id).unwrap();
+            fsio::create_dir_all(&folder.join("v1")).unwrap();
+            fsio::write_atomic(&folder.join("v1/a.proto"), b"x").unwrap();
+        }
+
+        scratch.delete(&gone.id).unwrap();
+
+        assert!(!scratch.protos_dir(&gone.id).unwrap().exists());
+        assert!(scratch
+            .protos_dir(&kept.id)
+            .unwrap()
+            .join("v1/a.proto")
+            .exists());
+        assert!(dir.path().join("scratch-protos").exists());
+        assert_eq!(
+            scratch.protos_dir("../x").unwrap_err().code,
+            ErrorCode::InvalidInput
         );
     }
 

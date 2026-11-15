@@ -122,6 +122,7 @@ pub enum RequestKind {
     Graphql,
     Soap,
     Ws,
+    Grpc,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -167,6 +168,27 @@ pub struct WsTemplate {
 pub struct WsSettings {
     pub subprotocols: Vec<String>,
     pub messages: Vec<WsTemplate>,
+}
+
+/// Where a gRPC request gets its service definitions (plan 08 §4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum GrpcSource {
+    #[default]
+    Protos,
+    Reflection,
+}
+
+/// The `grpc` section of a `kind: grpc` request (plan 08 §4).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct GrpcSettings {
+    pub source: GrpcSource,
+    pub protos: Vec<String>,
+    pub import_paths: Vec<String>,
+    pub service: String,
+    pub method: String,
+    pub message: String,
+    pub deadline_ms: u32,
 }
 
 /// The `subscription` section of a `kind: graphql` request (plan 06b §3).
@@ -311,6 +333,8 @@ pub struct RequestContent {
     pub ws: WsSettings,
     #[serde(default)]
     pub subscription: SubscriptionSettings,
+    #[serde(default)]
+    pub grpc: GrpcSettings,
 }
 
 impl RequestContent {

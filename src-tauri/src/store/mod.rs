@@ -14,6 +14,8 @@ pub mod env_ops;
 pub mod environments;
 pub mod fingerprint;
 pub mod fsio;
+pub mod grpc_model;
+pub mod grpc_protos;
 pub mod history;
 pub mod model;
 pub mod paths;

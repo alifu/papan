@@ -1,6 +1,7 @@
 import { useRequestStore } from "../features/request/requestStore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectionLocation, scratchLocation } from "../features/locations";
+import { useGrpcStore } from "../features/grpc/grpcStore";
 import { useWsStore } from "../features/ws/wsStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 import { WELCOME_TAB, useTabsStore } from "./tabsStore";
@@ -183,6 +184,20 @@ describe("tabsStore ws release", () => {
     expect(release).toHaveBeenCalledWith(id);
     const id2 = useTabsStore.getState().openRequest(scratchLocation("w2"), "W2");
     useTabsStore.getState().closeByLocation(scratchLocation("w2"));
+    expect(release).toHaveBeenCalledWith(id2);
+    release.mockRestore();
+  });
+});
+
+describe("tabsStore grpc release", () => {
+  it("closing a tab releases its gRPC call, by tab and by location", () => {
+    const release = vi.spyOn(useGrpcStore.getState(), "release").mockResolvedValue();
+    useTabsStore.setState(useTabsStore.getInitialState(), true);
+    const id = useTabsStore.getState().openRequest(scratchLocation("g1"), "G1");
+    useTabsStore.getState().discardTab(id);
+    expect(release).toHaveBeenCalledWith(id);
+    const id2 = useTabsStore.getState().openRequest(scratchLocation("g2"), "G2");
+    useTabsStore.getState().closeByLocation(scratchLocation("g2"));
     expect(release).toHaveBeenCalledWith(id2);
     release.mockRestore();
   });

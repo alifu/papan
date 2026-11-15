@@ -1,0 +1,55 @@
+// The gRPC test service (tests/support/grpc_server.rs). Request metadata `x-echo-*` comes
+// back as response headers and `x-trailer-*` as trailers on every method.
+syntax = "proto3";
+
+package test.v1;
+
+import "test/v1/types.proto";
+
+service Echo {
+  // Echoes the message.
+  rpc Unary(EchoRequest) returns (EchoResponse);
+  // `count` messages "<message> <i>", `delay_ms` apart; fails with ABORTED after
+  // `fail_at` messages when `fail_at` > 0.
+  rpc ServerStream(StreamRequest) returns (stream EchoResponse);
+  // Sums the values once the client ends its stream.
+  rpc ClientStream(stream SumRequest) returns (SumResponse);
+  // Echoes each message; echoes "bye" and then ends the stream.
+  rpc Bidi(stream EchoRequest) returns (stream EchoResponse);
+  // Fails with `code`, `message` and `details` (grpc-status-details-bin).
+  rpc Fail(FailRequest) returns (EchoResponse);
+  // Answers after `ms` milliseconds; `ms` = 0 never answers (cancel and deadline tests).
+  rpc Sleep(SleepRequest) returns (EchoResponse);
+  // A response whose message is `size` bytes of "x".
+  rpc Large(LargeRequest) returns (EchoResponse);
+}
+
+message StreamRequest {
+  string message = 1;
+  int32 count = 2;
+  int32 delay_ms = 3;
+  int32 fail_at = 4;
+}
+
+message SumRequest {
+  int64 value = 1;
+}
+
+message SumResponse {
+  int64 sum = 1;
+  int32 count = 2;
+}
+
+message FailRequest {
+  int32 code = 1;
+  string message = 2;
+  bytes details = 3;
+}
+
+message SleepRequest {
+  int32 ms = 1;
+}
+
+message LargeRequest {
+  int32 size = 1;
+}

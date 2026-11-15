@@ -136,6 +136,38 @@ export const commands = {
 	wsDisconnect: (connectionId: string, code: number | null, reason: string) => __TAURI_INVOKE<null>("ws_disconnect", { connectionId, code, reason }),
 	wsLog: (connectionId: string) => __TAURI_INVOKE<WsMessage[]>("ws_log", { connectionId }),
 	wsClearLog: (connectionId: string) => __TAURI_INVOKE<null>("ws_clear_log", { connectionId }),
+	/**
+	 *  The services and methods of the request: its proto files compiled, or reflection
+	 *  from the cache. Without `allow_network` a reflection request with no cache entry
+	 *  answers `None` and nothing is sent; with it the server is asked.
+	 */
+	grpcSchema: (location: RequestLocation, content: RequestContent, allowNetwork: boolean) => __TAURI_INVOKE<GrpcSchema | null>("grpc_schema", { location, content, allowNetwork }),
+	/**
+	 *  Server reflection for the request's server; `refresh` fetches again and rewrites the
+	 *  cache.
+	 */
+	grpcReflect: (location: RequestLocation, content: RequestContent, refresh: boolean) => __TAURI_INVOKE<GrpcSchema>("grpc_reflect", { location, content, refresh }),
+	/**
+	 *  Picks a `.proto` file in the native dialog and copies it, with what it imports, into
+	 *  the protos folder of `location`. Nothing is added when the dialog is cancelled.
+	 */
+	grpcImportProto: (location: RequestLocation) => __TAURI_INVOKE<ProtoImport>("grpc_import_proto", { location }),
+	/**
+	 *  Starts the call of the request and streams its events as `grpcEvent`. A call still
+	 *  running under `call_id` is cancelled first. Cancellable with `grpc_cancel`.
+	 */
+	grpcStart: (callId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<GrpcStarted>("grpc_start", { callId, location, content }),
+	/**
+	 *  Resolves the variables of `message` with the scopes of `location` and sends it on a
+	 *  client or bidi stream.
+	 */
+	grpcSend: (callId: string, location: RequestLocation, message: string) => __TAURI_INVOKE<WsMessage>("grpc_send", { callId, location, message }),
+	/**  Half-closes the request stream of a client or bidi call. */
+	grpcEnd: (callId: string) => __TAURI_INVOKE<null>("grpc_end", { callId }),
+	/**  Cancels the call or a start in progress. A finished call is not an error. */
+	grpcCancel: (callId: string) => __TAURI_INVOKE<null>("grpc_cancel", { callId }),
+	grpcLog: (callId: string) => __TAURI_INVOKE<WsMessage[]>("grpc_log", { callId }),
+	grpcClearLog: (callId: string) => __TAURI_INVOKE<null>("grpc_clear_log", { callId }),
 	listWebhooks: () => __TAURI_INVOKE<WebhookListener[]>("list_webhooks"),
 	saveWebhook: (config: WebhookConfig) => __TAURI_INVOKE<WebhookListener>("save_webhook", { config }),
 	deleteWebhook: (id: string) => __TAURI_INVOKE<null>("delete_webhook", { id }),
@@ -150,6 +182,7 @@ export const commands = {
 /** Events */
 export const events = {
 	collectionChanged: makeEvent<CollectionChanged, CollectionChanged>("collection-changed"),
+	grpcEvent: makeEvent<GrpcEvent, GrpcEvent>("grpc-event"),
 	webhookCaptured: makeEvent<WebhookCaptured, WebhookCaptured>("webhook-captured"),
 	webhookStopped: makeEvent<WebhookStopped, WebhookStopped>("webhook-stopped"),
 	wsEvent: makeEvent<WsEvent, WsEvent>("ws-event"),
@@ -320,6 +353,74 @@ export type GraphqlSchema = {
 	source: SchemaSource,
 };
 
+export type GrpcEndBy = "client" | "server" | "error";
+
+/**  Emitted per call. TS: `events.grpcEvent`. */
+export type GrpcEvent = {
+	call_id: string,
+	attempt: number,
+	kind: GrpcEventKind,
+};
+
+export type GrpcEventKind = { type: "headers"; metadata: KeyValue[] } | { type: "messages"; items: WsMessage[] } | { type: "finished"; status: GrpcStatus; trailers: KeyValue[]; by: GrpcEndBy; elapsed_ms: number | null; error: AppError | null };
+
+export type GrpcMethod = {
+	name: string,
+	kind: GrpcMethodKind,
+	input_type: string,
+	output_type: string,
+	/**  Proto3 JSON request template with every field. */
+	template: string,
+};
+
+export type GrpcMethodKind = "unary" | "server_streaming" | "client_streaming" | "bidi";
+
+export type GrpcSchema = {
+	source: GrpcSource,
+	services: GrpcService[],
+	files: string[],
+	warnings: string[],
+	/**  Reflection cache time. */
+	fetched_at_ms: number | null,
+};
+
+export type GrpcService = {
+	full_name: string,
+	methods: GrpcMethod[],
+};
+
+/**  The `grpc` section of a `kind: grpc` request (plan 08 §4). */
+export type GrpcSettings = {
+	source: GrpcSource,
+	protos: string[],
+	import_paths: string[],
+	service: string,
+	method: string,
+	message: string,
+	deadline_ms: number,
+};
+
+/**  Where a gRPC request gets its service definitions (plan 08 §4). */
+export type GrpcSource = "protos" | "reflection";
+
+export type GrpcStarted = {
+	call_id: string,
+	attempt: number,
+	/**  `/pkg.Svc/Method`. */
+	path: string,
+	kind: GrpcMethodKind,
+	/**  Masked. */
+	url: string,
+};
+
+export type GrpcStatus = {
+	code: number,
+	/**  `OK`, `UNAVAILABLE`, ... */
+	name: string,
+	message: string,
+	details_base64: string | null,
+};
+
 /**  A response header; non-UTF-8 values are decoded lossily. */
 export type Header = {
 	name: string,
@@ -399,6 +500,11 @@ export type PickedFile = {
 	size_bytes: number,
 };
 
+export type ProtoImport = {
+	added: string[],
+	warnings: string[],
+};
+
 /**  The proxy as written by Network settings; the password is write-only. */
 export type ProxyInput = {
 	mode: ProxyMode,
@@ -440,6 +546,7 @@ export type RequestContent = {
 	soap: SoapSettings,
 	ws?: WsSettings,
 	subscription?: SubscriptionSettings,
+	grpc?: GrpcSettings,
 };
 
 export type RequestDoc = {
@@ -448,7 +555,7 @@ export type RequestDoc = {
 };
 
 /**  Which editor a request opens in and how its body is built (plan 06 §3.1). */
-export type RequestKind = "http" | "graphql" | "soap" | "ws";
+export type RequestKind = "http" | "graphql" | "soap" | "ws" | "grpc";
 
 /**  Where a request lives: in the app's scratch area or inside a collection. */
 export type RequestLocation = { scope: "scratch"; id: string } | { scope: "collection"; collection_id: string; path: string };

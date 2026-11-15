@@ -178,6 +178,17 @@ pub fn handshake_parts(
     })
 }
 
+/// The headers `auth` adds on its own: `Authorization` (Basic, Bearer) and the API-key
+/// header. OAuth 2 has already become Bearer.
+pub(crate) fn auth_headers(auth: &Auth) -> Result<Vec<(HeaderName, HeaderValue)>, AppError> {
+    let api_key = api_key_header(auth)?;
+    let headers = [(AUTHORIZATION, authorization(auth)?)]
+        .into_iter()
+        .chain(api_key)
+        .filter_map(|(name, value)| value.map(|value| (name, value)));
+    Ok(headers.collect())
+}
+
 fn digest_credentials(auth: &Auth) -> Option<DigestCredentials> {
     match auth {
         Auth::Digest { username, password } => Some(DigestCredentials {

@@ -149,6 +149,18 @@ describe("CollectionsPanel", () => {
     expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "w", "ws");
   });
 
+  it("creates a gRPC request when the Type choice is changed", async () => {
+    seed();
+    vi.mocked(api.createRequest).mockResolvedValue({ tree: makeTree(), path: "auth/g.http.yaml" });
+    render(<CollectionsPanel />);
+
+    await pick("auth", "New Request");
+    await userEvent.selectOptions(screen.getByLabelText("Type"), "grpc");
+    await userEvent.type(screen.getByLabelText("Name"), "g{Enter}");
+
+    expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "g", "grpc");
+  });
+
   it("shows the protocol badge for GraphQL and SOAP rows", () => {
     const tree = makeTree();
     const retag = (path: string, request_kind: "graphql" | "soap") =>

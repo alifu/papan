@@ -10,6 +10,8 @@ export interface AuthEditorProps {
   /** Enables "Save as secret variable…"; omitted when there is nowhere to save. */
   readonly location?: RequestLocation;
   readonly variables?: readonly EffectiveVariable[];
+  /** gRPC: no Digest, and API keys go in metadata only. */
+  readonly grpc?: boolean;
 }
 
 const DEFAULTS: Record<string, Auth> = {
@@ -21,7 +23,7 @@ const DEFAULTS: Record<string, Auth> = {
   oauth2: OAUTH_DEFAULT,
 };
 
-export function AuthEditor({ auth, onChange, location, variables }: AuthEditorProps) {
+export function AuthEditor({ auth, onChange, location, variables, grpc = false }: AuthEditorProps) {
   if (auth.type === "unsupported") {
     return <p className="empty-text">Made by a newer Papan. This authentication is read-only.</p>;
   }
@@ -38,7 +40,7 @@ export function AuthEditor({ auth, onChange, location, variables }: AuthEditorPr
           <option value="basic">Basic</option>
           <option value="bearer">Bearer token</option>
           <option value="api_key">API key</option>
-          <option value="digest">Digest</option>
+          {grpc ? null : <option value="digest">Digest</option>}
           <option value="oauth2">OAuth 2</option>
         </select>
       </label>
@@ -90,17 +92,19 @@ export function AuthEditor({ auth, onChange, location, variables }: AuthEditorPr
             defaultName="api_key"
             onChange={(value) => onChange({ ...auth, value })}
           />
-          <label>
-            Add to
-            <select
-              aria-label="Add to"
-              value={auth.placement}
-              onChange={(e) => onChange({ ...auth, placement: e.target.value as ApiKeyPlacement })}
-            >
-              <option value="header">Header</option>
-              <option value="query">Query parameter</option>
-            </select>
-          </label>
+          {grpc ? null : (
+            <label>
+              Add to
+              <select
+                aria-label="Add to"
+                value={auth.placement}
+                onChange={(e) => onChange({ ...auth, placement: e.target.value as ApiKeyPlacement })}
+              >
+                <option value="header">Header</option>
+                <option value="query">Query parameter</option>
+              </select>
+            </label>
+          )}
         </>
       ) : null}
     </div>

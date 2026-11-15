@@ -58,6 +58,13 @@ describe("HistoryPanel", () => {
     expect(screen.queryByText("GET")).toBeNull();
   });
 
+  it("shows the gRPC badge instead of POST", async () => {
+    vi.mocked(api.listHistory).mockResolvedValue([entry({ id: "g", method: "POST", kind: "grpc" })]);
+    render(<HistoryPanel />);
+    expect(await screen.findByText("gRPC")).toBeInTheDocument();
+    expect(screen.queryByText("POST")).toBeNull();
+  });
+
   it("clears the list", async () => {
     render(<HistoryPanel />);
     await screen.findByText("200");

@@ -6,6 +6,7 @@ import {
   type RequestLocation,
 } from "../features/locations";
 import { isDirty, useRequestStore } from "../features/request/requestStore";
+import { useGrpcStore } from "../features/grpc/grpcStore";
 import { useWsStore } from "../features/ws/wsStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 
@@ -114,6 +115,7 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     tabs.filter((t) => !remaining.includes(t)).forEach((t) => {
       useRequestStore.getState().drop(t.id);
       void useWsStore.getState().release(t.id);
+      void useGrpcStore.getState().release(t.id);
     });
     set({ tabs: remaining, activeTabId: activeAfterRemoval(tabs, remaining, activeTabId) });
   },
@@ -127,6 +129,7 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     if (!tabs.some((t) => t.id === id)) return;
     useRequestStore.getState().drop(id);
     void useWsStore.getState().release(id);
+    void useGrpcStore.getState().release(id);
     const remaining = tabs.filter((t) => t.id !== id);
     set({
       tabs: remaining,

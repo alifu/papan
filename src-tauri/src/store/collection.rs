@@ -103,6 +103,11 @@ impl Collection {
         filled
     }
 
+    /// `<collection>/protos`, the root of the gRPC proto files (may not exist yet).
+    pub fn protos_root(&self) -> PathBuf {
+        self.root.join(super::grpc_protos::PROTOS_DIR)
+    }
+
     pub fn requests_root(&self) -> PathBuf {
         self.root.join(REQUESTS_DIR)
     }

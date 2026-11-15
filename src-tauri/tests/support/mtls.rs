@@ -14,6 +14,7 @@ use super::server::{serve_tls, TestServer};
 pub struct TestCa {
     issuer: rcgen::Issuer<'static, rcgen::KeyPair>,
     der: CertificateDer<'static>,
+    pem: String,
 }
 
 /// A client certificate and its key, PEM.
@@ -31,10 +32,12 @@ impl TestCa {
         let mut params = rcgen::CertificateParams::new(Vec::<String>::new()).unwrap();
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
         let key = rcgen::KeyPair::generate().unwrap();
-        let der = params.self_signed(&key).unwrap().der().clone();
+        let cert = params.self_signed(&key).unwrap();
+        let (der, pem) = (cert.der().clone(), cert.pem());
         Self {
             issuer: rcgen::Issuer::new(params, key),
             der,
+            pem,
         }
     }
 
@@ -54,9 +57,14 @@ impl TestCa {
         }
     }
 
-    /// The usual test router over HTTPS; the handshake requires a client certificate
-    /// signed by this CA.
-    pub fn spawn_mtls(&self) -> TestServer {
+    /// The CA certificate, PEM (for clients that trust servers this CA signed).
+    pub fn ca_pem(&self) -> String {
+        self.pem.clone()
+    }
+
+    /// A server config for `127.0.0.1` signed by this CA; the handshake requires a client
+    /// certificate signed by this CA. ALPN offers `h2` and `http/1.1`.
+    pub fn server_config(&self) -> ServerConfig {
         let key = rcgen::KeyPair::generate().unwrap();
         let cert = self.issue("127.0.0.1", &key);
         let mut roots = RootCertStore::empty();
@@ -72,6 +80,12 @@ impl TestCa {
             .with_single_cert(vec![cert.der().clone()], key)
             .unwrap();
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-        serve_tls(RustlsConfig::from_config(Arc::new(config)))
+        config
+    }
+
+    /// The usual test router over HTTPS; the handshake requires a client certificate
+    /// signed by this CA.
+    pub fn spawn_mtls(&self) -> TestServer {
+        serve_tls(RustlsConfig::from_config(Arc::new(self.server_config())))
     }
 }

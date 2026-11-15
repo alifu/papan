@@ -64,6 +64,17 @@ describe("ScratchPanel", () => {
     expect(await screen.findByRole("button", { name: /Sock/ })).toHaveTextContent("WS");
   });
 
+  it("creates a gRPC scratch request with the gRPC badge", async () => {
+    vi.mocked(api.createScratch).mockResolvedValue({ id: "g", name: "Rpc", method: "POST", kind: "grpc" });
+    render(<ScratchPanel />);
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "New Request" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "gRPC" }));
+
+    expect(api.createScratch).toHaveBeenCalledWith("grpc");
+    expect(await screen.findByRole("button", { name: /Rpc/ })).toHaveTextContent("gRPC");
+  });
+
   it("clicking a row opens its tab", async () => {
     useScratchStore.setState({ items: [item("a", "Alpha")] });
     render(<ScratchPanel />);

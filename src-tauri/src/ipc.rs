@@ -14,6 +14,8 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 use crate::commands;
 use crate::engine::graphql::commands as graphql;
 use crate::engine::graphql::subscription_commands as graphql_sub;
+use crate::engine::grpc::commands as grpc;
+use crate::engine::grpc::types::GrpcEvent;
 use crate::engine::http::commands as http;
 use crate::engine::http::net_commands as net;
 use crate::engine::http::oauth::commands as oauth;
@@ -109,6 +111,15 @@ pub fn builder() -> Builder<tauri::Wry> {
             ws::ws_disconnect,
             ws::ws_log,
             ws::ws_clear_log,
+            grpc::grpc_schema,
+            grpc::grpc_reflect,
+            grpc::grpc_import_proto,
+            grpc::grpc_start,
+            grpc::grpc_send,
+            grpc::grpc_end,
+            grpc::grpc_cancel,
+            grpc::grpc_log,
+            grpc::grpc_clear_log,
             webhook::list_webhooks,
             webhook::save_webhook,
             webhook::delete_webhook,
@@ -122,6 +133,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         .events(collect_events![
             CollectionChanged,
             WsEvent,
+            GrpcEvent,
             WebhookCaptured,
             WebhookStopped
         ])
@@ -280,6 +292,15 @@ mod tests {
             "wsDisconnect",
             "wsLog",
             "wsClearLog",
+            "grpcSchema",
+            "grpcReflect",
+            "grpcImportProto",
+            "grpcStart",
+            "grpcSend",
+            "grpcEnd",
+            "grpcCancel",
+            "grpcLog",
+            "grpcClearLog",
             "listWebhooks",
             "saveWebhook",
             "deleteWebhook",
@@ -290,6 +311,7 @@ mod tests {
             "clearCaptures",
             "replayCapture",
             "wsEvent",
+            "grpcEvent",
             "webhookCaptured",
             "webhookStopped",
         ];

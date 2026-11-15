@@ -1,0 +1,14 @@
+// Shared messages of the gRPC test server (tests/support/grpc_server.rs). A separate file
+// so reflection has a dependency to follow.
+syntax = "proto3";
+
+package test.v1;
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+  int32 index = 2;
+}

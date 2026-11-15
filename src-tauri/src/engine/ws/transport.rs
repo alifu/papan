@@ -300,28 +300,38 @@ pub async fn connect(
     let host = url
         .host()
         .ok_or_else(|| AppError::invalid_input("The URL has no host."))?;
-    let host_text = strip_brackets(url.host_str().unwrap_or_default()).to_string();
     let port = url.port_or_known_default().unwrap_or(80);
+    let tls = (url.scheme() == "wss").then_some(tls);
+    connect_stream(&host, port, proxy, tls, &[]).await
+}
+
+/// TCP to `host:port` (through `proxy` when given), then TLS when `tls` is set, offering
+/// the `alpn` protocols (none for WebSocket, `h2` for gRPC).
+pub async fn connect_stream(
+    host: &Host<&str>,
+    port: u16,
+    proxy: Option<&ProxyHop>,
+    tls: Option<&TlsOptions>,
+    alpn: &[&[u8]],
+) -> Result<BoxedIo, AppError> {
+    let bracketed = host.to_string();
+    let host_text = strip_brackets(&bracketed);
     let tcp = match proxy {
-        Some(hop) => {
-            let authority = match &host {
-                Host::Ipv6(_) => format!("[{host_text}]:{port}"),
-                _ => format!("{host_text}:{port}"),
-            };
-            tunnel(hop, &authority).await?
-        }
-        None => TcpStream::connect((host_text.as_str(), port))
+        Some(hop) => tunnel(hop, &format!("{bracketed}:{port}")).await?,
+        None => TcpStream::connect((host_text, port))
             .await
             .map_err(|source| network_error("Could not connect to the server.", source))?,
     };
     // Small frames should not wait for Nagle; a failure only costs latency.
     let _ = tcp.set_nodelay(true);
-    if url.scheme() != "wss" {
+    let Some(tls) = tls else {
         return Ok(Box::new(tcp));
-    }
-    let connector = TlsConnector::from(tls_config(tls)?);
+    };
+    let mut config = (*tls_config(tls)?).clone();
+    config.alpn_protocols = alpn.iter().map(|protocol| protocol.to_vec()).collect();
+    let connector = TlsConnector::from(Arc::new(config));
     let secured = connector
-        .connect(server_name(&host)?, tcp)
+        .connect(server_name(host)?, tcp)
         .await
         .map_err(|source| {
             network_error(

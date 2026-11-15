@@ -309,3 +309,110 @@ fn graphql_and_soap_requests_are_created_with_their_kind() {
     let listed = f.store.list_scratch().unwrap();
     assert_eq!(listed[0].kind, RequestKind::Graphql);
 }
+
+fn put_scratch_proto(f: &Fixture, scratch_id: &str, rel: &str, text: &str) {
+    let path = f
+        .store
+        .protos_root(&RequestLocation::Scratch {
+            id: scratch_id.to_string(),
+        })
+        .unwrap()
+        .join(rel);
+    fsio::create_dir_all(path.parent().unwrap()).unwrap();
+    fsio::write_atomic(&path, text.as_bytes()).unwrap();
+}
+
+#[test]
+fn moving_a_grpc_scratch_request_copies_its_protos_into_the_collection() {
+    let mut f = fixture();
+    let id = f
+        .store
+        .create_collection(f.work.path(), "C")
+        .unwrap()
+        .collection
+        .id;
+    let item = f.store.create_scratch(RequestKind::Grpc).unwrap();
+    put_scratch_proto(&f, &item.id, "v1/a.proto", "A");
+
+    f.store
+        .move_scratch_to_collection(&item.id, &id, "")
+        .unwrap();
+
+    let root = f.work.path().join("c/protos/v1/a.proto");
+    assert_eq!(std::fs::read_to_string(root).unwrap(), "A");
+    let scratch_dir = f
+        .store
+        .protos_root(&RequestLocation::Scratch { id: item.id });
+    assert!(!scratch_dir.unwrap().exists());
+}
+
+#[test]
+fn a_proto_conflict_moves_nothing() {
+    let mut f = fixture();
+    let id = f
+        .store
+        .create_collection(f.work.path(), "C")
+        .unwrap()
+        .collection
+        .id;
+    let existing = f.work.path().join("c/protos/a.proto");
+    fsio::create_dir_all(existing.parent().unwrap()).unwrap();
+    fsio::write_atomic(&existing, b"OLD").unwrap();
+    let item = f.store.create_scratch(RequestKind::Grpc).unwrap();
+    put_scratch_proto(&f, &item.id, "a.proto", "NEW");
+
+    let error = f
+        .store
+        .move_scratch_to_collection(&item.id, &id, "")
+        .unwrap_err();
+
+    assert_eq!(
+        error.message,
+        "protos/a.proto already exists with other content."
+    );
+    assert_eq!(f.store.list_scratch().unwrap(), vec![item]);
+    assert_eq!(std::fs::read_to_string(existing).unwrap(), "OLD");
+    let tree = f.store.read_tree(&id).unwrap();
+    assert!(tree.children.is_empty());
+}
+
+#[test]
+fn the_protos_root_of_a_collection_request_is_its_protos_folder() {
+    let mut f = fixture();
+    let id = f
+        .store
+        .create_collection(f.work.path(), "C")
+        .unwrap()
+        .collection
+        .id;
+
+    let root = f
+        .store
+        .protos_root(&collection_location(&id, "x.http.yaml"))
+        .unwrap();
+
+    assert!(root.ends_with("protos"));
+    assert!(root.starts_with(fsio::canonicalize(f.work.path()).unwrap()));
+}
+
+#[test]
+fn a_failed_add_leaves_no_protos_in_the_collection() {
+    let mut f = fixture();
+    let id = f
+        .store
+        .create_collection(f.work.path(), "C")
+        .unwrap()
+        .collection
+        .id;
+    let item = f.store.create_scratch(RequestKind::Grpc).unwrap();
+    put_scratch_proto(&f, &item.id, "v1/a.proto", "A");
+
+    let error = f
+        .store
+        .move_scratch_to_collection(&item.id, &id, "missing")
+        .unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::NotFound);
+    assert!(!f.work.path().join("c/protos").exists());
+    assert_eq!(f.store.list_scratch().unwrap(), vec![item]);
+}

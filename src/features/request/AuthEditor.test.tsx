@@ -44,3 +44,14 @@ describe("AuthEditor secrets", () => {
     expect(field).toHaveAttribute("title", "Not defined: who");
   });
 });
+
+describe("AuthEditor for gRPC", () => {
+  it("offers no Digest and no placement choice for an API key", () => {
+    render(
+      <AuthEditor grpc auth={{ type: "api_key", name: "k", value: "v", placement: "header" }} onChange={vi.fn()} location={location} variables={[]} />,
+    );
+    expect(screen.queryByRole("option", { name: "Digest" })).toBeNull();
+    expect(screen.queryByLabelText("Add to")).toBeNull();
+    expect(screen.getByRole("option", { name: "OAuth 2" })).toBeInTheDocument();
+  });
+});

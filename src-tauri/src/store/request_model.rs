@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 
 use super::auth_model::{parse_auth, validate_auth};
+use super::grpc_model::{self, GRPC};
 use super::model;
 use super::protocol_model::{self, SOAP};
 use super::script_model::{parse_scripts, validate_scripts, SCRIPTS};
@@ -25,10 +26,11 @@ pub const BODY: &str = "body";
 pub const DISABLED_PARAMS: &str = "disabled_params";
 pub const HEADERS: &str = "headers";
 pub const SETTINGS: &str = "settings";
-pub const SECTIONS: [&str; 9] = [
+pub const SECTIONS: [&str; 10] = [
     AUTH,
     BODY,
     DISABLED_PARAMS,
+    GRPC,
     HEADERS,
     SCRIPTS,
     SETTINGS,
@@ -77,6 +79,7 @@ pub fn parse_sections(
         soap: protocol_model::parse_soap(label, kind, extra.get(SOAP))?,
         ws: ws_model::parse_ws(label, kind, extra.get(WS))?,
         subscription: subscription_model::parse_subscription(label, kind, extra.get(SUBSCRIPTION))?,
+        grpc: grpc_model::parse_grpc(label, kind, extra.get(GRPC))?,
     };
     validate_sections(label, &content)?;
     Ok(content)

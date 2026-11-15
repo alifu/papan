@@ -74,6 +74,14 @@ futures-util = "0.3"
 axum = { version = "0.8.9", default-features = false, features = ["tokio", "http1"] }
 hyper = { version = "1", features = ["server", "http1"] }
 http-body-util = "0.1"
+# gRPC (plan 08 §2). TLS stays ours: tonic gets no tls-* feature. prost 0.14.5+ is under 14 days old.
+tonic = { version = "=0.14.9", default-features = false, features = ["channel"] }
+tonic-prost = "=0.14.9"
+tonic-reflection = { version = "=0.14.9", default-features = false }
+prost = "=0.14.4"
+prost-types = "=0.14.4"
+prost-reflect = { version = "=0.16.5", features = ["serde"] }
+protox = "=0.10.0"
 
 [target.'cfg(windows)'.dependencies]
 # The loopback listener binds with SO_EXCLUSIVEADDRUSE (already in the tree via hyper-util).
@@ -89,3 +97,6 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "test-util"] }
 # GraphQL test server (plan 06 §2); 8.0 is still rc.
 async-graphql = { version = "=7.2.1", default-features = false }
 async-graphql-axum = "=7.2.1"
+# gRPC test server (plan 08 §2): resolver 2 keeps these features out of the app build.
+tonic = { version = "=0.14.9", default-features = false, features = ["channel", "server", "router"] }
+tonic-reflection = { version = "=0.14.9" }

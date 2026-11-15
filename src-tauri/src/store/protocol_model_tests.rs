@@ -49,7 +49,8 @@ fn kinds_parse_and_newer_kinds_are_refused_naming_the_field() {
     assert_eq!(parse_kind("r", "http").unwrap(), RequestKind::Http);
     assert_eq!(parse_kind("r", "graphql").unwrap(), RequestKind::Graphql);
     assert_eq!(parse_kind("r", "soap").unwrap(), RequestKind::Soap);
-    let error = parse_kind("r.http.yaml", "grpc").unwrap_err();
+    assert_eq!(parse_kind("r", "grpc").unwrap(), RequestKind::Grpc);
+    let error = parse_kind("r.http.yaml", "smtp").unwrap_err();
 
     assert_eq!(error.code, ErrorCode::InvalidInput);
     assert!(error.message.contains("r.http.yaml"), "{}", error.message);
