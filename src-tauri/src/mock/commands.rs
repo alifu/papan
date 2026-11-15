@@ -288,7 +288,7 @@ fn picked_path(picked: tauri_plugin_dialog::FilePath) -> MockResult<PathBuf> {
     })
 }
 
-/// Picks a Mockoon or OpenAPI file, converts it and saves it as a new mock; `None` when the
+/// Picks a Mockers or OpenAPI file, converts it and saves it as a new mock; `None` when the
 /// file dialog is cancelled.
 #[tauri::command]
 #[specta::specta]
@@ -302,7 +302,7 @@ pub async fn import_mock(
     let picked = dialog(move || {
         app.dialog()
             .file()
-            .add_filter("Mockoon or OpenAPI", &["json", "yaml", "yml"])
+            .add_filter("Mockers or OpenAPI", &["json", "yaml", "yml"])
             .blocking_pick_file()
     })
     .await?;
@@ -315,7 +315,7 @@ pub async fn import_mock(
         let text = String::from_utf8(bytes)
             .map_err(|_| AppError::invalid_input("That file is not valid UTF-8 text."))?;
         let converted = match format {
-            MockImportFormat::Mockoon => super::mockoon::import(&text)?,
+            MockImportFormat::Mockers => super::mockers::import(&text)?,
             MockImportFormat::Openapi => super::openapi::import(&text)?,
         };
         let file = disk::write(&root, None, &converted.mock)?;
@@ -331,7 +331,7 @@ pub async fn import_mock(
     logged(made).map(Some)
 }
 
-/// Saves the mock as a Mockoon environment file; returns the saved file's name, or `None` when
+/// Saves the mock as a Mockers environment file; returns the saved file's name, or `None` when
 /// the save dialog is cancelled.
 #[tauri::command]
 #[specta::specta]
@@ -343,8 +343,8 @@ pub async fn export_mock(
 ) -> MockResult<Option<String>> {
     let root = root_of(&state, &collection_id)?;
     let mock = logged(disk::read(&root, &file))?;
-    let text = logged(super::mockoon::export(&mock))?;
-    let name = format!("{}.mockoon.json", file.trim_end_matches(disk::SUFFIX));
+    let text = logged(super::mockers::export(&mock))?;
+    let name = format!("{}.mockers.json", file.trim_end_matches(disk::SUFFIX));
     let picked =
         dialog(move || app.dialog().file().set_file_name(name).blocking_save_file()).await?;
     let Some(picked) = picked else {

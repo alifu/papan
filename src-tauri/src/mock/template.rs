@@ -1,4 +1,4 @@
-//! Handlebars templating with Mockoon-style helpers (plan 11 §4). Helpers read the
+//! Handlebars templating with Mockers-style helpers (plan 11 §4). Helpers read the
 //! request from the render data (`request`), so one registry serves every mock.
 
 use std::sync::OnceLock;

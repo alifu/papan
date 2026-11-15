@@ -1,5 +1,5 @@
-//! Mockoon environment files, in and out (plan 11 §13). Read leniently from JSON, written as the
-//! plain environment object Mockoon opens. Things Mockoon has and Papan does not are dropped
+//! Mockers environment files, in and out (plan 11 §13). Read leniently from JSON, written as the
+//! plain environment object Mockers opens. Things Mockers has and Papan does not are dropped
 //! and reported as notes.
 
 use std::collections::HashMap;
@@ -13,7 +13,7 @@ use super::model::{
 use crate::error::AppError;
 use crate::store::types::KeyValue;
 
-/// The schema version written on export; Mockoon migrates older files forward.
+/// The schema version written on export; Mockers migrates older files forward.
 const EXPORT_MIGRATION: u32 = 32;
 
 pub struct Converted {
@@ -63,7 +63,7 @@ fn headers_of(value: &Value) -> Vec<KeyValue> {
         .collect()
 }
 
-/// Mockoon exports either the environment itself or a wrapper listing its items.
+/// Mockers exports either the environment itself or a wrapper listing its items.
 fn environment_of(root: &Value) -> Option<&Value> {
     if root.get("routes").is_some() {
         return Some(root);
@@ -221,7 +221,7 @@ fn route_of(
     }
 }
 
-/// A bucket's value must be JSON here; Mockoon allows templates, which are not kept.
+/// A bucket's value must be JSON here; Mockers allows templates, which are not kept.
 fn buckets_of(env: &Value, notes: &mut Vec<String>) -> (Vec<DataBucket>, HashMap<String, String>) {
     let mut map = HashMap::new();
     let buckets = list(env, "data")
@@ -247,11 +247,11 @@ fn buckets_of(env: &Value, notes: &mut Vec<String>) -> (Vec<DataBucket>, HashMap
 
 pub fn import(source: &str) -> Result<Converted, AppError> {
     let root: Value = serde_json::from_str(source).map_err(|_| {
-        AppError::invalid_input("That file is not valid JSON, so it is not a Mockoon environment.")
+        AppError::invalid_input("That file is not valid JSON, so it is not a Mockers environment.")
     })?;
     let Some(env) = environment_of(&root) else {
         return Err(AppError::invalid_input(
-            "That JSON has no Mockoon environment in it.",
+            "That JSON has no Mockers environment in it.",
         ));
     };
     let mut notes = Vec::new();
@@ -369,7 +369,7 @@ fn mode_name(mode: ResponseMode) -> Value {
 fn route_json(route: &MockRoute) -> Value {
     let crud = route.kind == RouteKind::Crud;
     let responses: Vec<Value> = if crud {
-        // Mockoon wants one response on a CRUD route.
+        // Mockers wants one response on a CRUD route.
         vec![json!({
             "uuid": new_id(), "body": "", "latency": 0, "statusCode": 200, "label": "",
             "headers": [], "bodyType": "DATABUCKET", "filePath": "", "databucketID": "",
@@ -395,7 +395,7 @@ fn route_json(route: &MockRoute) -> Value {
     })
 }
 
-/// The mock as the environment object Mockoon opens.
+/// The mock as the environment object Mockers opens.
 pub fn export(mock: &MockEnvironment) -> Result<String, AppError> {
     let routes: Vec<Value> = mock.routes.iter().map(route_json).collect();
     let children: Vec<Value> = mock
@@ -449,7 +449,7 @@ pub fn export(mock: &MockEnvironment) -> Result<String, AppError> {
     env.insert("data".into(), Value::Array(data));
     env.insert("callbacks".into(), json!([]));
     serde_json::to_string_pretty(&Value::Object(env)).map_err(|source| {
-        AppError::internal("Could not write the Mockoon file.").with_detail(source.to_string())
+        AppError::internal("Could not write the Mockers file.").with_detail(source.to_string())
     })
 }
 
@@ -485,7 +485,7 @@ mod tests {
     }"#;
 
     #[test]
-    fn a_mockoon_environment_becomes_a_valid_mock_with_notes_for_what_is_lost() {
+    fn a_mockers_environment_becomes_a_valid_mock_with_notes_for_what_is_lost() {
         let done = import(SAMPLE).unwrap();
         let mock = &done.mock;
         validate("test", mock).unwrap();
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn the_wrapped_export_format_is_read_too() {
-        let wrapped = r#"{"source":"mockoon","data":[{"type":"environment","item":{"name":"W","routes":[]}}]}"#;
+        let wrapped = r#"{"source":"mockers","data":[{"type":"environment","item":{"name":"W","routes":[]}}]}"#;
         assert_eq!(import(wrapped).unwrap().mock.name, "W");
         assert!(import("{}").is_err());
         assert!(import("nope").is_err());

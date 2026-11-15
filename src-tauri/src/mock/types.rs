@@ -50,7 +50,7 @@ impl MockSummary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum MockImportFormat {
-    Mockoon,
+    Mockers,
     Openapi,
 }
 

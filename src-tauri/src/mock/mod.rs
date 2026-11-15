@@ -1,4 +1,4 @@
-//! Mockoon-style mock server (plan 11).
+//! Mockers-style mock server (plan 11).
 
 pub mod commands;
 pub mod crud;
@@ -7,7 +7,7 @@ pub mod engine;
 pub mod files;
 pub mod from_collection;
 pub mod matcher;
-pub mod mockoon;
+pub mod mockers;
 pub mod model;
 pub mod openapi;
 pub mod proxy;

@@ -3,7 +3,7 @@
 
 use serde_json::{json, Map, Value};
 
-use super::mockoon::Converted;
+use super::mockers::Converted;
 use super::model::{
     default_id_key, MockEnvironment, MockResponse, MockRoute, ResponseMode, RouteKind,
     RulesOperator, MAX_RESPONSES, MAX_ROUTES,

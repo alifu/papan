@@ -110,8 +110,8 @@ export function MocksPanel() {
                 icon="chevron-down"
                 items={[
                   {
-                    label: "Mockoon file…",
-                    onSelect: () => void importFile(collection.id, "mockoon"),
+                    label: "Mockers file…",
+                    onSelect: () => void importFile(collection.id, "mockers"),
                   },
                   {
                     label: "OpenAPI file…",
@@ -172,7 +172,7 @@ export function MocksPanel() {
                     className="tree-menu"
                     items={[
                       {
-                        label: "Export as Mockoon…",
+                        label: "Export as Mockers…",
                         disabled: Boolean(mock.error),
                         onSelect: () =>
                           void exportFile(collection.id, mock.file),

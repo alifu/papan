@@ -114,12 +114,12 @@ export const commands = {
 	/**  Writes a new mock with one route per HTTP, GraphQL and SOAP request of the collection. */
 	mockFromCollection: (collectionId: string) => __TAURI_INVOKE<MockSummary>("mock_from_collection", { collectionId }),
 	/**
-	 *  Picks a Mockoon or OpenAPI file, converts it and saves it as a new mock; `None` when the
+	 *  Picks a Mockers or OpenAPI file, converts it and saves it as a new mock; `None` when the
 	 *  file dialog is cancelled.
 	 */
 	importMock: (collectionId: string, format: MockImportFormat) => __TAURI_INVOKE<ImportedMock | null>("import_mock", { collectionId, format }),
 	/**
-	 *  Saves the mock as a Mockoon environment file; returns the saved file's name, or `None` when
+	 *  Saves the mock as a Mockers environment file; returns the saved file's name, or `None` when
 	 *  the save dialog is cancelled.
 	 */
 	exportMock: (collectionId: string, file: string) => __TAURI_INVOKE<string | null>("export_mock", { collectionId, file }),
@@ -618,7 +618,7 @@ export type MockEnvironment = {
 };
 
 /**  What a mock import reads. */
-export type MockImportFormat = "mockoon" | "openapi";
+export type MockImportFormat = "mockers" | "openapi";
 
 /**  One request the mock served. */
 export type MockLogEntry = {
