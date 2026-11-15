@@ -13,6 +13,7 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 
 use crate::commands;
 use crate::engine::graphql::commands as graphql;
+use crate::engine::graphql::subscription_commands as graphql_sub;
 use crate::engine::http::commands as http;
 use crate::engine::http::net_commands as net;
 use crate::engine::http::oauth::commands as oauth;
@@ -98,6 +99,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             graphql::read_cached_schema,
             graphql::load_schema_file,
             graphql::clear_cached_schema,
+            graphql_sub::graphql_subscribe,
+            graphql_sub::graphql_unsubscribe,
             soap::import_wsdl,
             soap::read_cached_wsdl,
             soap::soap_envelope,

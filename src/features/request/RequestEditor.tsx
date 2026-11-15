@@ -7,7 +7,11 @@ import "../collections/collections.css";
 import { reportError, showToast } from "../../ui/toastStore";
 import { importCurl } from "../curl/api";
 import { GraphqlEditor, graphqlBodyOf } from "../graphql/GraphqlEditor";
-import { SUBSCRIPTION_HINT, runsSubscription } from "../graphql/operations";
+import { runsSubscription } from "../graphql/operations";
+import { SubscriptionBar } from "../graphql/SubscriptionBar";
+import { SubscriptionPanel } from "../graphql/SubscriptionPanel";
+import { subscriptionOf } from "../graphql/subscriptionModel";
+import { SubscriptionSettings } from "../graphql/SubscriptionSettings";
 import { VariablesEditor } from "../graphql/VariablesEditor";
 import SoapPanel from "../soap/SoapPanel";
 import { useNetworkStore } from "../network/networkStore";
@@ -99,6 +103,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
 
   const kind = content.kind;
   const isWs = kind === "ws";
+  const isSubscription = runsSubscription(content);
   const wsSettings = wsSettingsOf(content);
   const sections = sectionsFor(kind, {
     params: tab.paramRows.filter((r) => r.enabled && r.name !== "").length,
@@ -109,7 +114,17 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   return (
     <div className="request-editor">
       <div className="request-pane" style={{ height: editorHeight }}>
-      {isWs ? (
+      {isSubscription ? (
+        <SubscriptionBar
+          tabId={tabId}
+          location={location}
+          content={content}
+          variables={variables}
+          dirty={tab.draft !== null}
+          onUrl={(url) => editUrl(tabId, url)}
+          onSave={() => void save(tabId, location)}
+        />
+      ) : isWs ? (
         <ConnectBar
           tabId={tabId}
           location={location}
@@ -128,7 +143,6 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
           sending={tab.sending}
           dirty={tab.draft !== null}
           hideMethod={kind === "graphql"}
-          sendBlockedReason={runsSubscription(content) ? SUBSCRIPTION_HINT : undefined}
           tlsVerified={content.settings.verify_tls}
           proxyActive={proxyActive}
           onImportCurl={(text) => void applyCurl(text)}
@@ -166,6 +180,13 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
             value={content.body.type === "graphql" ? content.body.variables : ""}
             variables={variables}
             onChange={(text) => edit(tabId, (c) => ({ ...c, body: { ...graphqlBodyOf(c), variables: text } }))}
+          />
+        ) : null}
+        {shown === "subscription" ? (
+          <SubscriptionSettings
+            settings={subscriptionOf(content)}
+            variables={variables}
+            onChange={(subscription) => edit(tabId, (c) => ({ ...c, subscription }))}
           />
         ) : null}
         {shown === "soap" ? <SoapPanel location={location} content={content} variables={variables} onChange={(update) => edit(tabId, update)} /> : null}
@@ -211,7 +232,9 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         onResize={resize}
         onToggle={() => resize(EDITOR_DEFAULT_HEIGHT)}
       />
-      {isWs ? (
+      {isSubscription ? (
+        <SubscriptionPanel tabId={tabId} location={location} />
+      ) : isWs ? (
         <WsPanel tabId={tabId} location={location} content={content} variables={variables} onChange={(update) => edit(tabId, update)} />
       ) : (
         <ResponseViewer response={tab.response} error={tab.error} sending={tab.sending} scripts={tab.scripts} onInsertScriptLine={insertPostResponseLine} />

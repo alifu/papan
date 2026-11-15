@@ -169,6 +169,13 @@ pub struct WsSettings {
     pub messages: Vec<WsTemplate>,
 }
 
+/// The `subscription` section of a `kind: graphql` request (plan 06b §3).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct SubscriptionSettings {
+    pub url: String,
+    pub init_payload: String,
+}
+
 /// The `soap` section of a `kind: soap` request (plan 06 §3.3).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct SoapSettings {
@@ -302,6 +309,8 @@ pub struct RequestContent {
     pub soap: SoapSettings,
     #[serde(default)]
     pub ws: WsSettings,
+    #[serde(default)]
+    pub subscription: SubscriptionSettings,
 }
 
 impl RequestContent {

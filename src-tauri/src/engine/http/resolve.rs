@@ -3,7 +3,9 @@
 //! file paths are never resolved: a variable must not choose which file is uploaded.
 
 use super::mask::mask_secrets;
-use crate::store::types::{Auth, Body, KeyValue, Part, RequestContent, SoapSettings, SoapVersion};
+use crate::store::types::{
+    Auth, Body, KeyValue, Part, RequestContent, SoapSettings, SoapVersion, SubscriptionSettings,
+};
 use crate::vars::dynamic::Dynamics;
 use crate::vars::resolve::{resolve_text, Report};
 use crate::vars::scopes::Scopes;
@@ -165,6 +167,13 @@ impl Resolver<'_> {
         }
     }
 
+    fn subscription(&mut self, settings: &SubscriptionSettings) -> SubscriptionSettings {
+        SubscriptionSettings {
+            url: self.text(&settings.url),
+            init_payload: self.text(&settings.init_payload),
+        }
+    }
+
     fn auth(&mut self, auth: &Auth) -> Auth {
         match auth {
             Auth::Basic { username, password } => Auth::Basic {
@@ -232,6 +241,7 @@ pub fn resolve_content(
         body: resolver.body(&content.body),
         auth: resolver.auth(&content.auth),
         soap: resolver.soap(&content.soap),
+        subscription: resolver.subscription(&content.subscription),
         ..content.clone()
     };
     Resolved {

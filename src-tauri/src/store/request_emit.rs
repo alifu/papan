@@ -8,6 +8,7 @@ use super::auth_model;
 use super::protocol_model::{self, SOAP};
 use super::request_model::{self, Extra, Fields, AUTH, BODY, DISABLED_PARAMS, HEADERS, SECTIONS};
 use super::script_model::{emit_scripts, SCRIPTS};
+use super::subscription_model::{self, SUBSCRIPTION};
 use super::types::{
     ApiKeyPlacement, Auth, Body, ClientAuth, HttpVersion, KeyValue, OAuthGrant, Pair, Part,
     RequestContent, RequestKind, Settings,
@@ -99,6 +100,7 @@ fn section_eq(key: &str, a: &RequestContent, b: &RequestContent) -> bool {
         HEADERS => a.headers == b.headers,
         SCRIPTS => a.scripts == b.scripts,
         SOAP => a.soap == b.soap,
+        SUBSCRIPTION => a.subscription == b.subscription,
         WS => a.ws == b.ws,
         _ => a.settings == b.settings,
     }
@@ -122,6 +124,7 @@ pub fn emit_section(key: &str, content: &RequestContent, raw: Option<&Value>) ->
         HEADERS => list_value(content.headers.iter().map(key_value_fields), raw),
         SCRIPTS => emit_scripts(&content.scripts, raw),
         SOAP => protocol_model::emit_soap(&content.soap, raw),
+        SUBSCRIPTION => subscription_model::emit_subscription(&content.subscription, raw),
         WS => ws_model::emit_ws(&content.ws, raw),
         _ => emit_settings(&content.settings, raw),
     }

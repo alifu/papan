@@ -6,7 +6,7 @@ const ids = (kind: "http" | "graphql" | "soap" | "ws") => sectionsFor(kind, { pa
 describe("sectionsFor", () => {
   it("matches the plan per kind", () => {
     expect(ids("http")).toEqual(["params", "headers", "body", "auth", "scripts", "settings"]);
-    expect(ids("graphql")).toEqual(["params", "headers", "query", "variables", "auth", "scripts", "settings"]);
+    expect(ids("graphql")).toEqual(["params", "headers", "query", "variables", "subscription", "auth", "scripts", "settings"]);
     expect(ids("soap")).toEqual(["params", "headers", "body", "soap", "auth", "scripts", "settings"]);
     expect(ids("ws")).toEqual(["params", "headers", "messages", "subprotocols", "auth", "settings"]);
   });

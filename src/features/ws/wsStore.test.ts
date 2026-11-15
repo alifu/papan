@@ -222,4 +222,56 @@ describe("wsStore", () => {
     useWsStore.getState().drop("t");
     expect(state()).toBeUndefined();
   });
+
+  describe("subscriptions", () => {
+    it("subscribe goes connecting, then open through graphqlSubscribe", async () => {
+      vi.mocked(api.graphqlSubscribe).mockResolvedValue(opened({ protocol: "graphql-transport-ws" }));
+      await useWsStore.getState().subscribe("t", loc, emptyContent());
+      expect(api.graphqlSubscribe).toHaveBeenCalledWith(CID, loc, emptyContent());
+      expect(api.wsConnect).not.toHaveBeenCalled();
+      expect(state()).toMatchObject({ status: "open", opened: { protocol: "graphql-transport-ws" } });
+    });
+
+    it("a failed start keeps the error", async () => {
+      vi.mocked(api.graphqlSubscribe).mockRejectedValue({ code: "network", message: "4401 unauthorized", detail: null });
+      await useWsStore.getState().subscribe("t", loc, emptyContent());
+      expect(state()).toMatchObject({ status: "closed", error: { message: "4401 unauthorized" } });
+    });
+
+    it("a user-cancelled start is not an error", async () => {
+      vi.mocked(api.graphqlSubscribe).mockRejectedValue({ code: "cancelled", message: "Cancelled", detail: null });
+      await useWsStore.getState().subscribe("t", loc, emptyContent());
+      expect(state()).toMatchObject({ status: "closed", error: null });
+    });
+
+    it("unsubscribe stays closing until the Closed event", async () => {
+      vi.mocked(api.graphqlSubscribe).mockResolvedValue(opened());
+      vi.mocked(api.graphqlUnsubscribe).mockResolvedValue(null);
+      await useWsStore.getState().subscribe("t", loc, emptyContent());
+      await useWsStore.getState().unsubscribe("t");
+      expect(api.graphqlUnsubscribe).toHaveBeenCalledWith(CID);
+      expect(state()?.status).toBe("closing");
+      emit({ connection_id: CID, kind: { type: "closed", code: 1000, reason: "", by: "client", error: null } });
+      expect(state()?.status).toBe("closed");
+    });
+
+    it("unsubscribe failure restores the open state and reports", async () => {
+      vi.mocked(api.graphqlSubscribe).mockResolvedValue(opened());
+      vi.mocked(api.graphqlUnsubscribe).mockRejectedValue({ code: "internal", message: "x", detail: null });
+      await useWsStore.getState().subscribe("t", loc, emptyContent());
+      await useWsStore.getState().unsubscribe("t");
+      expect(state()?.status).toBe("open");
+    });
+
+    it("ignores events for unknown ids and releases on tab close", async () => {
+      vi.mocked(api.graphqlSubscribe).mockResolvedValue(opened());
+      vi.mocked(api.wsDisconnect).mockResolvedValue(null);
+      await useWsStore.getState().subscribe("t", loc, emptyContent());
+      emit({ connection_id: "stale", kind: { type: "messages", items: [msg(1)] } });
+      expect(state()?.log).toEqual([]);
+      await useWsStore.getState().release("t");
+      expect(api.wsDisconnect).toHaveBeenCalledWith(CID, 1000, "");
+      expect(state()).toBeUndefined();
+    });
+  });
 });

@@ -54,7 +54,7 @@ test.describe("graphql", () => {
     await expect(page.getByText("Could not connect to localhost.")).toBeVisible();
   });
 
-  test("picks between operations, sends the selection and blocks subscriptions", async ({ page }) => {
+  test("picks between operations, sends the selection and starts subscriptions instead of sending", async ({ page }) => {
     await setQuery(page, "query A { user(id: 1) { id } } query B { search(text: \"x\") { __typename } }");
     await page.getByLabel("Operation").selectOption("B");
     await page.getByRole("tab", { name: "Variables" }).click();
@@ -71,7 +71,7 @@ test.describe("graphql", () => {
 
     await page.getByRole("tab", { name: "Query", exact: true }).click();
     await setQuery(page, "subscription S { tick }");
-    await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
-    await expect(page.getByText(/Subscriptions arrive with the WebSocket engine/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start" })).toBeVisible();
   });
 });

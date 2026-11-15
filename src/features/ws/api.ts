@@ -13,3 +13,6 @@ export const wsClearLog = (connectionId: string): Promise<null> => commands.wsCl
 /** One listener for every connection; the store routes by `connection_id`. Resolves to the unlisten function. */
 export const listenWsEvents = (onEvent: (event: WsEvent) => void): Promise<() => void> =>
   events.wsEvent.listen((e) => onEvent(e.payload));
+export const graphqlSubscribe = (connectionId: string, location: RequestLocation, content: RequestContent): Promise<WsOpened> =>
+  commands.graphqlSubscribe(connectionId, location, content);
+export const graphqlUnsubscribe = (connectionId: string): Promise<null> => commands.graphqlUnsubscribe(connectionId);

@@ -1,4 +1,4 @@
-//! The eight request sections of plan 03 §3, plan 05 §3 and plan 06 §3 (`auth`, `body`,
+//! The nine request sections of plan 03 §3, plan 05 §3 and plan 06 §3 (`auth`, `body`,
 //! `disabled_params`, `headers`, `scripts`, `settings`, `soap`): parsing from the raw YAML
 //! values and validation of the typed content. Emitting and the merge rule live in
 //! `request_emit`; the protocol parts (`kind`, GraphQL, SOAP) in `protocol_model`.
@@ -11,6 +11,7 @@ use super::auth_model::{parse_auth, validate_auth};
 use super::model;
 use super::protocol_model::{self, SOAP};
 use super::script_model::{parse_scripts, validate_scripts, SCRIPTS};
+use super::subscription_model::{self, SUBSCRIPTION};
 use super::types::{
     Body, HttpVersion, KeyValue, Pair, Part, RequestContent, RequestKind, Settings,
     DEFAULT_TIMEOUT_MS,
@@ -24,7 +25,7 @@ pub const BODY: &str = "body";
 pub const DISABLED_PARAMS: &str = "disabled_params";
 pub const HEADERS: &str = "headers";
 pub const SETTINGS: &str = "settings";
-pub const SECTIONS: [&str; 8] = [
+pub const SECTIONS: [&str; 9] = [
     AUTH,
     BODY,
     DISABLED_PARAMS,
@@ -32,6 +33,7 @@ pub const SECTIONS: [&str; 8] = [
     SCRIPTS,
     SETTINGS,
     SOAP,
+    SUBSCRIPTION,
     WS,
 ];
 
@@ -74,6 +76,7 @@ pub fn parse_sections(
         kind,
         soap: protocol_model::parse_soap(label, kind, extra.get(SOAP))?,
         ws: ws_model::parse_ws(label, kind, extra.get(WS))?,
+        subscription: subscription_model::parse_subscription(label, kind, extra.get(SUBSCRIPTION))?,
     };
     validate_sections(label, &content)?;
     Ok(content)

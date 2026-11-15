@@ -3,8 +3,13 @@
 
 pub mod cache;
 pub mod commands;
+pub mod driver;
+pub mod gql_ws;
 pub mod introspection;
 pub mod service;
+pub mod subscription;
+pub mod subscription_commands;
+pub mod subscription_service;
 pub mod types;
 
 pub use cache::SchemaCache;

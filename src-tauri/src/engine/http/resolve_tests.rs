@@ -262,3 +262,23 @@ fn graphql_query_variables_and_soap_action_resolve_but_operation_name_does_not()
     assert_eq!(soap_resolved.secret_headers, ["SOAPAction"]);
     assert!(!soap_resolved.redact("urn:S E").contains("S E"));
 }
+
+#[test]
+fn resolves_the_subscription_section_and_records_secrets() {
+    let content = RequestContent {
+        subscription: SubscriptionSettings {
+            url: "wss://{{v}}/ws".into(),
+            init_payload: "{ \"token\": \"{{s}}\" }".into(),
+        },
+        ..RequestContent::default()
+    };
+
+    let resolved = resolve_content(&content, &scopes(), &FixedDynamics::default());
+
+    assert_eq!(resolved.content.subscription.url, "wss://V/ws");
+    assert_eq!(
+        resolved.content.subscription.init_payload,
+        "{ \"token\": \"S E\" }"
+    );
+    assert!(resolved.secret_values.contains(&"S E".to_string()));
+}

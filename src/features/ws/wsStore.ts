@@ -48,6 +48,10 @@ export interface WsState {
   readonly idByLocation: Readonly<Record<string, string>>;
   connect: (tabId: string, location: RequestLocation, content: RequestContent) => Promise<void>;
   disconnect: (tabId: string) => Promise<void>;
+  /** Starts the GraphQL subscription of a request on its own connection. */
+  subscribe: (tabId: string, location: RequestLocation, content: RequestContent) => Promise<void>;
+  /** Stops the subscription (`complete`, then close); the tab stays closing until the Closed event. */
+  unsubscribe: (tabId: string) => Promise<void>;
   send: (tabId: string, location: RequestLocation, message: WsOutgoing) => Promise<void>;
   clear: (tabId: string) => Promise<void>;
   restore: (tabId: string, location: RequestLocation) => Promise<void>;
@@ -116,44 +120,49 @@ export const useWsStore = create<WsState>()((set, get) => {
     });
   };
 
+  const start = async (tabId: string, location: RequestLocation, open: (connectionId: string) => Promise<WsOpened>) => {
+    const connectionId = bind(tabId, location);
+    stopCloseTimer(tabId);
+    patch(tabId, (t) => ({ ...t, status: "connecting", opened: null, error: null, closed: null }));
+    try {
+      await ensureListening();
+      const opened = await open(connectionId);
+      patchLive(tabId, (t) => (t.status === "connecting" ? { ...t, status: "open", opened } : t));
+    } catch (err) {
+      if (!get().byTab[tabId]) return;
+      const error = toAppError(err);
+      const cancelled = error.code === "cancelled";
+      patchLive(tabId, (t) => ({ ...t, status: "closed", opened: null, error: cancelled ? null : error }));
+    }
+  };
+  const stop = async (tabId: string, close: (connectionId: string) => Promise<unknown>) => {
+    const connectionId = get().connByTab[tabId];
+    if (!connectionId) return;
+    patch(tabId, (t) => ({ ...t, status: "closing" }));
+    try {
+      await close(connectionId);
+      stopCloseTimer(tabId);
+      closeTimers.set(
+        tabId,
+        setTimeout(() => {
+          closeTimers.delete(tabId);
+          if (get().byTab[tabId]?.status === "closing") patch(tabId, (t) => ({ ...t, status: "closed" }));
+        }, CLOSE_TIMEOUT_MS),
+      );
+    } catch (err) {
+      patch(tabId, (t) => ({ ...t, status: t.opened ? "open" : "closed" }));
+      reportError(err);
+    }
+  };
+
   return {
     byTab: {},
     connByTab: {},
     idByLocation: {},
-    connect: async (tabId, location, content) => {
-      const connectionId = bind(tabId, location);
-      stopCloseTimer(tabId);
-      patch(tabId, (t) => ({ ...t, status: "connecting", opened: null, error: null, closed: null }));
-      try {
-        await ensureListening();
-        const opened = await api.wsConnect(connectionId, location, content);
-        patchLive(tabId, (t) => (t.status === "connecting" ? { ...t, status: "open", opened } : t));
-      } catch (err) {
-        if (!get().byTab[tabId]) return;
-        const error = toAppError(err);
-        const cancelled = error.code === "cancelled";
-        patchLive(tabId, (t) => ({ ...t, status: "closed", opened: null, error: cancelled ? null : error }));
-      }
-    },
-    disconnect: async (tabId) => {
-      const connectionId = get().connByTab[tabId];
-      if (!connectionId) return;
-      patch(tabId, (t) => ({ ...t, status: "closing" }));
-      try {
-        await api.wsDisconnect(connectionId, NORMAL_CLOSE, "");
-        stopCloseTimer(tabId);
-        closeTimers.set(
-          tabId,
-          setTimeout(() => {
-            closeTimers.delete(tabId);
-            if (get().byTab[tabId]?.status === "closing") patch(tabId, (t) => ({ ...t, status: "closed" }));
-          }, CLOSE_TIMEOUT_MS),
-        );
-      } catch (err) {
-        patch(tabId, (t) => ({ ...t, status: t.opened ? "open" : "closed" }));
-        reportError(err);
-      }
-    },
+    connect: (tabId, location, content) => start(tabId, location, (id) => api.wsConnect(id, location, content)),
+    disconnect: (tabId) => stop(tabId, (id) => api.wsDisconnect(id, NORMAL_CLOSE, "")),
+    subscribe: (tabId, location, content) => start(tabId, location, (id) => api.graphqlSubscribe(id, location, content)),
+    unsubscribe: (tabId) => stop(tabId, (id) => api.graphqlUnsubscribe(id)),
     send: async (tabId, location, message) => {
       const connectionId = bind(tabId, location);
       try {

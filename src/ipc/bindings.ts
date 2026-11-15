@@ -110,6 +110,13 @@ export const commands = {
 	/**  Deletes the cached schema of the request's resolved endpoint. */
 	clearCachedSchema: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<null>("clear_cached_schema", { location, content }),
 	/**
+	 *  Resolves `content`, opens a `graphql-transport-ws` socket and starts the
+	 *  subscription; resolves after `connection_ack`. Frames stream as `wsEvent`.
+	 */
+	graphqlSubscribe: (connectionId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<WsOpened>("graphql_subscribe", { connectionId, location, content }),
+	/**  Sends `complete` and closes the socket; also cancels a subscription that is starting. */
+	graphqlUnsubscribe: (connectionId: string) => __TAURI_INVOKE<null>("graphql_unsubscribe", { connectionId }),
+	/**
 	 *  Imports a WSDL and its imports; `None` when the file dialog is cancelled.
 	 *  Cancellable with `cancel_request(import_id)`.
 	 */
@@ -432,6 +439,7 @@ export type RequestContent = {
 	kind: RequestKind,
 	soap: SoapSettings,
 	ws?: WsSettings,
+	subscription?: SubscriptionSettings,
 };
 
 export type RequestDoc = {
@@ -616,6 +624,12 @@ export type StoredCookie = {
 	expires_at_ms: number | null,
 	http_only: boolean,
 	secure: boolean,
+};
+
+/**  The `subscription` section of a `kind: graphql` request (plan 06b §3). */
+export type SubscriptionSettings = {
+	url: string,
+	init_payload: string,
 };
 
 /**  A template resolved for display: secrets as "•••••", dynamics left as typed. */

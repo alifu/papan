@@ -20,7 +20,7 @@ export function sectionsFor(kind: RequestKind, counts: Counts): readonly TabItem
     { id: "scripts", label: "Scripts" },
     { id: "settings", label: "Settings" },
   ];
-  if (kind === "graphql") return [params, headers, { id: "query", label: "Query" }, { id: "variables", label: "Variables" }, ...tail];
+  if (kind === "graphql") return [params, headers, { id: "query", label: "Query" }, { id: "variables", label: "Variables" }, { id: "subscription", label: "Subscription" }, ...tail];
   if (kind === "soap") return [params, headers, { id: "body", label: "Body" }, { id: "soap", label: "SOAP" }, ...tail];
   return [params, headers, { id: "body", label: "Body" }, ...tail];
 }

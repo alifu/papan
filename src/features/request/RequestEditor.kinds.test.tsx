@@ -58,12 +58,18 @@ describe("RequestEditor by kind", () => {
     expect(useRequestStore.getState().byTab.t?.draft?.body).toMatchObject({ type: "graphql", variables: "1" });
   });
 
-  it("disables Send with a hint for a subscription and never sends it", async () => {
+  it("shows Start and the Subscription section, not Send, for a subscription, and never sends it", async () => {
+    vi.mocked(wsApi.wsLog).mockResolvedValue([]);
     await open(gql("subscription S { s }"));
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
-    expect(screen.getByText(/Subscriptions arrive with the WebSocket engine/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.getByLabelText("Subscription endpoint")).toHaveTextContent("ws://x/graphql");
+    expect(screen.getByText("No results yet.")).toBeVisible();
     await useRequestStore.getState().send("t", loc);
     expect(api.sendRequestOutcome).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("tab", { name: "Subscription" }));
+    await userEvent.type(screen.getByLabelText("WebSocket URL"), "w");
+    expect(useRequestStore.getState().byTab.t?.draft?.subscription).toMatchObject({ url: "w" });
   });
 
   it("enables Send once a query operation is selected", async () => {

@@ -19,8 +19,6 @@ export interface UrlBarProps {
   readonly onImportCurl?: (text: string) => void;
   /** GraphQL requests are always POST: the method select is hidden. */
   readonly hideMethod?: boolean;
-  /** Why Send is unavailable (for example a subscription); Send is disabled and shows this as its hint. */
-  readonly sendBlockedReason?: string;
   readonly onMethod: (method: string) => void;
   readonly onUrl: (url: string) => void;
   readonly onSend: () => void;
@@ -82,13 +80,8 @@ export function UrlBar(props: UrlBarProps) {
       {sending ? (
         <Button label="Cancel" onClick={props.onCancel} />
       ) : (
-        <Button label="Send" disabled={props.sendBlockedReason !== undefined} title={props.sendBlockedReason} onClick={props.onSend} />
+        <Button label="Send" onClick={props.onSend} />
       )}
-      {props.sendBlockedReason !== undefined ? (
-        <span className="send-hint" role="status">
-          {props.sendBlockedReason}
-        </span>
-      ) : null}
       <Button label="Save" disabled={!dirty} onClick={props.onSave} />
     </div>
   );

@@ -48,6 +48,7 @@ pub fn run() {
             app.manage(vars::commands::VarsState::new(vault));
             app.manage(open_graphql(app.handle())?);
             app.manage(engine::ws::WsEngine::default());
+            app.manage(engine::graphql::subscription_service::Subscriptions::default());
             app.manage(open_webhooks(app.handle())?);
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);

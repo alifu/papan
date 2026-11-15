@@ -88,7 +88,7 @@ impl Registry {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct WsEngine {
     registry: Arc<Mutex<Registry>>,
 }
@@ -229,7 +229,12 @@ impl WsEngine {
     /// Starts the close handshake (`code` defaults to 1000), or cancels a connect in
     /// progress. A connection that is already closed is not an error.
     pub async fn close(&self, id: &str, code: Option<u32>, reason: &str) -> Result<(), AppError> {
-        let code = close_code(code)?;
+        self.close_raw(id, close_code(code)?, reason).await
+    }
+
+    /// [`Self::close`] with a code the caller vouches for: protocol drivers close with
+    /// codes such as 1002 that a user may not choose.
+    pub async fn close_raw(&self, id: &str, code: u16, reason: &str) -> Result<(), AppError> {
         if reason.len() > MAX_REASON_BYTES {
             return Err(AppError::invalid_input(
                 "The close reason is longer than 123 bytes.",

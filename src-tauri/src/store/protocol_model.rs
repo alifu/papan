@@ -9,6 +9,7 @@ use super::request_emit::overlay;
 use super::request_model::{
     as_map, check_text, invalid, opt_text, present, text_or_empty, Fields, BODY,
 };
+use super::subscription_model;
 use super::types::{Body, RequestContent, RequestKind, SoapSettings, SoapVersion, WsdlRef};
 use super::ws_model;
 use super::yaml;
@@ -171,6 +172,7 @@ pub fn validate(label: &str, content: &RequestContent) -> Result<(), AppError> {
         return Err(soap_outside(label));
     }
     ws_model::validate(label, content)?;
+    subscription_model::validate(label, content)?;
     validate_soap(label, &content.soap)
 }
 

@@ -9,8 +9,6 @@ export interface GraphqlOperation {
   readonly type: OperationType;
 }
 
-export const SUBSCRIPTION_HINT = "Subscriptions arrive with the WebSocket engine (M6b).";
-
 function definitions(query: string): readonly OperationDefinitionNode[] {
   try {
     return parse(query, { noLocation: true }).definitions.filter(
@@ -35,7 +33,7 @@ export function selectedOperation(query: string, operationName: string): Graphql
   return all.length === 1 ? (all[0] ?? null) : null;
 }
 
-/** True when the request would run a subscription, which is not sent in M6. */
+/** True when the request would run a subscription (Start / Stop over WebSocket, not Send). */
 export function runsSubscription(content: RequestContent): boolean {
   const { body } = content;
   if (content.kind !== "graphql" || body.type !== "graphql") return false;

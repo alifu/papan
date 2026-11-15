@@ -431,3 +431,22 @@ fn invalid_websocket_files_name_the_file_and_the_field() {
         assert!(error.message.contains(field), "{name}: {}", error.message);
     }
 }
+
+#[test]
+fn m6b_subscription_requests_are_fixed_points_and_keep_the_section() {
+    let files = files_in(&fixtures().join("canonical/m6b"), ".http.yaml");
+    assert!(files.len() >= 2, "fixtures missing");
+
+    for path in &files {
+        assert_fixed_point(path, canonical);
+        let file = RequestFile::parse(&file_name(path), &fs::read(path).unwrap()).unwrap();
+        let content = file.content().unwrap();
+        assert_eq!(content.kind, RequestKind::Graphql);
+        let written = file.with_content(&content).unwrap();
+        assert_eq!(written.to_yaml().unwrap(), file.to_yaml().unwrap());
+    }
+    let full = fs::read(fixtures().join("canonical/m6b/subscription-full.http.yaml")).unwrap();
+    let content = RequestFile::parse("f", &full).unwrap().content().unwrap();
+    assert_eq!(content.subscription.url, "wss://{{host}}/graphql/ws");
+    assert!(content.subscription.init_payload.contains("authToken"));
+}

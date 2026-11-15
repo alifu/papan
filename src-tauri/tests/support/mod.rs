@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod digest;
+pub mod gql_ws_server;
 pub mod graphql_server;
 pub mod graphql_world;
 pub mod idp;

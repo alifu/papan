@@ -1,0 +1,14 @@
+body:
+  query: |
+    subscription OnMessage($room: ID!) { message(room: $room) { id text } }
+  type: graphql
+  variables: |
+    { "room": "{{room}}" }
+kind: graphql
+method: POST
+name: On message
+subscription:
+  init_payload: |
+    { "authToken": "{{token}}" }
+  url: wss://{{host}}/graphql/ws
+url: https://{{host}}/graphql
