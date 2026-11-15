@@ -149,6 +149,7 @@ fn kv(name: &str, value: &str) -> KeyValue {
 
 fn scripts(pre: &str, post: &str) -> Scripts {
     Scripts {
+        enabled: true,
         pre_request: pre.into(),
         post_response: post.into(),
     }
@@ -276,6 +277,51 @@ pm.variables.set("order", pm.variables.get("order") + "r");"#,
     let history = f.history_text();
     assert!(!history.contains("sig-global"), "{history}");
     assert_eq!(f.variable(&f.env, "order"), None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_disabled_level_is_skipped_without_an_error_and_the_others_still_run() {
+    let server = server::spawn().await;
+    let f = fixture(&server);
+    {
+        let mut guard = f.store.lock_store();
+        let collection = ScriptTarget::Collection {
+            collection_id: f.collection_id.clone(),
+        };
+        let folder = ScriptTarget::Folder {
+            collection_id: f.collection_id.clone(),
+            path: "auth".into(),
+        };
+        let off = Scripts {
+            enabled: false,
+            ..scripts(
+                "pm.variables.set(\"order\", \"BAD\"); throw new Error(\"no\");",
+                "",
+            )
+        };
+        guard.write_scripts(&collection, &off).unwrap();
+        guard
+            .write_scripts(&folder, &scripts("pm.variables.set(\"order\", \"f\");", ""))
+            .unwrap();
+    }
+    let draft = RequestContent {
+        headers: vec![kv("X-Order", "{{order}}")],
+        scripts: Scripts {
+            enabled: false,
+            ..scripts("pm.variables.set(\"order\", \"BAD2\");", "")
+        },
+        ..RequestContent::new("GET", "{{base}}/echo")
+    };
+
+    let (id, outcome) = f.send(&draft).await;
+
+    let outcome = outcome.unwrap();
+    assert!(
+        outcome.scripts.iter().all(|r| r.error.is_none()),
+        "{:?}",
+        outcome.scripts
+    );
+    assert_eq!(header(&f.echo(&id), "x-order").as_deref(), Some("f"));
 }
 
 #[tokio::test(flavor = "multi_thread")]

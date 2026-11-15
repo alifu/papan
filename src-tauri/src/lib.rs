@@ -45,6 +45,9 @@ pub fn run() {
                 app.handle(),
                 std::sync::Arc::clone(&vault),
             )?);
+            app.manage(interop::postman::commands::PostmanState::new(
+                std::sync::Arc::clone(&vault),
+            ));
             app.manage(vars::commands::VarsState::new(vault));
             app.manage(open_graphql(app.handle())?);
             app.manage(engine::ws::WsEngine::default());

@@ -82,6 +82,7 @@ async fn scripts_set_variables_and_test_the_graphql_response() {
     let gql = graphql_server::spawn().await;
     let w = world(&gql.url(""), "t");
     let scripts = Scripts {
+        enabled: true,
         pre_request: r#"pm.variables.set("uid", "42");"#.into(),
         post_response: r#"pm.test("user", () => {
   pm.expect(pm.response.json().data.user.id).to.eql("42");
@@ -106,6 +107,7 @@ async fn a_script_that_breaks_the_graphql_body_stops_the_send_and_history_keeps_
     let gql = graphql_server::spawn().await;
     let w = world(&gql.url(""), "t");
     let scripts = Scripts {
+        enabled: true,
         pre_request: r#"pm.request.body = "[1]";"#.into(),
         post_response: String::new(),
     };

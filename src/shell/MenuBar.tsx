@@ -25,6 +25,8 @@ export function MenuBar() {
           { label: "New Tab", shortcut: shortcutLabel("N"), onSelect: newTab },
           { label: "Save", shortcut: shortcutLabel("S"), onSelect: saveActiveRequest },
           { label: "Import cURL…", onSelect: () => showDialog("import-curl") },
+          { label: "Import Postman…", onSelect: () => showDialog("import-postman") },
+          { label: "Export to Postman…", onSelect: () => showDialog("export-postman") },
           { label: "Close Tab", shortcut: shortcutLabel("W"), onSelect: closeActiveTab },
         ]}
       />

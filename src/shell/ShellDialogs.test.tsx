@@ -6,6 +6,10 @@ import { useTabsStore } from "./tabsStore";
 
 vi.mock("../features/network/NetworkDialog", () => ({ NetworkDialog: () => <div>network dialog</div> }));
 vi.mock("../features/curl/ImportCurlDialog", () => ({ ImportCurlDialog: () => <div>import dialog</div> }));
+vi.mock("../features/postman/ImportPostmanDialog", () => ({ ImportPostmanDialog: () => <div>postman import dialog</div> }));
+vi.mock("../features/postman/ExportPostmanDialog", () => ({
+  ExportPostmanDialog: ({ collectionId }: { collectionId: string | null }) => <div>postman export {collectionId}</div>,
+}));
 vi.mock("../features/cookies/CookieManager", () => ({ CookieManager: () => <div>cookie dialog</div> }));
 
 beforeEach(() => {
@@ -26,6 +30,17 @@ describe("ShellDialogs", () => {
     useDialogsStore.setState({ open: "import-curl" });
     rerender(<ShellDialogs />);
     expect(screen.getByText("import dialog")).toBeInTheDocument();
+  });
+
+  it("renders the Postman dialogs and passes the collection to export", () => {
+    useDialogsStore.getState().show("import-postman");
+    const { rerender } = render(<ShellDialogs />);
+    expect(screen.getByText("postman import dialog")).toBeInTheDocument();
+    useDialogsStore.getState().show("export-postman", "c9");
+    rerender(<ShellDialogs />);
+    expect(screen.getByText("postman export c9")).toBeInTheDocument();
+    useDialogsStore.getState().close();
+    expect(useDialogsStore.getState().collectionId).toBeNull();
   });
 
   it("shows cookies only with an active request", () => {

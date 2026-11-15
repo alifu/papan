@@ -132,7 +132,7 @@ describe("RequestEditor scripts", () => {
     await userEvent.click(screen.getByRole("button", { name: "Post-response" }));
     await userEvent.type(screen.getByLabelText("Post-response script"), "a");
     const tab = useRequestStore.getState().byTab.t;
-    expect(tab?.draft?.scripts).toEqual({ pre_request: "", post_response: "a" });
+    expect(tab?.draft?.scripts).toEqual({ enabled: true, pre_request: "", post_response: "a" });
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 });

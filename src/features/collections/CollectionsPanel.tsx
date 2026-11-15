@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { RequestKind, ScriptTarget } from "../../ipc/bindings";
+import { useDialogsStore } from "../../shell/dialogsStore";
 import { useTabsStore } from "../../shell/tabsStore";
 import { Button } from "../../ui/Button";
 import { collectionLocation } from "../locations";
@@ -83,6 +84,7 @@ export function CollectionsPanel() {
       newRequest: (row) => setDialog({ kind: "newRequest", row }),
       newFolder: (row) => setDialog({ kind: "newFolder", row }),
       scripts: (row) => setDialog({ kind: "scripts", row }),
+      exportPostman: (row) => useDialogsStore.getState().show("export-postman", row.collectionId),
       rename: (row) => setDialog({ kind: "rename", row }),
       remove: (row) => setDialog({ kind: "delete", row }),
       closeCollection: (row) => {

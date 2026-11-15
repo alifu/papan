@@ -220,6 +220,7 @@ mod tests {
     fn introspection_keeps_url_headers_and_auth_and_drops_scripts() {
         let content = RequestContent {
             scripts: Scripts {
+                enabled: true,
                 pre_request: "x()".into(),
                 post_response: String::new(),
             },

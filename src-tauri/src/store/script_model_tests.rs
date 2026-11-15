@@ -5,6 +5,7 @@ use crate::error::ErrorCode;
 
 fn scripts(pre: &str, post: &str) -> Scripts {
     Scripts {
+        enabled: true,
         pre_request: pre.into(),
         post_response: post.into(),
     }
@@ -33,6 +34,8 @@ fn rejects_wrong_shapes_naming_file_and_field() {
     let cases = [
         (json!("x"), "`scripts`"),
         (json!({"pre_request": ["x"]}), "`scripts.pre_request`"),
+        (json!({"enabled": "no"}), "`scripts.enabled`"),
+        (json!({"enabled": 1}), "`scripts.enabled`"),
         (
             json!({"post_response": {"a": 1}}),
             "`scripts.post_response`",
@@ -102,4 +105,34 @@ fn with_scripts_replaces_or_removes_the_section() {
     assert_eq!(cleared, Extra::from([("other".to_string(), json!(true))]));
     assert_eq!(set[SCRIPTS], json!({"post_response": "b"}));
     assert_eq!(set["other"], json!(true));
+}
+
+#[test]
+fn enabled_defaults_to_true_and_parses_false() {
+    assert!(
+        parse_scripts("f", Some(&json!({"pre_request": "a"})))
+            .unwrap()
+            .enabled
+    );
+    let off = parse_scripts("f", Some(&json!({"enabled": false, "pre_request": "a"}))).unwrap();
+
+    assert!(!off.enabled);
+    assert_eq!(off.pre_request, "a");
+}
+
+#[test]
+fn emit_writes_enabled_only_when_false() {
+    let off = Scripts {
+        enabled: false,
+        ..scripts("a", "")
+    };
+
+    assert_eq!(
+        emit_scripts(&off, None),
+        Some(json!({"enabled": false, "pre_request": "a"}))
+    );
+    assert_eq!(
+        emit_scripts(&scripts("a", ""), Some(&json!({"enabled": false}))),
+        Some(json!({"pre_request": "a"}))
+    );
 }

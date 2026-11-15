@@ -90,6 +90,12 @@ export const commands = {
 	exportCurl: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<string>("export_curl", { location, content }),
 	/**  Parses a cURL command without executing or reading anything. */
 	importCurl: (text: string) => __TAURI_INVOKE<CurlImport>("import_curl", { text }),
+	postmanImportPick: () => __TAURI_INVOKE<PostmanPreview | null>("postman_import_pick"),
+	/**  `None` when the folder pick of a new-collection import is cancelled; the token stays valid. */
+	postmanImportCommit: (token: string, options: ImportOptions) => __TAURI_INVOKE<PostmanImportResult | null>("postman_import_commit", { token, options }),
+	postmanImportDiscard: (token: string) => __TAURI_INVOKE<null>("postman_import_discard", { token }),
+	/**  `None` when the folder pick is cancelled. */
+	postmanExport: (options: ExportOptions) => __TAURI_INVOKE<PostmanExportResult | null>("postman_export", { options }),
 	/**  Command 47: the token state of the draft's resolved OAuth 2 configuration. */
 	oauthStatus: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<OAuthStatus>("oauth_status", { location, content }),
 	/**  Command 48: runs "Get new token" for the configuration the dialog showed (`config_key`). */
@@ -346,6 +352,15 @@ export type ErrorCode =
 /**  A request was cancelled by the user. */
 "cancelled";
 
+export type ExportOptions = {
+	collection_id: string,
+	environments: string[],
+	include_globals: boolean,
+	include_secret_values: boolean,
+};
+
+export type GlobalsClash = "keep" | "overwrite";
+
 /**  A schema for one endpoint. `endpoint` is masked (scheme, host, port and path only). */
 export type GraphqlSchema = {
 	endpoint: string,
@@ -444,6 +459,17 @@ export type HistoryEntry = {
 /**  `Http2` is `h2` by ALPN over TLS and prior knowledge over cleartext (plan 03b §6.2). */
 export type HttpVersion = "auto" | "http1" | "http2";
 
+export type ImportOptions = {
+	target: ImportTarget,
+	/**  The user's final choice of secret variable names. */
+	secret_names: string[],
+	store_secret_values: boolean,
+	import_scripts: boolean,
+	globals_clash: GlobalsClash,
+};
+
+export type ImportTarget = { type: "new_collection" } | { type: "collection"; collection_id: string };
+
 /**  A header, form field or other name/value row that can be switched off. */
 export type KeyValue = {
 	name: string,
@@ -500,6 +526,40 @@ export type PickedFile = {
 	size_bytes: number,
 };
 
+export type PostmanExportResult = {
+	/**  File names written. */
+	files: string[],
+	report: ReportItem[],
+};
+
+export type PostmanFileKind = "collection_v20" | "collection_v21" | "environment" | "globals";
+
+export type PostmanFileSummary = {
+	/**  File name only, never a path. */
+	file: string,
+	kind: PostmanFileKind,
+	name: string,
+	requests: number,
+	folders: number,
+	variables: number,
+	scripts: number,
+	secret_candidates: string[],
+};
+
+export type PostmanImportResult = {
+	collection_id: string | null,
+	environments: string[],
+	globals: number,
+	report: ReportItem[],
+};
+
+export type PostmanPreview = {
+	token: string,
+	files: PostmanFileSummary[],
+	report: ReportItem[],
+	truncated: number,
+};
+
 export type ProtoImport = {
 	added: string[],
 	warnings: string[],
@@ -531,6 +591,16 @@ export type ReplayResult = {
 	item: ScratchItem,
 	warnings: string[],
 };
+
+export type ReportItem = {
+	level: ReportLevel,
+	file: string,
+	/**  JSON path or tree path. */
+	path: string,
+	message: string,
+};
+
+export type ReportLevel = "info" | "warning" | "skipped";
 
 /**  Everything about a request except its name. Enabled query parameters live only in `url`. */
 export type RequestContent = {
@@ -664,9 +734,12 @@ export type ScriptVarChange = {
 
 /**
  *  JavaScript run before the request is sent and after the response arrives (plan 05 §3).
- *  Empty means no script.
+ *  Empty means no script. `enabled: false` keeps them on disk but never runs them
+ *  (Postman imports start that way).
  */
 export type Scripts = {
+	/**  Absent in files and payloads from before M9: means enabled. */
+	enabled?: boolean,
 	pre_request: string,
 	post_response: string,
 };

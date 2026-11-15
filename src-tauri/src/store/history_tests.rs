@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::types::Auth;
+use crate::store::types::{Auth, Scripts};
 
 fn location() -> RequestLocation {
     RequestLocation::Scratch {
@@ -139,6 +139,37 @@ fn history_written_before_m6_reads_as_http() {
     assert_eq!(listed[0].kind, RequestKind::Http);
     assert_eq!(found.content.kind, RequestKind::Http);
     assert_eq!(found.content.soap, SoapSettings::default());
+}
+
+#[test]
+fn history_written_before_the_enabled_flag_keeps_its_scripts() {
+    let dir = tempfile::tempdir().unwrap();
+    let content = RequestContent {
+        scripts: Scripts {
+            enabled: true,
+            pre_request: "pm.test('a');".into(),
+            post_response: String::new(),
+        },
+        ..RequestContent::new("GET", "")
+    };
+    let mut file = serde_json::to_value(HistoryFile {
+        version: HISTORY_VERSION,
+        entries: vec![record("https://x", &content, ok())],
+    })
+    .unwrap();
+    let scripts = file["entries"][0]["content"]["scripts"]
+        .as_object_mut()
+        .unwrap();
+    scripts.remove("enabled");
+    std::fs::write(dir.path().join(HISTORY_FILE), file.to_string()).unwrap();
+    let history = History::new(dir.path());
+
+    let listed = history.list();
+
+    assert_eq!(listed.len(), 1);
+    let found = history.find(&listed[0].id).unwrap();
+    assert!(found.content.scripts.enabled);
+    assert_eq!(found.content.scripts.pre_request, "pm.test('a');");
 }
 
 #[test]

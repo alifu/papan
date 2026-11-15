@@ -333,6 +333,7 @@ fn normalise_matches_what_a_write_reads_back() {
 fn with_scripts(pre: &str, post: &str) -> RequestContent {
     RequestContent {
         scripts: crate::store::types::Scripts {
+            enabled: true,
             pre_request: pre.into(),
             post_response: post.into(),
         },

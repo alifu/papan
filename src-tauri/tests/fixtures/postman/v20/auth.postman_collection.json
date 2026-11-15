@@ -1,0 +1,58 @@
+{
+  "info": {
+    "_postman_id": "9a7b3c20-0000-4000-8000-000000000002",
+    "name": "Auth v2.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": { "token": "{{token}}" }
+  },
+  "item": [
+    {
+      "name": "Basic",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/basic",
+        "auth": {
+          "type": "basic",
+          "basic": { "username": "{{user}}", "password": "{{pass}}" }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "API key",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/apikey",
+        "auth": {
+          "type": "apikey",
+          "apikey": { "key": "X-Api-Key", "value": "{{apiKey}}", "in": "header" }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "OAuth2 bearer",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/oauth2",
+        "auth": {
+          "type": "oauth2",
+          "oauth2": { "accessToken": "{{accessToken}}", "addTokenTo": "header" }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "No auth",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/public",
+        "auth": { "type": "noauth" }
+      },
+      "response": []
+    }
+  ]
+}

@@ -17,7 +17,7 @@ export function emptyContent(): RequestContent {
     body: { type: "none" },
     auth: { type: "none" },
     settings: DEFAULT_SETTINGS,
-    scripts: { pre_request: "", post_response: "" },
+    scripts: { enabled: true, pre_request: "", post_response: "" },
     kind: "http",
     soap: { version: "1.1", action: "", wsdl: null },
     ws: { subprotocols: [], messages: [] },

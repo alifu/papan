@@ -1,0 +1,44 @@
+{
+  "info": {
+    "_postman_id": "6f1c2a10-0000-4000-8000-000000000401",
+    "name": "Bad duplicate names",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://one.example.test" },
+    { "key": "baseUrl", "value": "https://two.example.test" },
+    { "key": "token", "value": "FAKE-TOKEN-A-DO-NOT-USE", "type": "secret" },
+    { "key": "token", "value": "plain", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Dup",
+      "request": { "method": "GET", "url": "{{baseUrl}}/a" }
+    },
+    {
+      "name": "Dup",
+      "request": { "method": "GET", "url": "{{baseUrl}}/b" }
+    },
+    {
+      "name": "Dup",
+      "item": [
+        { "name": "Dup", "request": { "method": "GET", "url": "{{baseUrl}}/c" } },
+        { "name": "Dup", "request": { "method": "GET", "url": "{{baseUrl}}/d" } }
+      ]
+    },
+    {
+      "name": "Dup",
+      "item": []
+    },
+    {
+      "_postman_id": "6f1c2a10-0000-4000-8000-000000000402",
+      "name": "Same id A",
+      "request": { "method": "GET", "url": "{{baseUrl}}/e" }
+    },
+    {
+      "_postman_id": "6f1c2a10-0000-4000-8000-000000000402",
+      "name": "Same id B",
+      "request": { "method": "GET", "url": "{{baseUrl}}/f" }
+    }
+  ]
+}

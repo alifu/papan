@@ -36,6 +36,7 @@ async fn introspection_returns_the_schema_caches_it_and_writes_no_history() {
     let w = world(&gql.url(""), SECURE_TOKEN);
     let content = RequestContent {
         scripts: Scripts {
+            enabled: true,
             pre_request: "throw new Error('scripts must not run')".into(),
             post_response: String::new(),
         },

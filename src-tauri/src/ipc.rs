@@ -23,6 +23,7 @@ use crate::engine::soap::commands as soap;
 use crate::engine::ws::commands as ws;
 use crate::engine::ws::types::WsEvent;
 use crate::error::AppError;
+use crate::interop::postman::commands as postman;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
 use crate::vars::commands as vars;
@@ -93,6 +94,10 @@ pub fn builder() -> Builder<tauri::Wry> {
             net::delete_cookies,
             net::export_curl,
             net::import_curl,
+            postman::postman_import_pick,
+            postman::postman_import_commit,
+            postman::postman_import_discard,
+            postman::postman_export,
             oauth::oauth_status,
             oauth::oauth_authorize,
             oauth::oauth_cancel,

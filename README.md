@@ -40,3 +40,15 @@ Papan sends gRPC calls from `kind: grpc` requests. A request names a service and
 - **Metadata.** Headers are sent as gRPC metadata. Names ending in `-bin` take base64 values. Reserved names such as `content-type` and `grpc-*` are refused.
 - **Streaming.** There are four method kinds: unary (one message in, one out), server streaming (one in, many out), client streaming (many in, one out) and bidirectional. A streaming call stays open until you send End to close the request side or Cancel to stop the call. Messages in both directions appear in the log in order.
 - **Deadline.** An optional deadline in milliseconds ends the call with `DEADLINE_EXCEEDED` when it passes.
+
+## Postman
+
+Papan imports and exports Postman Collection v2.0 and v2.1 files, plus environments and globals. The test fixtures live in `src-tauri/tests/fixtures/postman/`.
+
+- **Fixtures.** `v21/` and `v20/` hold valid collections, `env/` holds an environment and globals, and `hostile/` holds `bad-*` files that must be refused or skipped without panics or writes outside the staging folder. All secret values in fixtures are fake.
+- **Schema.** `schema/` holds the official Postman Collection JSON schemas for v2.1.0 and v2.0.0, used by tests to check exports. They come from `postmanlabs/schemas` (Apache-2.0). `schema/LICENSE` is the licence text and `schema/SOURCE.md` records the URLs and SHA-256 hashes.
+- **Huge collection (not committed).** The item-count limit is tested with a generated file. Write it to a temporary folder, never into the repo:
+
+  ```sh
+  python3 -c "import json; print(json.dumps({'info': {'name': 'Huge', 'schema': 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'}, 'item': [{'name': f'r{i}', 'request': {'method': 'GET', 'url': f'https://example.test/{i}'}} for i in range(20000)]}))" > "$TMPDIR/huge.postman_collection.json"
+  ```

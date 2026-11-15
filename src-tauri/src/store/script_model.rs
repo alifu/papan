@@ -13,7 +13,8 @@ pub const SCRIPTS: &str = "scripts";
 pub const MAX_SCRIPT_BYTES: usize = 256 * 1024;
 const PRE_REQUEST: &str = "pre_request";
 const POST_RESPONSE: &str = "post_response";
-const SCRIPT_KEYS: [&str; 2] = [POST_RESPONSE, PRE_REQUEST];
+const ENABLED: &str = "enabled";
+const SCRIPT_KEYS: [&str; 3] = [ENABLED, POST_RESPONSE, PRE_REQUEST];
 
 /// The typed `scripts` section, validated; missing or null is empty.
 pub fn parse_scripts(label: &str, value: Option<&Value>) -> Result<Scripts, AppError> {
@@ -22,11 +23,25 @@ pub fn parse_scripts(label: &str, value: Option<&Value>) -> Result<Scripts, AppE
     };
     let fields = as_map(label, value, SCRIPTS)?;
     let scripts = Scripts {
+        enabled: enabled_flag(label, fields)?,
         pre_request: script_text(label, fields, PRE_REQUEST)?,
         post_response: script_text(label, fields, POST_RESPONSE)?,
     };
     validate_scripts(label, &scripts)?;
     Ok(scripts)
+}
+
+/// Missing or null means enabled; anything but a boolean is rejected.
+fn enabled_flag(label: &str, fields: &Fields) -> Result<bool, AppError> {
+    match present(fields.get(ENABLED)) {
+        None => Ok(true),
+        Some(Value::Bool(flag)) => Ok(*flag),
+        Some(_) => Err(invalid(
+            label,
+            &format!("{SCRIPTS}.{ENABLED}"),
+            "must be a boolean.",
+        )),
+    }
 }
 
 /// Text only: a script that YAML reads as a number or flag is still rejected.
@@ -58,7 +73,7 @@ pub fn validate_scripts(label: &str, scripts: &Scripts) -> Result<(), AppError> 
 /// The canonical section, or `None` when both scripts are empty and `raw` holds nothing
 /// else worth keeping.
 pub fn emit_scripts(scripts: &Scripts, raw: Option<&Value>) -> Option<Value> {
-    let canonical: Fields = [
+    let mut canonical: Fields = [
         (PRE_REQUEST, &scripts.pre_request),
         (POST_RESPONSE, &scripts.post_response),
     ]
@@ -66,6 +81,9 @@ pub fn emit_scripts(scripts: &Scripts, raw: Option<&Value>) -> Option<Value> {
     .filter(|(_, text)| !text.is_empty())
     .map(|(key, text)| (key.to_string(), Value::String(text.clone())))
     .collect();
+    if !scripts.enabled {
+        canonical.insert(ENABLED.to_string(), Value::Bool(false));
+    }
     let all = overlay(canonical, raw, &SCRIPT_KEYS);
     (!all.is_empty()).then_some(Value::Object(all))
 }

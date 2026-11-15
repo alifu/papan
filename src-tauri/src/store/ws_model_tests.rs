@@ -145,6 +145,7 @@ fn ws_requests_refuse_body_scripts_and_soap() {
     assert_names(&validate_content("r", &soap).unwrap_err(), "soap");
     let scripted = RequestContent {
         scripts: Scripts {
+            enabled: true,
             pre_request: "1".into(),
             post_response: String::new(),
         },

@@ -12,7 +12,7 @@ const target = { scope: "folder", collection_id: "c1", path: "auth" } as const;
 describe("ScriptsDialog", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(api.readScripts).mockResolvedValue({ pre_request: "a();", post_response: "" });
+    vi.mocked(api.readScripts).mockResolvedValue({ enabled: false, pre_request: "a();", post_response: "" });
     vi.mocked(api.writeScripts).mockResolvedValue(null);
   });
 
@@ -21,10 +21,12 @@ describe("ScriptsDialog", () => {
     render(<ScriptsDialog title="Folder scripts" target={target} onClose={onClose} />);
     const editor = await screen.findByLabelText("Pre-request script");
     expect(editor).toHaveValue("a();");
+    expect(screen.getByRole("note")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Enabled" }));
     await userEvent.type(editor, "b");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(api.readScripts).toHaveBeenCalledWith(target);
-    expect(api.writeScripts).toHaveBeenCalledWith(target, { pre_request: "a();b", post_response: "" });
+    expect(api.writeScripts).toHaveBeenCalledWith(target, { enabled: true, pre_request: "a();b", post_response: "" });
     expect(onClose).toHaveBeenCalled();
   });
 

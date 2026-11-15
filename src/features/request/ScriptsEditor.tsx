@@ -22,6 +22,19 @@ export function ScriptsEditor({ scripts, phase, onPhase, onChange }: ScriptsEdit
   const setText = (text: string) => onChange({ ...scripts, [phase]: text });
   return (
     <div className="scripts-editor">
+      <label className="scripts-enabled">
+        <input
+          type="checkbox"
+          checked={scripts.enabled}
+          onChange={(e) => onChange({ ...scripts, enabled: e.target.checked })}
+        />{" "}
+        Enabled
+      </label>
+      {!scripts.enabled && (
+        <p role="note" className="scripts-disabled-note">
+          Disabled: these scripts will not run. Review them before enabling.
+        </p>
+      )}
       <div className="scripts-toolbar" role="toolbar" aria-label="Script phase">
         {(Object.keys(PHASE_LABELS) as ScriptPhase[]).map((p) => (
           <Button key={p} label={PHASE_LABELS[p]} pressed={p === phase} onClick={() => onPhase(p)} />

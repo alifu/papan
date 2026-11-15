@@ -39,6 +39,7 @@ fn fixture() -> Fixture {
 
 fn scripts() -> Scripts {
     Scripts {
+        enabled: true,
         pre_request: PRE.into(),
         post_response: POST.into(),
     }
@@ -148,6 +149,7 @@ fn our_own_script_writes_do_not_look_like_outside_changes() {
 fn bad_targets_and_oversized_scripts_are_rejected() {
     let mut f = fixture();
     let huge = Scripts {
+        enabled: true,
         pre_request: "x".repeat(256 * 1024 + 1),
         post_response: String::new(),
     };

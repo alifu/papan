@@ -68,12 +68,13 @@ pub fn collect_chains(
         }
     }
     sources.push(("request".into(), request.clone()));
+    let active: Vec<&(String, Scripts)> = sources.iter().filter(|(_, s)| s.enabled).collect();
     Ok(Chains {
-        pre_request: sources
+        pre_request: active
             .iter()
             .map(|(label, s)| Script::new(label.clone(), s.pre_request.clone()))
             .collect(),
-        post_response: sources
+        post_response: active
             .iter()
             .map(|(label, s)| Script::new(label.clone(), s.post_response.clone()))
             .collect(),

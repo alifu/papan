@@ -1,0 +1,81 @@
+{
+  "info": {
+    "_postman_id": "6f1c2a10-0000-4000-8000-000000000002",
+    "name": "Bodies v2.1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Raw JSON",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/raw/json",
+        "body": { "mode": "raw", "raw": "{\"ok\": true}", "options": { "raw": { "language": "json" } } }
+      }
+    },
+    {
+      "name": "Raw text without language",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/raw/text",
+        "body": { "mode": "raw", "raw": "plain words" }
+      }
+    },
+    {
+      "name": "Raw XML",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/raw/xml",
+        "body": { "mode": "raw", "raw": "<note><to>Ada</to></note>", "options": { "raw": { "language": "xml" } } }
+      }
+    },
+    {
+      "name": "Urlencoded",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/form",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "name", "value": "Ada" },
+            { "key": "skipped", "value": "x", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Formdata",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/upload",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "title", "value": "hello", "type": "text" },
+            { "key": "upload", "type": "file", "src": "sample.txt" },
+            { "key": "old", "value": "x", "type": "text", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "File body",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/blob",
+        "body": { "mode": "file", "file": { "src": "sample.bin" } }
+      }
+    },
+    {
+      "name": "GraphQL body",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/graphql",
+        "body": {
+          "mode": "graphql",
+          "graphql": { "query": "query Viewer { viewer { id } }", "variables": "{\"limit\": 5}" }
+        }
+      }
+    }
+  ]
+}

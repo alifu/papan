@@ -126,6 +126,10 @@ fn with_m6_defaults(mut file: serde_json::Value) -> serde_json::Value {
         if let Some(content) = entry.get_mut("content").and_then(|c| c.as_object_mut()) {
             fill(content, "kind", serde_json::json!(RequestKind::Http));
             fill(content, "soap", serde_json::json!(SoapSettings::default()));
+            // M5-M8 records have scripts without the `enabled` flag (they always ran).
+            if let Some(scripts) = content.get_mut("scripts").and_then(|s| s.as_object_mut()) {
+                fill(scripts, "enabled", serde_json::json!(true));
+            }
         }
     }
     file

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { installEnvFake } from "./envMock";
+import { installPostmanFake } from "./postmanMock";
 import { installNetFake } from "./netMock";
 import { installGraphqlFake } from "./graphqlMock";
 import { installSoapFake } from "./soapMock";
@@ -347,6 +348,7 @@ export async function mockTauri(page: Page): Promise<void> {
   await installEnvFake(page);
   await installNetFake(page);
   await installSoapFake(page);
+  await installPostmanFake(page);
   await installGraphqlFake(page);
   await installWebhookFake(page);
 }

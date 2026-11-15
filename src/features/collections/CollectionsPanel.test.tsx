@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useDialogsStore } from "../../shell/dialogsStore";
 import { useTabsStore } from "../../shell/tabsStore";
 import { makeTree } from "../../test/fixtures";
 import { useToastStore } from "../../ui/toastStore";
@@ -97,10 +98,17 @@ describe("CollectionsPanel", () => {
       await userEvent.keyboard("{Escape}");
       return items;
     };
-    expect(await labels("My API")).toEqual(["New Request", "New Folder", "Scripts…", "Close"]);
+    expect(await labels("My API")).toEqual(["New Request", "New Folder", "Scripts…", "Export to Postman…", "Close"]);
     expect(await labels("auth")).toEqual(["New Request", "New Folder", "Scripts…", "Rename", "Move Up", "Move Down", "Delete"]);
     expect(await labels("login")).toEqual(["Rename", "Move Up", "Move Down", "Delete"]);
     expect(await labels("broken")).toEqual(["Delete"]);
+  });
+
+  it("Export to Postman opens the export dialog for that collection", async () => {
+    seed();
+    render(<CollectionsPanel />);
+    await pick("My API", "Export to Postman…");
+    expect(useDialogsStore.getState()).toMatchObject({ open: "export-postman", collectionId: "c1" });
   });
 
   it("disables Move Up at the top and Move Down at the bottom", async () => {

@@ -300,11 +300,29 @@ impl Default for Settings {
 }
 
 /// JavaScript run before the request is sent and after the response arrives (plan 05 §3).
-/// Empty means no script.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+/// Empty means no script. `enabled: false` keeps them on disk but never runs them
+/// (Postman imports start that way).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct Scripts {
+    /// Absent in files and payloads from before M9: means enabled.
+    #[serde(default = "scripts_enabled_by_default")]
+    pub enabled: bool,
     pub pre_request: String,
     pub post_response: String,
+}
+
+fn scripts_enabled_by_default() -> bool {
+    true
+}
+
+impl Default for Scripts {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pre_request: String::new(),
+            post_response: String::new(),
+        }
+    }
 }
 
 /// Where folder or collection scripts live; request scripts travel in `RequestContent`.

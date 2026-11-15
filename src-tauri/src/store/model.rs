@@ -376,6 +376,7 @@ mod tests {
 
     fn sample_scripts() -> Scripts {
         Scripts {
+            enabled: true,
             pre_request: "a();\nb();\n".into(),
             post_response: String::new(),
         }

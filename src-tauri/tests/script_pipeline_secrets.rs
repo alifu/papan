@@ -83,6 +83,7 @@ impl Fixture {
     async fn send(&self, pre: &str, post: &str) -> SendOutcome {
         let content = RequestContent {
             scripts: Scripts {
+                enabled: true,
                 pre_request: pre.into(),
                 post_response: post.into(),
             },

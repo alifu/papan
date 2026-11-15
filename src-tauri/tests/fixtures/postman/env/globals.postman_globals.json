@@ -1,0 +1,12 @@
+{
+  "id": "3c1f0e00-0000-4000-8000-00000000f001",
+  "name": "Globals",
+  "values": [
+    { "key": "userAgent", "value": "papan-fixture", "type": "default", "enabled": true },
+    { "key": "globalApiKey", "value": "FAKE-GLOBAL-API-KEY-DO-NOT-USE", "type": "secret", "enabled": true },
+    { "key": "unusedFlag", "value": "off", "type": "default", "enabled": false }
+  ],
+  "_postman_variable_scope": "globals",
+  "_postman_exported_at": "2026-11-01T00:00:00.000Z",
+  "_postman_exported_using": "Postman/11.0.0"
+}

@@ -1,0 +1,70 @@
+{
+  "info": {
+    "_postman_id": "6f1c2a10-0000-4000-8000-000000000004",
+    "name": "Scripts v2.1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": ["pm.environment.set('startedAt', Date.now());"]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": ["pm.test('status is 200', function () {", "    pm.response.to.have.status(200);", "});"]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Folder with script",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.collectionVariables.set('lastId', pm.response.json().id);"]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Supported calls",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.variables.set('nonce', 'abc');", "pm.request.headers.add({ key: 'X-Nonce', value: 'abc' });"]
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/scripted" }
+        },
+        {
+          "name": "Unsupported calls",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// pm.visualizer and pm.sendRequest are not supported by Papan",
+                  "pm.visualizer.set('<b>{{x}}</b>', {});",
+                  "pm.sendRequest('https://example.test/side', function () {});",
+                  "const jar = pm.cookies.jar();"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/unsupported" }
+        }
+      ]
+    }
+  ]
+}
