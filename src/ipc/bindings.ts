@@ -118,11 +118,34 @@ export const commands = {
 	readCachedWsdl: (location: RequestLocation, wsdl: WsdlRef) => __TAURI_INVOKE<WsdlImport | null>("read_cached_wsdl", { location, wsdl }),
 	/**  Generates the envelope of one operation from the cached model. */
 	soapEnvelope: (wsdlId: string, service: string, port: string, operation: string, options: EnvelopeOptions) => __TAURI_INVOKE<SoapTemplate>("soap_envelope", { wsdlId, service, port, operation, options }),
+	/**
+	 *  Resolves the variables of `content` for `location`, opens the socket and streams its
+	 *  events as `wsEvent` (messages batched every 50 ms).
+	 */
+	wsConnect: (connectionId: string, location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<WsOpened>("ws_connect", { connectionId, location, content }),
+	/**  Resolves the variables of `message` with the scopes of `location` and sends it. */
+	wsSend: (connectionId: string, location: RequestLocation, message: WsOutgoing) => __TAURI_INVOKE<WsMessage>("ws_send", { connectionId, location, message }),
+	/**  Closes the connection with the close handshake; also cancels a connect in progress. */
+	wsDisconnect: (connectionId: string, code: number | null, reason: string) => __TAURI_INVOKE<null>("ws_disconnect", { connectionId, code, reason }),
+	wsLog: (connectionId: string) => __TAURI_INVOKE<WsMessage[]>("ws_log", { connectionId }),
+	wsClearLog: (connectionId: string) => __TAURI_INVOKE<null>("ws_clear_log", { connectionId }),
+	listWebhooks: () => __TAURI_INVOKE<WebhookListener[]>("list_webhooks"),
+	saveWebhook: (config: WebhookConfig) => __TAURI_INVOKE<WebhookListener>("save_webhook", { config }),
+	deleteWebhook: (id: string) => __TAURI_INVOKE<null>("delete_webhook", { id }),
+	startWebhook: (id: string) => __TAURI_INVOKE<WebhookListener>("start_webhook", { id }),
+	stopWebhook: (id: string) => __TAURI_INVOKE<null>("stop_webhook", { id }),
+	listCaptures: (id: string) => __TAURI_INVOKE<CaptureSummary[]>("list_captures", { id }),
+	readCapture: (id: string, captureId: string) => __TAURI_INVOKE<Capture>("read_capture", { id, captureId }),
+	clearCaptures: (id: string) => __TAURI_INVOKE<null>("clear_captures", { id }),
+	replayCapture: (id: string, captureId: string) => __TAURI_INVOKE<ReplayResult>("replay_capture", { id, captureId }),
 };
 
 /** Events */
 export const events = {
 	collectionChanged: makeEvent<CollectionChanged, CollectionChanged>("collection-changed"),
+	webhookCaptured: makeEvent<WebhookCaptured, WebhookCaptured>("webhook-captured"),
+	webhookStopped: makeEvent<WebhookStopped, WebhookStopped>("webhook-stopped"),
+	wsEvent: makeEvent<WsEvent, WsEvent>("ws-event"),
 };
 
 /* Types */
@@ -151,6 +174,25 @@ export type Body = { type: "none" } | { type: "json"; text: string } | { type: "
 { type: "graphql"; query: string; variables: string; operation_name: string } | { type: "unsupported" };
 
 export type BodyEncoding = "text" | "base64" | "none";
+
+export type Capture = {
+	summary: CaptureSummary,
+	query: string,
+	headers: KeyValue[],
+	remote: string,
+	body_text: string | null,
+	body_base64: string | null,
+	truncated: boolean,
+};
+
+export type CaptureSummary = {
+	id: string,
+	at_ms: number | null,
+	method: string,
+	path: string,
+	size: number,
+	content_type: string,
+};
 
 /**  How the OAuth 2 client authenticates to the token endpoint. */
 export type ClientAuth = "basic" | "body";
@@ -371,6 +413,12 @@ export type ProxySettings = {
 	bypass: string[],
 };
 
+/**  Result of turning a capture into a scratch request. */
+export type ReplayResult = {
+	item: ScratchItem,
+	warnings: string[],
+};
+
 /**  Everything about a request except its name. Enabled query parameters live only in `url`. */
 export type RequestContent = {
 	method: string,
@@ -383,6 +431,7 @@ export type RequestContent = {
 	scripts: Scripts,
 	kind: RequestKind,
 	soap: SoapSettings,
+	ws?: WsSettings,
 };
 
 export type RequestDoc = {
@@ -391,7 +440,7 @@ export type RequestDoc = {
 };
 
 /**  Which editor a request opens in and how its body is built (plan 06 §3.1). */
-export type RequestKind = "http" | "graphql" | "soap";
+export type RequestKind = "http" | "graphql" | "soap" | "ws";
 
 /**  Where a request lives: in the app's scratch area or inside a collection. */
 export type RequestLocation = { scope: "scratch"; id: string } | { scope: "collection"; collection_id: string; path: string };
@@ -641,6 +690,104 @@ export type VariableInput = {
 	enabled: boolean,
 	secret: boolean,
 	secret_edit: SecretEdit,
+};
+
+export type WebhookBind = "loopback" | "all_interfaces";
+
+/**  Emitted for each captured request. TS: `events.webhookCaptured`. */
+export type WebhookCaptured = {
+	listener_id: string,
+	capture: CaptureSummary,
+};
+
+export type WebhookConfig = {
+	id: string,
+	name: string,
+	bind: WebhookBind,
+	/**  0 means any free port. */
+	port: number,
+	path: string,
+	response: WebhookResponse,
+	max_body_bytes: number,
+	max_captures: number,
+};
+
+export type WebhookListener = {
+	config: WebhookConfig,
+	running: boolean,
+	url: string | null,
+	captured: number,
+	unmatched: number,
+};
+
+export type WebhookResponse = {
+	status: number,
+	headers: KeyValue[],
+	body: string,
+};
+
+/**  Emitted when a listener stops on its own. TS: `events.webhookStopped`. */
+export type WebhookStopped = {
+	listener_id: string,
+	error: AppError | null,
+};
+
+export type WsCloseBy = "client" | "server" | "error";
+
+export type WsDirection = "sent" | "received";
+
+/**  Emitted per connection. TS: `events.wsEvent`. */
+export type WsEvent = {
+	connection_id: string,
+	kind: WsEventKind,
+};
+
+export type WsEventKind = {
+	type: "opened",
+} & WsOpened | ({ type: "messages"; items: WsMessage[] }) & { by?: never; code?: never; error?: never; reason?: never } | ({ type: "closed"; code: number | null; reason: string; by: WsCloseBy; error: AppError | null }) & { items?: never };
+
+/**  How a WebSocket template message is sent (plan 07 §4). */
+export type WsFormat = "text" | "json" | "binary";
+
+export type WsFrame = "text" | "binary" | "ping" | "pong" | "close";
+
+/**  One logged frame. `text` is base64 for `Binary`; secrets are masked. */
+export type WsMessage = {
+	seq: number,
+	at_ms: number | null,
+	direction: WsDirection,
+	frame: WsFrame,
+	text: string,
+	size: number,
+	truncated: boolean,
+};
+
+export type WsOpened = {
+	connection_id: string,
+	/**  Masked. */
+	url: string,
+	protocol: string | null,
+	status: number,
+	/**  Response headers, `Set-Cookie` values masked. */
+	headers: KeyValue[],
+};
+
+export type WsOutgoing = {
+	frame: WsFormat,
+	text: string,
+};
+
+/**  The `ws` section of a `kind: ws` request (plan 07 §4). */
+export type WsSettings = {
+	subprotocols: string[],
+	messages: WsTemplate[],
+};
+
+/**  A saved message of a `kind: ws` request. */
+export type WsTemplate = {
+	name: string,
+	format: WsFormat,
+	text: string,
 };
 
 /**  A parsed WSDL. `source` and `fetched` are masked locations. */

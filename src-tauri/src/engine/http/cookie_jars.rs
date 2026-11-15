@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 
-use super::client::{jar_key, Clients};
+use super::client::{effective_jar, jar_key, Clients};
 use super::cookie_file;
 use super::cookies;
 use super::types::{CookieFilter, CookieInput, StoredCookie};
@@ -224,6 +224,37 @@ impl CookieJars {
         let store = self.open(&jar_key(location)).await?;
         let listed = cookies::list(&lock_store(&store));
         Ok(listed)
+    }
+
+    /// The `Cookie` header value a request to `url` (`http`, `https`, `ws` or `wss`) would
+    /// carry from the jar `location` uses (the unverified twin when `verify_tls` is off),
+    /// matched like a browser: domain suffix, path and `Secure` (`wss` counts as secure).
+    pub async fn request_header(
+        &self,
+        location: &RequestLocation,
+        url: &url::Url,
+        verify_tls: bool,
+    ) -> Result<Option<String>, AppError> {
+        let mut twin = url.clone();
+        let scheme = if matches!(url.scheme(), "wss" | "https") {
+            "https"
+        } else {
+            "http"
+        };
+        if twin.set_scheme(scheme).is_err() {
+            return Ok(None);
+        }
+        let jar = jar_key(location);
+        let store = if verify_tls {
+            self.open(&jar).await?
+        } else {
+            self.clients.jar(&effective_jar(&jar, false))
+        };
+        let pairs: Vec<String> = lock_store(&store)
+            .get_request_values(&twin)
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect();
+        Ok((!pairs.is_empty()).then(|| pairs.join("; ")))
     }
 
     /// Adds or replaces one cookie; returns the jar's new list.

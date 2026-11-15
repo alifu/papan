@@ -119,3 +119,57 @@ async fn a_clear_during_a_save_leaves_no_file_behind() {
 
     assert!(!dir.path().join("scratch.jar").exists());
 }
+
+fn scratch() -> RequestLocation {
+    RequestLocation::Scratch { id: "s".into() }
+}
+
+#[tokio::test]
+async fn a_domain_cookie_goes_to_subdomains_and_a_host_only_cookie_does_not() {
+    let jars = Arc::new(CookieJars::new(Arc::default(), None));
+    let store = jars.open(JAR).await.unwrap();
+    let origin = Url::parse("https://example.com/").unwrap();
+    lock_store(&store)
+        .parse("wide=1; Domain=example.com; Path=/", &origin)
+        .unwrap();
+    lock_store(&store).parse("only=2; Path=/", &origin).unwrap();
+    lock_store(&store)
+        .parse("sec=3; Secure; Path=/", &origin)
+        .unwrap();
+
+    let sub_ws = Url::parse("ws://api.example.com/x").unwrap();
+    let sub_wss = Url::parse("wss://api.example.com/x").unwrap();
+    let apex_ws = Url::parse("ws://example.com/x").unwrap();
+
+    let loc = scratch();
+    let header = |url: Url| {
+        let (jars, loc) = (Arc::clone(&jars), loc.clone());
+        async move { jars.request_header(&loc, &url, true).await }
+    };
+    assert_eq!(header(sub_ws).await.unwrap().as_deref(), Some("wide=1"));
+    assert_eq!(header(sub_wss).await.unwrap().as_deref(), Some("wide=1"));
+    let apex = header(apex_ws).await.unwrap().unwrap();
+    assert!(apex.contains("wide=1") && apex.contains("only=2") && !apex.contains("sec=3"));
+}
+
+#[tokio::test]
+async fn the_unverified_jar_is_read_when_tls_is_not_verified() {
+    let jars = Arc::new(CookieJars::new(Arc::default(), None));
+    let url = Url::parse("https://example.com/").unwrap();
+    lock_store(&jars.clients.jar("scratch#tls-unverified"))
+        .parse("u=1; Path=/", &url)
+        .unwrap();
+    let ws = Url::parse("wss://example.com/").unwrap();
+
+    assert_eq!(
+        jars.request_header(&scratch(), &ws, false)
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("u=1")
+    );
+    assert_eq!(
+        jars.request_header(&scratch(), &ws, true).await.unwrap(),
+        None
+    );
+}

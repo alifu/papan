@@ -53,6 +53,17 @@ describe("ScratchPanel", () => {
     expect(await screen.findByRole("button", { name: /Q/ })).toHaveTextContent("GQL");
   });
 
+  it("creates a WebSocket scratch request with the WS badge", async () => {
+    vi.mocked(api.createScratch).mockResolvedValue({ id: "w", name: "Sock", method: "GET", kind: "ws" });
+    render(<ScratchPanel />);
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "New Request" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "WebSocket" }));
+
+    expect(api.createScratch).toHaveBeenCalledWith("ws");
+    expect(await screen.findByRole("button", { name: /Sock/ })).toHaveTextContent("WS");
+  });
+
   it("clicking a row opens its tab", async () => {
     useScratchStore.setState({ items: [item("a", "Alpha")] });
     render(<ScratchPanel />);

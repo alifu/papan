@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useCollectionsStore } from "../features/collections/collectionsStore";
 import { useEnvStore } from "../features/environments/envStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
+import { useWebhookStore } from "../features/webhooks/webhookStore";
 import { useNetworkStore } from "../features/network/networkStore";
 import { ToastHost } from "../ui/Toast";
 import { MenuBar } from "./MenuBar";
@@ -27,10 +28,13 @@ export function AppShell() {
     void useScratchStore.getState().load();
     void useNetworkStore.getState().loadProxyMode();
     const unlisten = useCollectionsStore.getState().subscribe();
+    void useWebhookStore.getState().load();
     const unlistenEnv = useEnvStore.getState().subscribe();
+    const unlistenWebhooks = useWebhookStore.getState().subscribe();
     return () => {
       void unlisten.then((fn) => fn());
       void unlistenEnv.then((fn) => fn());
+      void unlistenWebhooks.then((fn) => fn());
     };
   }, []);
   const width = useLayoutStore((s) => s.sidebarWidth);

@@ -9,8 +9,13 @@ vi.mock("./ipc/bindings", () => ({
     appInfo: vi.fn().mockResolvedValue({ name: "Papan", version: "0.1.0" }),
     listCollections: vi.fn().mockResolvedValue([]),
     listScratch: vi.fn().mockResolvedValue([]),
+    listWebhooks: vi.fn().mockResolvedValue([]),
   },
-  events: { collectionChanged: { listen: vi.fn().mockResolvedValue(() => {}) } },
+  events: {
+    collectionChanged: { listen: vi.fn().mockResolvedValue(() => {}) },
+    webhookCaptured: { listen: vi.fn().mockResolvedValue(() => {}) },
+    webhookStopped: { listen: vi.fn().mockResolvedValue(() => {}) },
+  },
 }));
 
 describe("App", () => {

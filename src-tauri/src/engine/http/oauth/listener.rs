@@ -175,14 +175,14 @@ async fn serve(mut stream: TcpStream, port: u16, state: Zeroizing<String>) -> Op
 
 /// Binds `address` as is: elsewhere a second bind of a bound port fails.
 #[cfg(not(windows))]
-async fn bind_exclusive(address: SocketAddr) -> std::io::Result<TcpListener> {
+pub(crate) async fn bind_exclusive(address: SocketAddr) -> std::io::Result<TcpListener> {
     TcpListener::bind(address).await
 }
 
 /// Binds `address` for exclusive use, so no other program can bind the same port with
 /// `SO_REUSEADDR` and take the callback.
 #[cfg(windows)]
-async fn bind_exclusive(address: SocketAddr) -> std::io::Result<TcpListener> {
+pub(crate) async fn bind_exclusive(address: SocketAddr) -> std::io::Result<TcpListener> {
     use std::os::windows::io::AsRawSocket;
 
     use socket2::{Domain, Protocol, Socket, Type};

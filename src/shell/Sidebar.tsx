@@ -1,6 +1,7 @@
 import { CollectionsPanel } from "../features/collections/CollectionsPanel";
 import { HistoryPanel } from "../features/history/HistoryPanel";
 import { ScratchPanel } from "../features/scratch/ScratchPanel";
+import { WebhooksPanel } from "../features/webhooks/WebhooksPanel";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/icons";
 import { NAV_SECTIONS, useLayoutStore, type NavSection } from "./layoutStore";
@@ -9,6 +10,7 @@ import { NAV_SECTION_META } from "./navSections";
 function renderSection(section: NavSection, emptyText: string) {
   if (section === "collections") return <CollectionsPanel />;
   if (section === "scratch") return <ScratchPanel />;
+  if (section === "webhooks") return <WebhooksPanel />;
   if (section === "history") return <HistoryPanel />;
   return <p className="empty-text">{emptyText}</p>;
 }

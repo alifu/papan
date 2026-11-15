@@ -141,6 +141,7 @@ impl RequestFile {
         check_name(label, &self.name)?;
         protocol::check_method(label, kind, &self.method)?;
         check_url(label, &self.url)?;
+        protocol::check_url(label, kind, &self.url)?;
         request_model::parse_sections(label, kind, &self.extra).map(|_| ())
     }
 

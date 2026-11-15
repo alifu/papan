@@ -1,0 +1,7 @@
+body:
+  text: hello
+  type: text
+kind: ws
+method: GET
+name: Bad WS body
+url: wss://echo.example.com/socket

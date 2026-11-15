@@ -38,7 +38,7 @@ pub fn jar_key(location: &RequestLocation) -> String {
 }
 
 /// The jar actually used: the location's, or its separate twin when TLS is unverified.
-fn effective_jar(jar: &str, verify_tls: bool) -> String {
+pub(super) fn effective_jar(jar: &str, verify_tls: bool) -> String {
     if verify_tls {
         jar.to_string()
     } else {

@@ -1,6 +1,7 @@
 import { useRequestStore } from "../features/request/requestStore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectionLocation, scratchLocation } from "../features/locations";
+import { useWsStore } from "../features/ws/wsStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 import { WELCOME_TAB, useTabsStore } from "./tabsStore";
 
@@ -158,5 +159,31 @@ describe("tabsStore dirty close", () => {
     useTabsStore.getState().discardTab(id);
     expect(useTabsStore.getState().tabs.some((t) => t.id === id)).toBe(false);
     expect(useRequestStore.getState().byTab[id]).toBeUndefined();
+  });
+
+  it("openWebhook focuses an existing listener tab; retitle and close act on it", () => {
+    const first = useTabsStore.getState().openWebhook("w1", "Hook");
+    expect(useTabsStore.getState().openWebhook("w1", "Hook")).toBe(first);
+    expect(useTabsStore.getState().tabs.filter((t) => t.kind === "webhook")).toHaveLength(1);
+
+    useTabsStore.getState().retitleWebhook("w1", "Renamed");
+    expect(useTabsStore.getState().tabs.find((t) => t.id === first)?.title).toBe("Renamed");
+
+    useTabsStore.getState().closeWebhook("w1");
+    expect(useTabsStore.getState().tabs.some((t) => t.webhookId === "w1")).toBe(false);
+  });
+});
+
+describe("tabsStore ws release", () => {
+  it("closing a tab releases its websocket connection, by tab and by location", () => {
+    const release = vi.spyOn(useWsStore.getState(), "release").mockResolvedValue();
+    useTabsStore.setState(useTabsStore.getInitialState(), true);
+    const id = useTabsStore.getState().openRequest(scratchLocation("w1"), "W1");
+    useTabsStore.getState().discardTab(id);
+    expect(release).toHaveBeenCalledWith(id);
+    const id2 = useTabsStore.getState().openRequest(scratchLocation("w2"), "W2");
+    useTabsStore.getState().closeByLocation(scratchLocation("w2"));
+    expect(release).toHaveBeenCalledWith(id2);
+    release.mockRestore();
   });
 });

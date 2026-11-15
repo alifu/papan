@@ -47,6 +47,8 @@ pub fn run() {
             )?);
             app.manage(vars::commands::VarsState::new(vault));
             app.manage(open_graphql(app.handle())?);
+            app.manage(engine::ws::WsEngine::default());
+            app.manage(open_webhooks(app.handle())?);
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");
@@ -59,6 +61,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 if let Some(engine) = app.try_state::<engine::http::HttpEngine>() {
                     tauri::async_runtime::block_on(engine.cookies().flush());
+                }
+                if let Some(webhooks) = app.try_state::<webhook::WebhookService>() {
+                    tauri::async_runtime::block_on(webhooks.stop_all());
                 }
             }
         });
@@ -122,6 +127,16 @@ fn open_graphql(app: &tauri::AppHandle) -> Result<engine::graphql::GraphqlState,
     Ok(engine::graphql::GraphqlState {
         cache: engine::graphql::SchemaCache::new(&app_data),
     })
+}
+
+/// Webhook listener configs live in app data; nothing listens until a listener is started.
+fn open_webhooks(app: &tauri::AppHandle) -> Result<webhook::WebhookService, error::AppError> {
+    let app_data = app.path().app_data_dir().map_err(|source| {
+        error::AppError::internal("Could not locate the app data directory.")
+            .with_detail(source.to_string())
+    })?;
+    let sink = webhook::commands::TauriSink::arc(app.clone());
+    Ok(webhook::WebhookService::new(&app_data, sink))
 }
 
 /// Secrets: an encrypted vault whose key is in the OS keychain. Nothing is opened here

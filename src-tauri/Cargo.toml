@@ -41,7 +41,7 @@ tempfile = "3"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "system-proxy", "cookies", "gzip", "brotli", "deflate", "zstd", "multipart", "stream"] }
 reqwest_cookie_store = "0.10"
 # reqwest's own proxy matcher, to tell which proxy a hop goes through (plan 03b §4.3).
-hyper-util = { version = "0.1.21", default-features = false, features = ["client-proxy", "client-proxy-system"] }
+hyper-util = { version = "0.1.21", default-features = false, features = ["client-proxy", "client-proxy-system", "tokio"] }
 http = "1"
 cookie_store = { version = "0.22", default-features = false }
 tokio = { version = "1", features = ["rt", "macros", "fs", "io-util", "time", "sync", "net"] }
@@ -65,6 +65,15 @@ time = { version = "0.3", features = ["formatting"] }
 rquickjs = { version = "0.14", default-features = false, features = ["std"] }
 # WSDL/XSD parsing (plan 06 §2): read-only, namespace-aware DOM; DTDs refused by default.
 roxmltree = "0.21"
+# WebSocket and webhook (plan 07 §2). tungstenite runs over our own stream: no second TLS stack.
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+tokio-rustls = "0.26"
+rustls-platform-verifier = "0.7"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
+futures-util = "0.3"
+axum = { version = "0.8.9", default-features = false, features = ["tokio", "http1"] }
+hyper = { version = "1", features = ["server", "http1"] }
+http-body-util = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 # The loopback listener binds with SO_EXCLUSIVEADDRUSE (already in the tree via hyper-util).
@@ -75,10 +84,8 @@ windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock"] }
 axum = { version = "0.8", features = ["multipart"] }
 axum-server = { version = "0.9", features = ["tls-rustls"] }
 rcgen = "0.14"
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 flate2 = "1"
-futures-util = "0.3"
-tokio = { version = "1", features = ["rt-multi-thread", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "test-util"] }
 # GraphQL test server (plan 06 §2); 8.0 is still rc.
 async-graphql = { version = "=7.2.1", default-features = false }
 async-graphql-axum = "=7.2.1"

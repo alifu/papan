@@ -137,6 +137,18 @@ describe("CollectionsPanel", () => {
     expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "s", "soap");
   });
 
+  it("creates a WebSocket request when the Type choice is changed", async () => {
+    seed();
+    vi.mocked(api.createRequest).mockResolvedValue({ tree: makeTree(), path: "auth/w.http.yaml" });
+    render(<CollectionsPanel />);
+
+    await pick("auth", "New Request");
+    await userEvent.selectOptions(screen.getByLabelText("Type"), "ws");
+    await userEvent.type(screen.getByLabelText("Name"), "w{Enter}");
+
+    expect(api.createRequest).toHaveBeenCalledWith("c1", "auth", "w", "ws");
+  });
+
   it("shows the protocol badge for GraphQL and SOAP rows", () => {
     const tree = makeTree();
     const retag = (path: string, request_kind: "graphql" | "soap") =>

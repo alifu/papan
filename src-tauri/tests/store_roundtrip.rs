@@ -396,3 +396,38 @@ fn collection_tree_carries_the_request_kind() {
     assert_eq!(kind_of("soap-add.http.yaml"), Some(RequestKind::Soap));
     assert!(tree.iter().all(|node| node.kind == NodeKind::Request));
 }
+
+#[test]
+fn m7_websocket_requests_are_fixed_points_and_parse_to_ws() {
+    let files = files_in(&fixtures().join("canonical/m7"), ".http.yaml");
+    assert!(files.len() >= 3, "fixtures missing");
+
+    for path in &files {
+        assert_fixed_point(path, canonical);
+        let file = RequestFile::parse(&file_name(path), &fs::read(path).unwrap()).unwrap();
+        let content = file.content().unwrap();
+        assert_eq!(content.kind, RequestKind::Ws);
+        let written = file.with_content(&content).unwrap();
+        assert_eq!(written.to_yaml().unwrap(), file.to_yaml().unwrap());
+    }
+}
+
+#[test]
+fn invalid_websocket_files_name_the_file_and_the_field() {
+    let cases = [
+        ("bad-ws-base64.http.yaml", "ws.messages.text"),
+        ("bad-ws-body-present.http.yaml", "body.type"),
+        ("bad-ws-duplicate-template.http.yaml", "ws.messages.name"),
+        ("bad-ws-method-post.http.yaml", "method"),
+        ("bad-ws-subprotocol.http.yaml", "ws.subprotocols"),
+    ];
+    for (name, field) in cases {
+        let bytes = fs::read(fixtures().join("ws").join(name)).unwrap();
+
+        let error = RequestFile::parse(name, &bytes).unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::InvalidInput, "{name}");
+        assert!(error.message.contains(name), "{name}: {}", error.message);
+        assert!(error.message.contains(field), "{name}: {}", error.message);
+    }
+}

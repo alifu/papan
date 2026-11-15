@@ -1,0 +1,4 @@
+kind: ws
+method: POST
+name: Bad WS method
+url: wss://echo.example.com/socket

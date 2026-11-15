@@ -87,6 +87,7 @@ pub fn derived_headers(
         RequestKind::Http => Ok(Vec::new()),
         RequestKind::Graphql => Ok(vec![(ACCEPT, HeaderValue::from_static(GRAPHQL_ACCEPT))]),
         RequestKind::Soap => soap_headers(&content.soap),
+        RequestKind::Ws => Ok(Vec::new()),
     }
 }
 

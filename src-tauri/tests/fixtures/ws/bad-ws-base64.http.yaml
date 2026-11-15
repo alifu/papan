@@ -1,0 +1,9 @@
+kind: ws
+method: GET
+name: Bad WS base64
+url: wss://echo.example.com/socket
+ws:
+  messages:
+    - format: binary
+      name: Not base64
+      text: "not base64!"

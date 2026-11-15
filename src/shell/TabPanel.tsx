@@ -1,4 +1,5 @@
 import { RequestEditor } from "../features/request/RequestEditor";
+import { WebhookTab } from "../features/webhooks/WebhookTab";
 import { Button } from "../ui/Button";
 import { shortcutLabel } from "../ui/platform";
 import { DiscardDialog } from "./DiscardDialog";
@@ -22,6 +23,7 @@ function Welcome() {
 }
 
 function renderTab(tab: Tab) {
+  if (tab.kind === "webhook" && tab.webhookId) return <WebhookTab key={tab.id} webhookId={tab.webhookId} />;
   if (tab.kind === "welcome" || !tab.location) return <Welcome />;
   return <RequestEditor key={tab.id} tabId={tab.id} location={tab.location} />;
 }

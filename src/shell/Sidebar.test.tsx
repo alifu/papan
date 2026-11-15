@@ -45,4 +45,12 @@ describe("Sidebar", () => {
     await userEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(screen.getByRole("button", { name: "Collections" })).toBeVisible();
   });
+
+  it("shows the webhooks section with its empty text", async () => {
+    render(<Sidebar />);
+    await userEvent.click(screen.getByRole("button", { name: "Webhooks" }));
+
+    expect(screen.getByRole("region", { name: "Webhooks" })).toHaveTextContent("No webhook listeners yet.");
+    expect(useLayoutStore.getState().activeSection).toBe("webhooks");
+  });
 });

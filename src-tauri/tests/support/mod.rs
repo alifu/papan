@@ -9,4 +9,6 @@ pub mod idp;
 pub mod mtls;
 pub mod proxy;
 pub mod server;
+pub mod webhook;
+pub mod ws_server;
 pub mod wsdl_server;

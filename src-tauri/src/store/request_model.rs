@@ -1,4 +1,4 @@
-//! The seven request sections of plan 03 §3, plan 05 §3 and plan 06 §3 (`auth`, `body`,
+//! The eight request sections of plan 03 §3, plan 05 §3 and plan 06 §3 (`auth`, `body`,
 //! `disabled_params`, `headers`, `scripts`, `settings`, `soap`): parsing from the raw YAML
 //! values and validation of the typed content. Emitting and the merge rule live in
 //! `request_emit`; the protocol parts (`kind`, GraphQL, SOAP) in `protocol_model`.
@@ -15,6 +15,7 @@ use super::types::{
     Body, HttpVersion, KeyValue, Pair, Part, RequestContent, RequestKind, Settings,
     DEFAULT_TIMEOUT_MS,
 };
+use super::ws_model::{self, WS};
 use super::yaml;
 use crate::error::AppError;
 
@@ -23,7 +24,7 @@ pub const BODY: &str = "body";
 pub const DISABLED_PARAMS: &str = "disabled_params";
 pub const HEADERS: &str = "headers";
 pub const SETTINGS: &str = "settings";
-pub const SECTIONS: [&str; 7] = [
+pub const SECTIONS: [&str; 8] = [
     AUTH,
     BODY,
     DISABLED_PARAMS,
@@ -31,6 +32,7 @@ pub const SECTIONS: [&str; 7] = [
     SCRIPTS,
     SETTINGS,
     SOAP,
+    WS,
 ];
 
 pub const MAX_ENTRIES: usize = 200;
@@ -71,6 +73,7 @@ pub fn parse_sections(
         scripts: parse_scripts(label, extra.get(SCRIPTS))?,
         kind,
         soap: protocol_model::parse_soap(label, kind, extra.get(SOAP))?,
+        ws: ws_model::parse_ws(label, kind, extra.get(WS))?,
     };
     validate_sections(label, &content)?;
     Ok(content)
@@ -80,6 +83,7 @@ pub fn parse_sections(
 pub fn validate_content(label: &str, content: &RequestContent) -> Result<(), AppError> {
     protocol_model::check_method(label, content.kind, &content.method)?;
     model::check_url(label, &content.url)?;
+    protocol_model::check_url(label, content.kind, &content.url)?;
     validate_sections(label, content)
 }
 

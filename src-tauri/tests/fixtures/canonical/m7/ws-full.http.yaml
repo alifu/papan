@@ -1,0 +1,29 @@
+auth:
+  token: "{{token}}"
+  type: bearer
+headers:
+  - name: X-Client
+    value: papan
+kind: ws
+method: GET
+name: Chat room
+settings:
+  timeout_ms: 10000
+  verify_tls: false
+url: wss://{{host}}/rooms/{{room}}
+ws:
+  messages:
+    - format: json
+      name: Join
+      text: |
+        { "type": "join", "room": "{{room}}" }
+    - name: Ping text
+      text: |
+        hello from papan
+        second line
+    - format: binary
+      name: Raw frame
+      text: AAECAwQF
+  subprotocols:
+    - chat.v2
+    - graphql-transport-ws

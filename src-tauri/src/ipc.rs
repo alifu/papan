@@ -17,10 +17,14 @@ use crate::engine::http::commands as http;
 use crate::engine::http::net_commands as net;
 use crate::engine::http::oauth::commands as oauth;
 use crate::engine::soap::commands as soap;
+use crate::engine::ws::commands as ws;
+use crate::engine::ws::types::WsEvent;
 use crate::error::AppError;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
 use crate::vars::commands as vars;
+use crate::webhook::commands as webhook;
+use crate::webhook::types::{WebhookCaptured, WebhookStopped};
 
 /// Result of [`sync_bindings`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,8 +101,27 @@ pub fn builder() -> Builder<tauri::Wry> {
             soap::import_wsdl,
             soap::read_cached_wsdl,
             soap::soap_envelope,
+            ws::ws_connect,
+            ws::ws_send,
+            ws::ws_disconnect,
+            ws::ws_log,
+            ws::ws_clear_log,
+            webhook::list_webhooks,
+            webhook::save_webhook,
+            webhook::delete_webhook,
+            webhook::start_webhook,
+            webhook::stop_webhook,
+            webhook::list_captures,
+            webhook::read_capture,
+            webhook::clear_captures,
+            webhook::replay_capture,
         ])
-        .events(collect_events![CollectionChanged])
+        .events(collect_events![
+            CollectionChanged,
+            WsEvent,
+            WebhookCaptured,
+            WebhookStopped
+        ])
         .typ::<AppError>()
         .disable_serde_phases()
 }
@@ -249,6 +272,23 @@ mod tests {
             "importWsdl",
             "readCachedWsdl",
             "soapEnvelope",
+            "wsConnect",
+            "wsSend",
+            "wsDisconnect",
+            "wsLog",
+            "wsClearLog",
+            "listWebhooks",
+            "saveWebhook",
+            "deleteWebhook",
+            "startWebhook",
+            "stopWebhook",
+            "listCaptures",
+            "readCapture",
+            "clearCaptures",
+            "replayCapture",
+            "wsEvent",
+            "webhookCaptured",
+            "webhookStopped",
         ];
 
         let missing: Vec<&str> = expected

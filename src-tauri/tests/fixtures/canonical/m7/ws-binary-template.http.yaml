@@ -1,0 +1,9 @@
+kind: ws
+method: GET
+name: Binary template
+url: wss://echo.example.com/binary
+ws:
+  messages:
+    - format: binary
+      name: Header bytes
+      text: AAECAwQF

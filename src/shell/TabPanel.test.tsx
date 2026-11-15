@@ -42,4 +42,10 @@ describe("TabPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "New Tab" }));
     await vi.waitFor(() => expect(useTabsStore.getState().tabs).toHaveLength(1));
   });
+
+  it("renders the webhook view for a webhook tab", () => {
+    useTabsStore.getState().openWebhook("missing", "Hook");
+    render(<TabPanel />);
+    expect(screen.getByText("This listener no longer exists.")).toBeVisible();
+  });
 });

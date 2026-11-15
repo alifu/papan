@@ -25,6 +25,12 @@ import { ScriptsEditor, type ScriptPhase } from "./ScriptsEditor";
 import { appendSnippet } from "./snippets";
 import { SettingsEditor } from "./SettingsEditor";
 import { UrlBar } from "./UrlBar";
+import { ConnectBar } from "../ws/ConnectBar";
+import { SubprotocolsEditor } from "../ws/SubprotocolsEditor";
+import { TemplatesEditor } from "../ws/TemplatesEditor";
+import { WsPanel } from "../ws/WsPanel";
+import { wsSettingsOf } from "../ws/wsModel";
+import { useWsStore } from "../ws/wsStore";
 import "./request.css";
 
 export interface RequestEditorProps {
@@ -92,6 +98,8 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   if (!tab || !content) return null;
 
   const kind = content.kind;
+  const isWs = kind === "ws";
+  const wsSettings = wsSettingsOf(content);
   const sections = sectionsFor(kind, {
     params: tab.paramRows.filter((r) => r.enabled && r.name !== "").length,
     headers: countEnabled(content.headers),
@@ -101,24 +109,36 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
   return (
     <div className="request-editor">
       <div className="request-pane" style={{ height: editorHeight }}>
-      <UrlBar
-        method={content.method}
-        url={content.url}
-        location={location}
-        variables={variables}
-        sending={tab.sending}
-        dirty={tab.draft !== null}
-        hideMethod={kind === "graphql"}
-        sendBlockedReason={runsSubscription(content) ? SUBSCRIPTION_HINT : undefined}
-        tlsVerified={content.settings.verify_tls}
-        proxyActive={proxyActive}
-        onImportCurl={(text) => void applyCurl(text)}
-        onMethod={(method) => edit(tabId, (c) => ({ ...c, method }))}
-        onUrl={(url) => editUrl(tabId, url)}
-        onSend={() => void send(tabId, location)}
-        onCancel={() => cancel(tabId)}
-        onSave={() => void save(tabId, location)}
-      />
+      {isWs ? (
+        <ConnectBar
+          tabId={tabId}
+          location={location}
+          content={content}
+          variables={variables}
+          dirty={tab.draft !== null}
+          onUrl={(url) => editUrl(tabId, url)}
+          onSave={() => void save(tabId, location)}
+        />
+      ) : (
+        <UrlBar
+          method={content.method}
+          url={content.url}
+          location={location}
+          variables={variables}
+          sending={tab.sending}
+          dirty={tab.draft !== null}
+          hideMethod={kind === "graphql"}
+          sendBlockedReason={runsSubscription(content) ? SUBSCRIPTION_HINT : undefined}
+          tlsVerified={content.settings.verify_tls}
+          proxyActive={proxyActive}
+          onImportCurl={(text) => void applyCurl(text)}
+          onMethod={(method) => edit(tabId, (c) => ({ ...c, method }))}
+          onUrl={(url) => editUrl(tabId, url)}
+          onSend={() => void send(tabId, location)}
+          onCancel={() => cancel(tabId)}
+          onSave={() => void save(tabId, location)}
+        />
+      )}
       <Tabs tabs={sections} selectedId={shown} onSelect={setSection} label="Request sections">
         {shown === "params" ? <ParamsEditor variables={variables} rows={tab.paramRows} onChange={(rows) => editParams(tabId, rows)} /> : null}
         {shown === "headers" ? (
@@ -149,6 +169,19 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
           />
         ) : null}
         {shown === "soap" ? <SoapPanel location={location} content={content} variables={variables} onChange={(update) => edit(tabId, update)} /> : null}
+        {shown === "messages" ? (
+          <TemplatesEditor
+            templates={wsSettings.messages}
+            onChange={(messages) => edit(tabId, (c) => ({ ...c, ws: { ...wsSettingsOf(c), messages: [...messages] } }))}
+            onLoad={(t) => useWsStore.getState().setComposer(tabId, { format: t.format, text: t.text })}
+          />
+        ) : null}
+        {shown === "subprotocols" ? (
+          <SubprotocolsEditor
+            value={wsSettings.subprotocols}
+            onChange={(subprotocols) => edit(tabId, (c) => ({ ...c, ws: { ...wsSettingsOf(c), subprotocols: [...subprotocols] } }))}
+          />
+        ) : null}
         {shown === "auth" ? (
           <>
             <AuthEditor location={location} variables={variables} auth={content.auth} onChange={(auth) => edit(tabId, (c) => ({ ...c, auth }))} />
@@ -164,7 +197,7 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
           />
         ) : null}
         {shown === "settings" ? (
-          <SettingsEditor settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
+          <SettingsEditor connectionOnly={isWs} settings={content.settings} onChange={(settings) => edit(tabId, (c) => ({ ...c, settings }))} />
         ) : null}
       </Tabs>
       </div>
@@ -178,7 +211,11 @@ export function RequestEditor({ tabId, location }: RequestEditorProps) {
         onResize={resize}
         onToggle={() => resize(EDITOR_DEFAULT_HEIGHT)}
       />
-      <ResponseViewer response={tab.response} error={tab.error} sending={tab.sending} scripts={tab.scripts} onInsertScriptLine={insertPostResponseLine} />
+      {isWs ? (
+        <WsPanel tabId={tabId} location={location} content={content} variables={variables} onChange={(update) => edit(tabId, update)} />
+      ) : (
+        <ResponseViewer response={tab.response} error={tab.error} sending={tab.sending} scripts={tab.scripts} onInsertScriptLine={insertPostResponseLine} />
+      )}
     </div>
   );
 }

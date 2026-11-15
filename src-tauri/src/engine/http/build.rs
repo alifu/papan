@@ -5,7 +5,9 @@
 use std::path::PathBuf;
 
 use base64::Engine as _;
-use reqwest::header::{HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
+use reqwest::header::{
+    HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE, SEC_WEBSOCKET_PROTOCOL, USER_AGENT,
+};
 use reqwest::Method;
 use url::Url;
 
@@ -108,6 +110,71 @@ pub fn build(content: &RequestContent, version: &str) -> Result<Prepared, AppErr
         body,
         secret_headers,
         digest: digest_credentials(&content.auth),
+    })
+}
+
+/// What the WebSocket opening handshake of a `kind: ws` request carries (plan 07 §5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HandshakeParts {
+    /// `ws` or `wss`, with an API-key query appended.
+    pub url: Url,
+    /// The user's headers first, then the defaults the user did not set.
+    pub headers: Vec<(HeaderName, HeaderValue)>,
+    /// Headers carrying a secret beyond the well-known sensitive names.
+    pub secret_headers: Vec<HeaderName>,
+    /// The offered subprotocols, from the `ws` section.
+    pub subprotocols: Vec<String>,
+}
+
+pub const INVALID_WS_URL_MESSAGE: &str = "Enter a valid ws:// or wss:// URL.";
+
+fn parse_ws_url(text: &str) -> Result<Url, AppError> {
+    let invalid = || AppError::invalid_input(INVALID_WS_URL_MESSAGE);
+    let url =
+        Url::parse(text.trim()).map_err(|source| invalid().with_detail(source.to_string()))?;
+    let ok = matches!(url.scheme(), "ws" | "wss") && url.host_str().is_some_and(|h| !h.is_empty());
+    if ok {
+        Ok(url)
+    } else {
+        Err(invalid())
+    }
+}
+
+/// The handshake of a resolved WebSocket request. Pure, like [`build`]: OAuth 2 has
+/// already become Bearer; Digest cannot answer an upgrade and is refused.
+pub fn handshake_parts(
+    content: &RequestContent,
+    version: &str,
+) -> Result<HandshakeParts, AppError> {
+    if matches!(content.auth, Auth::Digest { .. }) {
+        return Err(AppError::invalid_input(
+            "Digest is not supported for WebSocket.",
+        ));
+    }
+    let url = with_api_key_query(parse_ws_url(&content.url)?, &content.auth);
+    let subprotocols = content.ws.subprotocols.clone();
+    let offered = (!subprotocols.is_empty())
+        .then(|| header_value(&subprotocols.join(", ")))
+        .transpose()?;
+    let api_key = api_key_header(&content.auth)?;
+    let secret_headers = api_key.iter().map(|(name, _)| name.clone()).collect();
+    let defaults = [
+        (AUTHORIZATION, authorization(&content.auth)?),
+        (USER_AGENT, Some(header_value(&format!("Papan/{version}"))?)),
+        (SEC_WEBSOCKET_PROTOCOL, offered),
+    ]
+    .into_iter()
+    .chain(api_key)
+    .filter_map(|(name, value)| value.map(|value| (name, value)));
+    let user = user_headers(&content.headers)?;
+    let missing: Vec<_> = defaults
+        .filter(|(name, _)| !user.iter().any(|(user_name, _)| user_name == name))
+        .collect();
+    Ok(HandshakeParts {
+        url,
+        headers: user.into_iter().chain(missing).collect(),
+        secret_headers,
+        subprotocols,
     })
 }
 
@@ -309,3 +376,7 @@ fn multipart(parts: &[Part]) -> Vec<PreparedPart> {
 #[cfg(test)]
 #[path = "build_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "build_ws_tests.rs"]
+mod ws_tests;

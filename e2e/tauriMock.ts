@@ -6,6 +6,7 @@ import { installEnvFake } from "./envMock";
 import { installNetFake } from "./netMock";
 import { installGraphqlFake } from "./graphqlMock";
 import { installSoapFake } from "./soapMock";
+import { installWebhookFake } from "./webhookMock";
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name: string, encoding: "utf8" | "base64"): string => readFileSync(join(FIXTURE_DIR, name), encoding);
@@ -19,7 +20,7 @@ declare global {
 
 /**
  * The browser has no Tauri runtime. This installs an in-memory fake of the backend
- * commands (app_info, the 17 storage commands, send/cancel/history; environments are in `envMock.ts`). `send_request` answers by URL path:
+ * commands (app_info, the 17 storage commands, send/cancel/history; environments are in `envMock.ts`, webhooks in `webhookMock.ts`). `send_request` answers by URL path:
  * `/json`, `/xml`, `/html`, `/image`, `/error` (network error) and `/slow` (pending until cancelled), seeded with one collection and one
  * scratch request, and stubs for the event plugin.
  */
@@ -305,11 +306,27 @@ export async function mockTauri(page: Page): Promise<void> {
       return { meta, scripts };
     };
 
+    // Event plugin: listeners are remembered so tests can push events with `window.__emit`.
+    const callbacks = new Map<number, (event: unknown) => void>();
+    const listeners = new Map<string, number[]>();
+    (window as unknown as Record<string, unknown>).__emit = (event: string, payload: unknown) => {
+      for (const id of listeners.get(event) ?? []) callbacks.get(id)?.({ event, id, payload });
+    };
+
     let callbackId = 0;
     const internals = {
-      transformCallback: () => ++callbackId,
+      transformCallback: (callback?: (event: unknown) => void) => {
+        const id = ++callbackId;
+        if (callback) callbacks.set(id, callback);
+        return id;
+      },
       unregisterCallback: () => {},
       invoke: (cmd: string, args: Args = {}) => {
+        if (cmd === "plugin:event|listen") {
+          const name = String(args.event);
+          listeners.set(name, [...(listeners.get(name) ?? []), Number(args.handler)]);
+          return Promise.resolve(++callbackId);
+        }
         if (cmd.startsWith("plugin:event|")) return Promise.resolve(++callbackId);
         if (failing.delete(cmd)) return Promise.reject(appError("io", "Backend says no."));
         const handler = handlers[cmd];
@@ -331,4 +348,5 @@ export async function mockTauri(page: Page): Promise<void> {
   await installNetFake(page);
   await installSoapFake(page);
   await installGraphqlFake(page);
+  await installWebhookFake(page);
 }

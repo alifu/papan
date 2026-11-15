@@ -121,6 +121,7 @@ pub enum RequestKind {
     Http,
     Graphql,
     Soap,
+    Ws,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -141,6 +142,31 @@ pub struct WsdlRef {
     pub service: String,
     pub port: String,
     pub operation: String,
+}
+
+/// How a WebSocket template message is sent (plan 07 §4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum WsFormat {
+    #[default]
+    Text,
+    Json,
+    Binary,
+}
+
+/// A saved message of a `kind: ws` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WsTemplate {
+    pub name: String,
+    pub format: WsFormat,
+    pub text: String,
+}
+
+/// The `ws` section of a `kind: ws` request (plan 07 §4).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WsSettings {
+    pub subprotocols: Vec<String>,
+    pub messages: Vec<WsTemplate>,
 }
 
 /// The `soap` section of a `kind: soap` request (plan 06 §3.3).
@@ -274,6 +300,8 @@ pub struct RequestContent {
     pub scripts: Scripts,
     pub kind: RequestKind,
     pub soap: SoapSettings,
+    #[serde(default)]
+    pub ws: WsSettings,
 }
 
 impl RequestContent {

@@ -6,6 +6,7 @@ describe("requestKind", () => {
     ["http", "request-http", "GET", "GET"],
     ["graphql", "request-graphql", "POST", "GQL"],
     ["soap", "request-soap", "POST", "SOAP"],
+    ["ws", "request-ws", "GET", "WS"],
     [null, "request-http", "PUT", "PUT"],
   ] as const)("maps %s to icon and badge", (kind, icon, method, badge) => {
     expect(kindIcon(kind)).toBe(icon);

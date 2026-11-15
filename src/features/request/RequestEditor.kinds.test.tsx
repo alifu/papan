@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as collections from "../collections/api";
 import * as graphqlApi from "../graphql/api";
+import * as wsApi from "../ws/api";
+import { useWsStore } from "../ws/wsStore";
 import { scratchLocation } from "../locations";
 import * as api from "./api";
 import { emptyContent } from "./content";
@@ -12,6 +14,7 @@ import { useRequestStore } from "./requestStore";
 vi.mock("../collections/api");
 vi.mock("./api");
 vi.mock("../graphql/api");
+vi.mock("../ws/api");
 vi.mock("../environments/api");
 vi.mock("../../ui/code/CodeEditor", () => import("../../ui/code/CodeEditor.mock"));
 vi.mock("../response/ResponseViewer", () => ({ ResponseViewer: () => <div>viewer</div> }));
@@ -76,5 +79,59 @@ describe("RequestEditor by kind", () => {
     await userEvent.click(screen.getByRole("tab", { name: "SOAP" }));
     await userEvent.click(screen.getByRole("button", { name: "soap-panel" }));
     expect(useRequestStore.getState().byTab.t?.draft?.url).toBe("http://soap");
+  });
+
+  describe("WebSocket", () => {
+    const ws = (over: Partial<ReturnType<typeof emptyContent>> = {}) => ({
+      ...emptyContent(),
+      kind: "ws" as const,
+      url: "wss://x/ws",
+      ws: { subprotocols: ["chat"], messages: [{ name: "Join", format: "json" as const, text: '{"t":"join"}' }] },
+      ...over,
+    });
+    beforeEach(() => {
+      useWsStore.getState().reset();
+      vi.mocked(wsApi.wsLog).mockResolvedValue([]);
+    });
+
+    it("shows the WebSocket sections, Connect instead of Send and no method", async () => {
+      await open(ws());
+      expect(tabNames()).toEqual(["Params", "Headers", "Messages", "Subprotocols", "Auth", "Settings"]);
+      expect(screen.getByRole("button", { name: "Connect" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+      expect(screen.queryByLabelText("Method")).toBeNull();
+      expect(screen.getByLabelText("Message")).toBeVisible();
+    });
+
+    it("connects with the current draft", async () => {
+      vi.mocked(wsApi.wsConnect).mockResolvedValue({ connection_id: "t", url: "wss://x/ws", protocol: null, status: 101, headers: [] });
+      vi.mocked(wsApi.listenWsEvents).mockResolvedValue(() => {});
+      await open(ws());
+      await userEvent.click(screen.getByRole("button", { name: "Connect" }));
+      expect(wsApi.wsConnect).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f-]{36}$/), loc, expect.objectContaining({ kind: "ws", url: "wss://x/ws" }));
+      expect(await screen.findByRole("button", { name: "Disconnect" })).toBeVisible();
+    });
+
+    it("loads a template into the composer", async () => {
+      await open(ws());
+      await userEvent.click(screen.getByRole("tab", { name: "Messages" }));
+      await userEvent.click(screen.getByRole("button", { name: "Load Join into composer" }));
+      expect(screen.getByLabelText("Message")).toHaveValue('{"t":"join"}');
+      expect(screen.getByLabelText("Format")).toHaveValue("json");
+    });
+
+    it("edits subprotocols into the draft", async () => {
+      await open(ws());
+      await userEvent.click(screen.getByRole("tab", { name: "Subprotocols" }));
+      await userEvent.type(screen.getByLabelText("New subprotocol"), "chat.v2{Enter}");
+      expect(useRequestStore.getState().byTab.t?.draft?.ws?.subprotocols).toEqual(["chat", "chat.v2"]);
+    });
+
+    it("hides redirect and HTTP version settings", async () => {
+      await open(ws());
+      await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
+      expect(screen.queryByLabelText("HTTP version")).toBeNull();
+      expect(screen.getByLabelText("Verify TLS certificates")).toBeVisible();
+    });
   });
 });

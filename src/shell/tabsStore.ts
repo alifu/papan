@@ -6,14 +6,17 @@ import {
   type RequestLocation,
 } from "../features/locations";
 import { isDirty, useRequestStore } from "../features/request/requestStore";
+import { useWsStore } from "../features/ws/wsStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 
-export type TabKind = "welcome" | "request";
+export type TabKind = "welcome" | "request" | "webhook";
 export interface Tab {
   readonly id: string;
   readonly kind: TabKind;
   readonly title: string;
   readonly location?: RequestLocation;
+  /** Set on `webhook` tabs: the listener the tab shows. */
+  readonly webhookId?: string;
 }
 
 export const WELCOME_TAB: Tab = { id: "welcome", kind: "welcome", title: "Welcome" };
@@ -26,6 +29,12 @@ export interface TabsState {
   newTab: () => Promise<void>;
   /** Focuses the tab for `location` or adds one. Returns its id. */
   openRequest: (location: RequestLocation, title: string) => string;
+  /** Focuses the tab for the webhook listener or adds one. Returns its id. */
+  openWebhook: (webhookId: string, title: string) => string;
+  /** Renames the tab of a webhook listener. */
+  retitleWebhook: (webhookId: string, title: string) => void;
+  /** Closes the tab of a webhook listener (it has no draft to discard). */
+  closeWebhook: (webhookId: string) => void;
   /** Points tabs at `from` (or below it) to the same place under `to`. */
   retarget: (from: RequestLocation, to: RequestLocation, title?: string) => void;
   /** Closes tabs at `location` or below it. */
@@ -70,6 +79,24 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     set({ tabs: [...tabs, tab], activeTabId: tab.id, nextTabNumber: nextTabNumber + 1 });
     return tab.id;
   },
+  openWebhook: (webhookId, title) => {
+    const { tabs, nextTabNumber } = get();
+    const existing = tabs.find((t) => t.webhookId === webhookId);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const tab: Tab = { id: `tab-${nextTabNumber}`, kind: "webhook", title, webhookId };
+    set({ tabs: [...tabs, tab], activeTabId: tab.id, nextTabNumber: nextTabNumber + 1 });
+    return tab.id;
+  },
+  retitleWebhook: (webhookId, title) => {
+    set({ tabs: get().tabs.map((t) => (t.webhookId === webhookId ? { ...t, title } : t)) });
+  },
+  closeWebhook: (webhookId) => {
+    const tab = get().tabs.find((t) => t.webhookId === webhookId);
+    if (tab) get().discardTab(tab.id);
+  },
   retarget: (from, to, title) => {
     set({
       tabs: get().tabs.map((tab) => {
@@ -84,7 +111,10 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     const { tabs, activeTabId } = get();
     const remaining = tabs.filter((t) => !(t.location && locationWithin(location, t.location)));
     if (remaining.length === tabs.length) return;
-    tabs.filter((t) => !remaining.includes(t)).forEach((t) => useRequestStore.getState().drop(t.id));
+    tabs.filter((t) => !remaining.includes(t)).forEach((t) => {
+      useRequestStore.getState().drop(t.id);
+      void useWsStore.getState().release(t.id);
+    });
     set({ tabs: remaining, activeTabId: activeAfterRemoval(tabs, remaining, activeTabId) });
   },
   closeTab: (id) => {
@@ -96,6 +126,7 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     const { tabs, activeTabId, pendingCloseId } = get();
     if (!tabs.some((t) => t.id === id)) return;
     useRequestStore.getState().drop(id);
+    void useWsStore.getState().release(id);
     const remaining = tabs.filter((t) => t.id !== id);
     set({
       tabs: remaining,

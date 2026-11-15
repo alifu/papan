@@ -51,6 +51,13 @@ describe("HistoryPanel", () => {
     expect(screen.queryByText("POST")).toBeNull();
   });
 
+  it("shows the WS badge instead of GET", async () => {
+    vi.mocked(api.listHistory).mockResolvedValue([entry({ id: "w", method: "GET", kind: "ws" })]);
+    render(<HistoryPanel />);
+    expect(await screen.findByText("WS")).toBeInTheDocument();
+    expect(screen.queryByText("GET")).toBeNull();
+  });
+
   it("clears the list", async () => {
     render(<HistoryPanel />);
     await screen.findByText("200");

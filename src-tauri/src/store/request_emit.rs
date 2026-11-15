@@ -12,6 +12,7 @@ use super::types::{
     ApiKeyPlacement, Auth, Body, ClientAuth, HttpVersion, KeyValue, OAuthGrant, Pair, Part,
     RequestContent, RequestKind, Settings,
 };
+use super::ws_model::{self, WS};
 use crate::error::AppError;
 
 const ENTRY_KEYS: [&str; 4] = ["enabled", "file", "name", "value"];
@@ -98,6 +99,7 @@ fn section_eq(key: &str, a: &RequestContent, b: &RequestContent) -> bool {
         HEADERS => a.headers == b.headers,
         SCRIPTS => a.scripts == b.scripts,
         SOAP => a.soap == b.soap,
+        WS => a.ws == b.ws,
         _ => a.settings == b.settings,
     }
 }
@@ -120,6 +122,7 @@ pub fn emit_section(key: &str, content: &RequestContent, raw: Option<&Value>) ->
         HEADERS => list_value(content.headers.iter().map(key_value_fields), raw),
         SCRIPTS => emit_scripts(&content.scripts, raw),
         SOAP => protocol_model::emit_soap(&content.soap, raw),
+        WS => ws_model::emit_ws(&content.ws, raw),
         _ => emit_settings(&content.settings, raw),
     }
 }

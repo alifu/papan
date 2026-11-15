@@ -30,6 +30,7 @@ pub mod service;
 pub mod tree_ops;
 pub mod types;
 pub mod watcher;
+pub mod ws_model;
 pub mod yaml;
 
 pub use service::Store;
