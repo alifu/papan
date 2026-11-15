@@ -98,7 +98,7 @@ describe("CollectionsPanel", () => {
       await userEvent.keyboard("{Escape}");
       return items;
     };
-    expect(await labels("My API")).toEqual(["New Request", "New Folder", "Scripts…", "Export to Postman…", "Close"]);
+    expect(await labels("My API")).toEqual(["New Request", "New Folder", "Scripts…", "Export to Postman…", "Git…", "Close"]);
     expect(await labels("auth")).toEqual(["New Request", "New Folder", "Scripts…", "Rename", "Move Up", "Move Down", "Delete"]);
     expect(await labels("login")).toEqual(["Rename", "Move Up", "Move Down", "Delete"]);
     expect(await labels("broken")).toEqual(["Delete"]);
@@ -109,6 +109,13 @@ describe("CollectionsPanel", () => {
     render(<CollectionsPanel />);
     await pick("My API", "Export to Postman…");
     expect(useDialogsStore.getState()).toMatchObject({ open: "export-postman", collectionId: "c1" });
+  });
+
+  it("Git opens the git dialog for that collection", async () => {
+    seed();
+    render(<CollectionsPanel />);
+    await pick("My API", "Git…");
+    expect(useDialogsStore.getState()).toMatchObject({ open: "git", collectionId: "c1" });
   });
 
   it("disables Move Up at the top and Move Down at the bottom", async () => {

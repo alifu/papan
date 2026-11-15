@@ -95,6 +95,11 @@ impl Store {
         self.registry.find(id).cloned()
     }
 
+    /// Folder of an open collection, for Git (plan 10).
+    pub fn collection_root(&self, id: &str) -> Result<PathBuf, AppError> {
+        Ok(self.entry(id)?.path)
+    }
+
     pub(super) fn open_entry(&self, id: &str) -> Result<(RegistryEntry, Collection), AppError> {
         let entry = self.entry(id)?;
         let collection = open_registered(&entry)?;

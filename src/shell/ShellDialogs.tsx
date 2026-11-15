@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { CookieManager } from "../features/cookies/CookieManager";
 import { useActiveLocation } from "../features/environments/useActiveLocation";
+import { CloneDialog } from "../features/git/CloneDialog";
+import { GitDialog } from "../features/git/GitDialog";
 import { ImportCurlDialog } from "../features/curl/ImportCurlDialog";
 import { ExportPostmanDialog } from "../features/postman/ExportPostmanDialog";
 import { ImportPostmanDialog } from "../features/postman/ImportPostmanDialog";
@@ -22,6 +24,8 @@ export function ShellDialogs() {
   if (open === "import-curl") return <ImportCurlDialog onClose={close} />;
   if (open === "import-postman") return <ImportPostmanDialog onClose={close} />;
   if (open === "export-postman") return <ExportPostmanDialog collectionId={collectionId} onClose={close} />;
+  if (open === "clone-git") return <CloneDialog onClose={close} />;
+  if (open === "git" && collectionId) return <GitDialog collectionId={collectionId} onClose={close} />;
   if (open === "cookies" && location) return <CookieManager location={location} onClose={close} />;
   return null;
 }

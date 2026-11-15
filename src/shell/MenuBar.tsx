@@ -27,6 +27,7 @@ export function MenuBar() {
           { label: "Import cURL…", onSelect: () => showDialog("import-curl") },
           { label: "Import Postman…", onSelect: () => showDialog("import-postman") },
           { label: "Export to Postman…", onSelect: () => showDialog("export-postman") },
+          { label: "Clone Repository…", onSelect: () => showDialog("clone-git") },
           { label: "Close Tab", shortcut: shortcutLabel("W"), onSelect: closeActiveTab },
         ]}
       />

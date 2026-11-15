@@ -23,6 +23,7 @@ use crate::engine::soap::commands as soap;
 use crate::engine::ws::commands as ws;
 use crate::engine::ws::types::WsEvent;
 use crate::error::AppError;
+use crate::git::commands as git;
 use crate::interop::postman::commands as postman;
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
@@ -98,6 +99,17 @@ pub fn builder() -> Builder<tauri::Wry> {
             postman::postman_import_commit,
             postman::postman_import_discard,
             postman::postman_export,
+            git::git_status,
+            git::git_init,
+            git::git_clone,
+            git::git_diff,
+            git::git_commit,
+            git::git_pull,
+            git::git_push,
+            git::git_branches,
+            git::git_switch,
+            git::git_create_branch,
+            git::git_resolve,
             oauth::oauth_status,
             oauth::oauth_authorize,
             oauth::oauth_cancel,

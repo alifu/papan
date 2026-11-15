@@ -84,6 +84,7 @@ export function CollectionsPanel() {
       newRequest: (row) => setDialog({ kind: "newRequest", row }),
       newFolder: (row) => setDialog({ kind: "newFolder", row }),
       scripts: (row) => setDialog({ kind: "scripts", row }),
+      git: (row) => useDialogsStore.getState().show("git", row.collectionId),
       exportPostman: (row) => useDialogsStore.getState().show("export-postman", row.collectionId),
       rename: (row) => setDialog({ kind: "rename", row }),
       remove: (row) => setDialog({ kind: "delete", row }),

@@ -8,6 +8,7 @@ export interface RowActions {
   readonly rename: (row: TreeRowModel) => void;
   readonly remove: (row: TreeRowModel) => void;
   readonly exportPostman: (row: TreeRowModel) => void;
+  readonly git: (row: TreeRowModel) => void;
   readonly closeCollection: (row: TreeRowModel) => void;
   readonly moveBy: (row: TreeRowModel, offset: -1 | 1) => void;
 }
@@ -31,6 +32,7 @@ export function menuItemsFor(row: TreeRowModel, actions: RowActions): readonly M
             item("New Folder", actions.newFolder),
             item("Scripts…", actions.scripts),
             item("Export to Postman…", actions.exportPostman),
+            item("Git…", actions.git),
             item("Close", actions.closeCollection),
           ]
         : [item("Close", actions.closeCollection)];

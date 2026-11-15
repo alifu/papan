@@ -96,6 +96,22 @@ export const commands = {
 	postmanImportDiscard: (token: string) => __TAURI_INVOKE<null>("postman_import_discard", { token }),
 	/**  `None` when the folder pick is cancelled. */
 	postmanExport: (options: ExportOptions) => __TAURI_INVOKE<PostmanExportResult | null>("postman_export", { options }),
+	gitStatus: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_status", { collectionId }),
+	gitInit: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_init", { collectionId }),
+	/**
+	 *  Asks for a parent folder, clones into it and opens the clone as a collection.
+	 *  `None` when the user cancels the folder picker. A clone that is not a Papan
+	 *  collection is removed again (only the folder this call created).
+	 */
+	gitClone: (url: string) => __TAURI_INVOKE<CollectionTree | null>("git_clone", { url }),
+	gitDiff: (collectionId: string, path: string) => __TAURI_INVOKE<string>("git_diff", { collectionId, path }),
+	gitCommit: (collectionId: string, message: string) => __TAURI_INVOKE<GitOutput>("git_commit", { collectionId, message }),
+	gitPull: (collectionId: string) => __TAURI_INVOKE<GitOutput>("git_pull", { collectionId }),
+	gitPush: (collectionId: string) => __TAURI_INVOKE<GitOutput>("git_push", { collectionId }),
+	gitBranches: (collectionId: string) => __TAURI_INVOKE<GitBranch[]>("git_branches", { collectionId }),
+	gitSwitch: (collectionId: string, branch: string) => __TAURI_INVOKE<GitStatus>("git_switch", { collectionId, branch }),
+	gitCreateBranch: (collectionId: string, branch: string) => __TAURI_INVOKE<GitStatus>("git_create_branch", { collectionId, branch }),
+	gitResolve: (collectionId: string, path: string, side: ConflictSide) => __TAURI_INVOKE<GitStatus>("git_resolve", { collectionId, path, side }),
 	/**  Command 47: the token state of the draft's resolved OAuth 2 configuration. */
 	oauthStatus: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<OAuthStatus>("oauth_status", { location, content }),
 	/**  Command 48: runs "Get new token" for the configuration the dialog showed (`config_key`). */
@@ -276,6 +292,9 @@ export type CollectionTree = {
 	children: TreeNode[],
 };
 
+/**  Which side wins when resolving a conflicted file. */
+export type ConflictSide = "mine" | "theirs";
+
 export type ConsoleLevel = "log" | "info" | "warn" | "error";
 
 /**  One `console.*` call, or a warning from the host (level `warn`). */
@@ -357,6 +376,41 @@ export type ExportOptions = {
 	environments: string[],
 	include_globals: boolean,
 	include_secret_values: boolean,
+};
+
+export type GitBranch = {
+	name: string,
+	current: boolean,
+};
+
+/**
+ *  One changed path. `index` / `worktree` are git's one-letter states (`M`, `A`, `D`, `R`,
+ *  `?` for untracked, `.` for unchanged).
+ */
+export type GitFileChange = {
+	path: string,
+	index: string,
+	worktree: string,
+	conflicted: boolean,
+};
+
+/**  Outcome of pull / push / commit: git's own (redacted) message for the toast. */
+export type GitOutput = {
+	message: string,
+};
+
+export type GitStatus = {
+	/**  `false` when the `git` binary cannot be run. */
+	git_available: boolean,
+	/**  The collection folder is itself a repository root. */
+	is_repo: boolean,
+	/**  Current branch; `None` on a detached HEAD or an empty repo with no commits yet. */
+	branch: string | null,
+	upstream: string | null,
+	ahead: number,
+	behind: number,
+	merging: boolean,
+	files: GitFileChange[],
 };
 
 export type GlobalsClash = "keep" | "overwrite";

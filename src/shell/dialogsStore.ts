@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ShellDialog = "network" | "cookies" | "import-curl" | "import-postman" | "export-postman";
+export type ShellDialog = "network" | "cookies" | "import-curl" | "import-postman" | "export-postman" | "git" | "clone-git";
 
 interface DialogsState {
   readonly open: ShellDialog | null;

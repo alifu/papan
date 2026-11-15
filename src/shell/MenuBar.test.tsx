@@ -49,6 +49,7 @@ describe("MenuBar", () => {
     ["File", /Import cURL/, "import-curl"],
     ["File", /Import Postman/, "import-postman"],
     ["File", /Export to Postman/, "export-postman"],
+    ["File", /Clone Repository/, "clone-git"],
     ["Edit", /Network settings/, "network"],
     ["Request", /Manage cookies/, "cookies"],
   ])("%s menu opens the %s dialog", async (menu, item, dialog) => {
