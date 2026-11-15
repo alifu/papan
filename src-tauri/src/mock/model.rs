@@ -95,6 +95,9 @@ pub struct MockResponse {
     pub rules_operator: RulesOperator,
     #[serde(default)]
     pub default: bool,
+    /// A file inside the collection to send instead of `body` (plan 11 §9); empty = use `body`.
+    #[serde(default)]
+    pub file: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -133,6 +136,12 @@ pub struct MockEnvironment {
     pub headers: Vec<KeyValue>,
     #[serde(default)]
     pub routes: Vec<MockRoute>,
+    /// Serve HTTPS with a self-signed certificate made at start.
+    #[serde(default)]
+    pub tls: bool,
+    /// Forward requests that match no route to this `http(s)://` base URL; empty = off.
+    #[serde(default)]
+    pub proxy: String,
 }
 
 const METHODS: [&str; 8] = [
@@ -165,6 +174,50 @@ pub fn check_header(file: &str, field: &str, header: &KeyValue) -> Result<(), Ap
     Ok(())
 }
 
+/// A file reference must stay inside the collection: relative, no `..`, no hidden parts.
+/// The server re-checks after resolving links; this refuses the obvious at save time.
+pub fn check_file(file: &str, field: &str, path: &str) -> Result<(), AppError> {
+    if path.is_empty() {
+        return Ok(());
+    }
+    check_text(file, field, path, MAX_FIELD_CHARS)?;
+    let bad = path.starts_with(['/', '\\'])
+        || path.contains(['\0', ':'])
+        || path
+            .split(['/', '\\'])
+            .any(|part| part == ".." || part.starts_with('.'));
+    if bad {
+        return Err(invalid(
+            file,
+            field,
+            "must be a relative path inside the collection",
+        ));
+    }
+    Ok(())
+}
+
+/// The proxy target must be an absolute http(s) URL without credentials.
+pub fn check_proxy(file: &str, target: &str) -> Result<(), AppError> {
+    if target.is_empty() {
+        return Ok(());
+    }
+    check_text(file, "proxy", target, MAX_FIELD_CHARS)?;
+    let parsed =
+        url::Url::parse(target).map_err(|_| invalid(file, "proxy", "is not a valid URL"))?;
+    let ok = matches!(parsed.scheme(), "http" | "https")
+        && parsed.host_str().is_some()
+        && parsed.username().is_empty()
+        && parsed.password().is_none();
+    if !ok {
+        return Err(invalid(
+            file,
+            "proxy",
+            "must be an http or https URL without credentials",
+        ));
+    }
+    Ok(())
+}
+
 fn check_headers(file: &str, field: &str, headers: &[KeyValue]) -> Result<(), AppError> {
     if headers.len() > MAX_HEADERS {
         return Err(invalid(file, field, "has too many headers"));
@@ -187,6 +240,7 @@ fn check_response(file: &str, at: &str, response: &MockResponse) -> Result<(), A
     if response.rules.len() > MAX_RULES {
         return Err(invalid(file, &format!("{at}.rules"), "has too many rules"));
     }
+    check_file(file, &format!("{at}.file"), &response.file)?;
     check_text(
         file,
         &format!("{at}.label"),
@@ -218,6 +272,7 @@ pub fn validate(file: &str, mock: &MockEnvironment) -> Result<(), AppError> {
         return Err(invalid(file, "latency_ms", "is over 60000"));
     }
     check_headers(file, "headers", &mock.headers)?;
+    check_proxy(file, &mock.proxy)?;
     if mock.routes.len() > MAX_ROUTES {
         return Err(invalid(file, "routes", "has too many routes"));
     }
@@ -263,6 +318,8 @@ pub mod tests_support {
             latency_ms: 0,
             cors: true,
             headers: vec![],
+            tls: false,
+            proxy: String::new(),
             routes: vec![MockRoute {
                 id: "r1".into(),
                 method: "get".into(),
@@ -279,6 +336,7 @@ pub mod tests_support {
                     rules: vec![],
                     rules_operator: RulesOperator::And,
                     default: true,
+                    file: String::new(),
                 }],
             }],
         }
@@ -317,6 +375,38 @@ mod tests {
         let mut mock = sample();
         mock.name = " ".into();
         assert!(validate("f", &mock).is_err());
+    }
+
+    #[test]
+    fn file_paths_must_stay_inside_the_collection() {
+        for bad in [
+            "/etc/passwd",
+            "../x",
+            "a/../b",
+            ".git/config",
+            "a\\b/..\\c",
+            "C:x",
+            "a/.env",
+        ] {
+            let mut mock = sample();
+            mock.routes[0].responses[0].file = bad.into();
+            assert!(validate("f", &mock).is_err(), "{bad}");
+        }
+        let mut mock = sample();
+        mock.routes[0].responses[0].file = "files/data.json".into();
+        assert!(validate("f", &mock).is_ok());
+    }
+
+    #[test]
+    fn proxy_must_be_an_http_url_without_credentials() {
+        for bad in ["ftp://x", "not a url", "https://u:p@host", "file:///etc"] {
+            let mut mock = sample();
+            mock.proxy = bad.into();
+            assert!(validate("f", &mock).is_err(), "{bad}");
+        }
+        let mut mock = sample();
+        mock.proxy = "https://api.example.com/v1".into();
+        assert!(validate("f", &mock).is_ok());
     }
 
     #[test]

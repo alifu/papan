@@ -121,6 +121,7 @@ mod tests {
             rules,
             rules_operator: RulesOperator::And,
             default,
+            file: String::new(),
         }
     }
 

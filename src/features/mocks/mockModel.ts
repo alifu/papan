@@ -1,6 +1,7 @@
 import type {
   KeyValue,
   MockEnvironment,
+  MockLogEntry,
   MockResponse,
   MockRoute,
   ResponseMode,
@@ -42,6 +43,7 @@ const normalizeResponse = (response: MockResponse): MResponse => ({
   rules: (response.rules ?? []).map(normalizeRule),
   rules_operator: response.rules_operator ?? "and",
   default: response.default ?? false,
+  file: response.file ?? "",
 });
 
 /** Fills in every field the file left to its default. */
@@ -52,6 +54,8 @@ export const normalizeMock = (mock: MockEnvironment): MEnv => ({
   prefix: mock.prefix ?? "",
   latency_ms: mock.latency_ms ?? 0,
   cors: mock.cors ?? true,
+  tls: mock.tls ?? false,
+  proxy: mock.proxy ?? "",
   headers: [...(mock.headers ?? [])],
   routes: (mock.routes ?? []).map((route) => ({
     id: route.id,
@@ -143,6 +147,7 @@ export const newResponse = (isDefault: boolean): MResponse => ({
   rules: [],
   rules_operator: "and",
   default: isDefault,
+  file: "",
 });
 
 export const newRoute = (): MRoute => ({
@@ -169,6 +174,8 @@ export const newMock = (name: string): MEnv => ({
   prefix: "",
   latency_ms: 0,
   cors: true,
+  tls: false,
+  proxy: "",
   headers: [],
   routes: [],
 });
@@ -206,6 +213,14 @@ export function withoutResponse(route: MRoute, index: number): MRoute {
   };
 }
 
+const isInsideCollection = (path: string): boolean =>
+  path === "" ||
+  !(
+    /^[/\\]/.test(path) ||
+    /[\0:]/.test(path) ||
+    path.split(/[/\\]/).some((part) => part === ".." || part.startsWith("."))
+  );
+
 /** What blocks saving, or null. Mirrors the checks Rust makes. */
 export function draftProblem(mock: MEnv): string | null {
   if (mock.name.trim() === "") return "Give the mock a name.";
@@ -213,8 +228,13 @@ export function draftProblem(mock: MEnv): string | null {
     return "The port must be 0 to 65535.";
   if (mock.latency_ms < 0 || mock.latency_ms > MAX_LATENCY_MS)
     return "Latency must be 0 to 60000 ms.";
+  if (mock.proxy !== "" && !/^https?:\/\/[^/\s@?#]+([/?#]|$)/i.test(mock.proxy))
+    return "The proxy target must be an http or https URL without credentials.";
   for (const [n, route] of mock.routes.entries()) {
     for (const response of route.responses) {
+      if (!isInsideCollection(response.file)) {
+        return `Route ${n + 1}: the file must be a relative path inside the collection, with no hidden parts.`;
+      }
       if (
         !Number.isInteger(response.status) ||
         response.status < 100 ||
@@ -232,3 +252,24 @@ export function draftProblem(mock: MEnv): string | null {
 
 export const endpointLabel = (route: MRoute): string =>
   `${route.method.toUpperCase()} /${route.endpoint.replace(/^\/+/, "")}`;
+
+const slashes = /^\/+|\/+$/g;
+
+/** A route that answers the request in a log entry (relative to the mock's prefix). */
+export const routeFromRequest = (
+  entry: Pick<MockLogEntry, "method" | "path">,
+  prefix: string,
+): MRoute => {
+  const method = entry.method.toLowerCase();
+  const wanted = prefix.replace(slashes, "");
+  const path = entry.path.replace(slashes, "");
+  const relative =
+    wanted !== "" && (path === wanted || path.startsWith(`${wanted}/`))
+      ? path.slice(wanted.length).replace(slashes, "")
+      : path;
+  return {
+    ...newRoute(),
+    method: (METHODS as readonly string[]).includes(method) ? method : "any",
+    endpoint: relative,
+  };
+};

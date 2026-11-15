@@ -5,11 +5,12 @@ import { Button } from "../../ui/Button";
 export interface MockLogProps {
   readonly entries: readonly MockLogEntry[];
   readonly onClear: () => void;
+  readonly onCreateRoute: (entry: MockLogEntry) => void;
 }
 
 const time = (ms: number): string => new Date(ms).toLocaleTimeString();
 
-export function MockLog({ entries, onClear }: MockLogProps) {
+export function MockLog({ entries, onClear, onCreateRoute }: MockLogProps) {
   const [openId, setOpenId] = useState<number | null>(null);
   const open = entries.find((e) => e.id === openId);
   return (
@@ -48,6 +49,10 @@ export function MockLog({ entries, onClear }: MockLogProps) {
           <h3>
             {open.method} {open.path}
           </h3>
+          <Button
+            label="Create route from this request"
+            onClick={() => onCreateRoute(open)}
+          />
           <dl>
             {open.headers.map((h) => (
               <div key={h.name}>

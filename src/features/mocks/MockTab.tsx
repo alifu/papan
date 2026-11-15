@@ -13,6 +13,7 @@ import {
   newRoute,
   removeAt,
   replaceAt,
+  routeFromRequest,
   normalizeMock,
   type MEnv,
 } from "./mockModel";
@@ -154,6 +155,17 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
           <MockLog
             entries={entries}
             onClear={() => void store.clearLog(collectionId, file)}
+            onCreateRoute={(entry) => {
+              setDraft({
+                ...draft,
+                routes: [
+                  ...draft.routes,
+                  routeFromRequest(entry, draft.prefix),
+                ],
+              });
+              setSelected(draft.routes.length);
+              setView("design");
+            }}
           />
         ) : (
           <>

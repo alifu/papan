@@ -40,6 +40,10 @@ pub struct Reply {
     pub delay: Duration,
     pub route_id: Option<String>,
     pub response_id: Option<String>,
+    /// A collection file to send instead of `body`.
+    pub file: Option<String>,
+    /// No route matched and the mock has a proxy target: the server forwards the request.
+    pub forward: bool,
 }
 
 fn set_header(headers: &mut Vec<(String, String)>, name: &str, value: String) {
@@ -80,6 +84,15 @@ fn error_reply(status: u16, message: &str) -> Reply {
         delay: Duration::ZERO,
         route_id: None,
         response_id: None,
+        file: None,
+        forward: false,
+    }
+}
+
+fn forward_reply() -> Reply {
+    Reply {
+        forward: true,
+        ..error_reply(502, "")
     }
 }
 
@@ -91,6 +104,9 @@ fn capped_delay(milliseconds: u32) -> Duration {
 pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
     let mock = &compiled.mock;
     let Some(relative) = strip_prefix(&mock.prefix, &ctx.path).map(str::to_string) else {
+        if !mock.proxy.is_empty() {
+            return forward_reply();
+        }
         return with_cors(
             error_reply(404, "No mock route matches this path."),
             mock,
@@ -98,6 +114,9 @@ pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
         );
     };
     let Some(hit) = find_route(&mock.routes, &compiled.routes, &ctx.method, &relative) else {
+        if !mock.proxy.is_empty() {
+            return forward_reply();
+        }
         if mock.cors && ctx.method.eq_ignore_ascii_case("options") {
             let mut reply = Reply {
                 status: 204,
@@ -125,16 +144,23 @@ pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
     {
         set_header(&mut headers, &header.name, header.value.clone());
     }
-    let (status, body) = match template::render(&response.body, &ctx) {
-        Ok(body) => (response.status, body),
-        Err(problem) => {
-            tracing::warn!(route = %route.id, "mock template failed: {problem}");
-            let reply = error_reply(500, &format!("Template error: {problem}"));
-            (reply.status, reply.body)
+    let (status, body) = if !response.file.is_empty() {
+        (response.status, String::new())
+    } else {
+        match template::render(&response.body, &ctx) {
+            Ok(body) => (response.status, body),
+            Err(problem) => {
+                tracing::warn!(route = %route.id, "mock template failed: {problem}");
+                let reply = error_reply(500, &format!("Template error: {problem}"));
+                (reply.status, reply.body)
+            }
         }
     };
+    let file = (!response.file.is_empty()).then(|| response.file.clone());
     if !has_header(&headers, "content-type") {
-        let kind = if looks_like_json(&body) {
+        let kind = if let Some(path) = &file {
+            super::files::content_type_of(path)
+        } else if looks_like_json(&body) {
             "application/json"
         } else {
             "text/plain; charset=utf-8"
@@ -148,6 +174,8 @@ pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
         delay: capped_delay(response.latency_ms.saturating_add(mock.latency_ms)),
         route_id: Some(route.id.clone()),
         response_id: Some(response.id.clone()),
+        file,
+        forward: false,
     };
     with_cors(reply, mock, &ctx)
 }
@@ -268,6 +296,7 @@ mod tests {
             id: "s2".into(),
             status: 201,
             default: false,
+            file: String::new(),
             ..mock.routes[0].responses[0].clone()
         };
         mock.routes[0].responses.push(second);
@@ -286,6 +315,7 @@ mod tests {
             id: "admin".into(),
             status: 202,
             default: false,
+            file: String::new(),
             rules: vec![Rule {
                 target: RuleTarget::Header,
                 modifier: "x-role".into(),

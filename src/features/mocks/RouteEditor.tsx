@@ -97,6 +97,15 @@ function ResponseEditor({
         onChange={(headers) => set({ ...response, headers })}
       />
       <label>
+        File (path inside the collection; sent instead of the body)
+        <input
+          aria-label={`Response ${n} file`}
+          value={response.file}
+          placeholder="files/users.json"
+          onChange={(e) => set({ ...response, file: e.target.value })}
+        />
+      </label>
+      <label>
         Body (Handlebars: {"{{urlParam 'id'}}"}, {"{{body 'a.b'}}"},{" "}
         {"{{uuid}}"} …)
         <textarea

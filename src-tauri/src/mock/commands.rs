@@ -49,18 +49,14 @@ fn logged<T>(result: MockResult<T>) -> MockResult<T> {
     result
 }
 
-fn url_of(port: u16) -> String {
-    format!("http://127.0.0.1:{port}")
-}
-
 async fn with_state(
     service: &MockService,
     collection_id: &str,
     mut summary: MockSummary,
 ) -> MockSummary {
-    if let Some(port) = service.port_of(collection_id, &summary.file).await {
+    if let Some(url) = service.url_of(collection_id, &summary.file).await {
         summary.running = true;
-        summary.url = Some(url_of(port));
+        summary.url = Some(url);
     }
     summary
 }
@@ -110,9 +106,13 @@ pub async fn save_mock(
     let root = root_of(&state, &collection_id)?;
     let saved = mock.clone();
     let name = logged(disk::write(&root, file.as_deref(), &mock))?;
-    if service.port_of(&collection_id, &name).await.is_some() {
+    if service.url_of(&collection_id, &name).await.is_some() {
         service.stop(&collection_id, &name).await;
-        logged(service.start(&collection_id, &name, saved.clone()).await)?;
+        logged(
+            service
+                .start(&collection_id, &name, root, saved.clone())
+                .await,
+        )?;
     }
     Ok(with_state(&service, &collection_id, MockSummary::of(&name, &saved)).await)
 }
@@ -141,8 +141,11 @@ pub async fn start_mock(
 ) -> MockResult<String> {
     let root = root_of(&state, &collection_id)?;
     let mock = logged(disk::read(&root, &file))?;
-    let port = logged(service.start(&collection_id, &file, mock).await)?;
-    Ok(url_of(port))
+    logged(service.start(&collection_id, &file, root, mock).await)?;
+    service
+        .url_of(&collection_id, &file)
+        .await
+        .ok_or_else(|| AppError::internal("The mock stopped right after it started."))
 }
 
 #[tauri::command]

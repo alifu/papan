@@ -571,6 +571,10 @@ export type MockEnvironment = {
 	cors?: boolean,
 	headers?: KeyValue[],
 	routes?: MockRoute[],
+	/**  Serve HTTPS with a self-signed certificate made at start. */
+	tls?: boolean,
+	/**  Forward requests that match no route to this `http(s)://` base URL; empty = off. */
+	proxy?: string,
 };
 
 /**  One request the mock served. */
@@ -607,6 +611,8 @@ export type MockResponse = {
 	rules?: Rule[],
 	rules_operator?: RulesOperator,
 	default?: boolean,
+	/**  A file inside the collection to send instead of `body` (plan 11 §9); empty = use `body`. */
+	file?: string,
 };
 
 export type MockRoute = {

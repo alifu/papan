@@ -4,8 +4,10 @@ import {
   endpointLabel,
   newMock,
   newRoute,
+  normalizeMock,
   removeAt,
   replaceAt,
+  routeFromRequest,
   withDefault,
   withoutResponse,
 } from "./mockModel";
@@ -71,5 +73,58 @@ describe("mockModel", () => {
     expect(
       endpointLabel({ ...newRoute(), method: "post", endpoint: "/users/:id" }),
     ).toBe("POST /users/:id");
+  });
+});
+
+describe("11c fields", () => {
+  it("defaults tls, proxy and file for old files", () => {
+    const old = {
+      name: "x",
+      routes: [
+        {
+          id: "r",
+          method: "get",
+          endpoint: "a",
+          responses: [{ id: "s", status: 200 }],
+        },
+      ],
+    };
+    const mock = normalizeMock(old as never);
+    expect([mock.tls, mock.proxy, mock.routes[0]?.responses[0]?.file]).toEqual([
+      false,
+      "",
+      "",
+    ]);
+  });
+
+  it("refuses unsafe file paths and bad proxy targets", () => {
+    for (const file of ["/etc/passwd", "../x", "a/.env", "C:x"]) {
+      const mock = newMock("m");
+      const route = newRoute();
+      mock.routes = [
+        { ...route, responses: [{ ...route.responses[0]!, file }] },
+      ];
+      expect(draftProblem(mock), file).toMatch(/file/);
+    }
+    for (const proxy of ["ftp://x", "api.example.com", "https://u:p@h"]) {
+      expect(draftProblem({ ...newMock("m"), proxy }), proxy).toMatch(/proxy/);
+    }
+    expect(
+      draftProblem({ ...newMock("m"), proxy: "https://api.example.com/v1" }),
+    ).toBeNull();
+  });
+
+  it("builds a route from a logged request, relative to the prefix", () => {
+    const route = routeFromRequest(
+      { method: "POST", path: "/api/v1/users/7" },
+      "/api/v1/",
+    );
+    expect([route.method, route.endpoint]).toEqual(["post", "users/7"]);
+    expect(
+      routeFromRequest({ method: "GET", path: "/other/x" }, "api").endpoint,
+    ).toBe("other/x");
+    expect(routeFromRequest({ method: "PROPFIND", path: "/" }, "").method).toBe(
+      "any",
+    );
   });
 });

@@ -84,6 +84,7 @@ prost-types = "=0.14.4"
 handlebars = "6"
 regex = "1"
 rand = "0.9"
+rcgen = "0.14"
 prost-reflect = { version = "=0.16.5", features = ["serde"] }
 protox = "=0.10.0"
 
@@ -95,7 +96,6 @@ windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock"] }
 [dev-dependencies]
 axum = { version = "0.8", features = ["multipart"] }
 axum-server = { version = "0.9", features = ["tls-rustls"] }
-rcgen = "0.14"
 flate2 = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "test-util"] }
 # GraphQL test server (plan 06 §2); 8.0 is still rc.

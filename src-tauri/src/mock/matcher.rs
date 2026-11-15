@@ -144,6 +144,7 @@ mod tests {
                 rules: vec![],
                 rules_operator: RulesOperator::And,
                 default: true,
+                file: String::new(),
             }],
         }
     }

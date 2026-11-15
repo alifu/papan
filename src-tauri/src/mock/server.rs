@@ -3,6 +3,7 @@
 
 use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -13,6 +14,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::{TokioIo, TokioTimer};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::{watch, Semaphore};
 use tokio::task::JoinSet;
@@ -22,6 +24,7 @@ use super::model::{MockBind, MockEnvironment};
 use super::request::{parse_cookies, parse_pairs, RequestCtx};
 use super::types::MockLogEntry;
 use super::MockSink;
+use super::{files, proxy, tls};
 use crate::engine::http::oauth::listener::bind_exclusive;
 use crate::error::AppError;
 use crate::store::types::KeyValue;
@@ -44,6 +47,8 @@ pub struct Shared {
     collection_id: String,
     file: String,
     compiled: Compiled,
+    root: PathBuf,
+    upstream: Option<reqwest::Client>,
     log: Mutex<VecDeque<MockLogEntry>>,
     next_id: AtomicU32,
     sink: Arc<dyn MockSink>,
@@ -53,17 +58,29 @@ impl Shared {
     pub fn new(
         collection_id: &str,
         file: &str,
+        root: PathBuf,
         mock: MockEnvironment,
         sink: Arc<dyn MockSink>,
     ) -> Self {
+        let upstream = if mock.proxy.is_empty() {
+            None
+        } else {
+            proxy::client().ok()
+        };
         Self {
             collection_id: collection_id.to_string(),
             file: file.to_string(),
             compiled: Compiled::new(mock),
+            root,
+            upstream,
             log: Mutex::new(VecDeque::new()),
             next_id: AtomicU32::new(1),
             sink,
         }
+    }
+
+    pub fn is_tls(&self) -> bool {
+        self.compiled.mock.tls
     }
 
     pub fn log(&self) -> MutexGuard<'_, VecDeque<MockLogEntry>> {
@@ -118,12 +135,40 @@ pub async fn start(shared: Arc<Shared>) -> Result<RunningServer, AppError> {
     let port = socket.local_addr().map(|a| a.port()).map_err(|source| {
         AppError::internal("Could not start the mock server.").with_detail(source.to_string())
     })?;
+    refuse_own_port(&shared.compiled.mock.proxy, port)?;
+    let acceptor = if shared.compiled.mock.tls {
+        Some(tls::acceptor()?)
+    } else {
+        None
+    };
     let (stop, stopped) = watch::channel(false);
-    let task = tokio::spawn(accept_loop(socket, shared, stopped));
+    let task = tokio::spawn(accept_loop(socket, shared, acceptor, stopped));
     Ok(RunningServer { port, stop, task })
 }
 
-async fn accept_loop(socket: TcpListener, shared: Arc<Shared>, mut stopped: watch::Receiver<bool>) {
+/// A proxy target that points back at this mock would forward every request to itself.
+pub(crate) fn refuse_own_port(target: &str, port: u16) -> Result<(), AppError> {
+    let Ok(url) = url::Url::parse(target) else {
+        return Ok(());
+    };
+    let local = matches!(
+        url.host_str(),
+        Some("localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0")
+    );
+    if local && url.port_or_known_default() == Some(port) {
+        return Err(AppError::invalid_input(
+            "The proxy target is this mock itself. Point it at another server.",
+        ));
+    }
+    Ok(())
+}
+
+async fn accept_loop(
+    socket: TcpListener,
+    shared: Arc<Shared>,
+    acceptor: Option<tokio_rustls::TlsAcceptor>,
+    mut stopped: watch::Receiver<bool>,
+) {
     let permits = Arc::new(Semaphore::new(MAX_CONNECTIONS));
     let mut connections: JoinSet<()> = JoinSet::new();
     loop {
@@ -145,8 +190,18 @@ async fn accept_loop(socket: TcpListener, shared: Arc<Shared>, mut stopped: watc
         match accepted {
             Ok((stream, remote)) => {
                 let (shared, stopped) = (Arc::clone(&shared), stopped.clone());
+                let acceptor = acceptor.clone();
                 connections.spawn(async move {
-                    serve(stream, remote, shared, stopped).await;
+                    match acceptor {
+                        Some(acceptor) => {
+                            let handshake =
+                                tokio::time::timeout(HEADER_TIMEOUT, acceptor.accept(stream));
+                            if let Ok(Ok(secure)) = handshake.await {
+                                serve(secure, remote, shared, stopped).await;
+                            }
+                        }
+                        None => serve(stream, remote, shared, stopped).await,
+                    }
                     drop(permit);
                 });
             }
@@ -164,12 +219,14 @@ async fn accept_loop(socket: TcpListener, shared: Arc<Shared>, mut stopped: watc
     connections.abort_all();
 }
 
-async fn serve(
-    stream: tokio::net::TcpStream,
+async fn serve<S>(
+    stream: S,
     remote: SocketAddr,
     shared: Arc<Shared>,
     mut stopped: watch::Receiver<bool>,
-) {
+) where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let service = service_fn(move |request| handle(request, remote, Arc::clone(&shared)));
     let connection = http1::Builder::new()
         .timer(TokioTimer::new())
@@ -246,11 +303,67 @@ fn context_of(parts: &http::request::Parts, remote: SocketAddr, body: &[u8]) -> 
     }
 }
 
-fn to_response(reply: &Reply) -> Response<Full<Bytes>> {
-    let mut response = Response::new(Full::new(Bytes::from(reply.body.clone())));
-    *response.status_mut() =
-        http::StatusCode::from_u16(reply.status).unwrap_or(http::StatusCode::OK);
-    for (name, value) in &reply.headers {
+/// What goes on the wire: the reply with its body resolved (text, file or upstream answer).
+struct Outgoing {
+    status: u16,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+fn problem(status: u16, message: &str) -> Outgoing {
+    Outgoing {
+        status,
+        headers: vec![("Content-Type".into(), "application/json".into())],
+        body: serde_json::json!({ "error": message })
+            .to_string()
+            .into_bytes(),
+    }
+}
+
+async fn resolve(
+    shared: &Arc<Shared>,
+    reply: &Reply,
+    ctx: &RequestCtx,
+    query: &str,
+    body: Vec<u8>,
+) -> Outgoing {
+    if reply.forward {
+        let Some(client) = &shared.upstream else {
+            return problem(502, "Proxy mode is not available.");
+        };
+        return match proxy::forward(client, &shared.compiled.mock.proxy, ctx, query, body).await {
+            Ok(done) => Outgoing {
+                status: done.status,
+                headers: done.headers,
+                body: done.body,
+            },
+            Err(message) => problem(502, &message),
+        };
+    }
+    if let Some(relative) = &reply.file {
+        let (root, relative) = (shared.root.clone(), relative.clone());
+        let read = tokio::task::spawn_blocking(move || files::read(&root, &relative)).await;
+        return match read {
+            Ok(Ok(bytes)) => Outgoing {
+                status: reply.status,
+                headers: reply.headers.clone(),
+                body: bytes,
+            },
+            Ok(Err(message)) => problem(500, &message),
+            Err(_) => problem(500, "The file could not be read."),
+        };
+    }
+    Outgoing {
+        status: reply.status,
+        headers: reply.headers.clone(),
+        body: reply.body.clone().into_bytes(),
+    }
+}
+
+fn to_response(out: &Outgoing) -> Response<Full<Bytes>> {
+    let mut response = Response::new(Full::new(Bytes::from(out.body.clone())));
+    *response.status_mut() = http::StatusCode::from_u16(out.status).unwrap_or(http::StatusCode::OK);
+    for (name, value) in &out.headers {
         let parsed = (
             http::HeaderName::from_bytes(name.as_bytes()),
             http::HeaderValue::from_str(value),
@@ -293,10 +406,11 @@ async fn handle(
     let body_text: String = ctx.body_text.chars().take(MAX_LOGGED_BODY).collect();
     let body_truncated = body_text.len() < ctx.body_text.len();
 
-    let reply = respond(&shared.compiled, ctx);
+    let reply = respond(&shared.compiled, ctx.clone());
     if !reply.delay.is_zero() {
         tokio::time::sleep(reply.delay).await;
     }
+    let outgoing = resolve(&shared, &reply, &ctx, &logged.2, bytes.to_vec()).await;
     let duration_ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
     shared.record(MockLogEntry {
         id: 0,
@@ -310,8 +424,8 @@ async fn handle(
         remote: remote.to_string(),
         route_id: reply.route_id.clone(),
         response_id: reply.response_id.clone(),
-        status: reply.status,
+        status: outgoing.status,
         duration_ms,
     });
-    Ok(to_response(&reply))
+    Ok(to_response(&outgoing))
 }

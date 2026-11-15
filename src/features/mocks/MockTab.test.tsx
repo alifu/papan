@@ -143,9 +143,9 @@ describe("MockTab", () => {
         ],
       },
     });
-    vi.mocked(api.mockLog).mockResolvedValue(
-      [...(useMockStore.getState().logs["c1/users.mock.yaml"] ?? [])],
-    );
+    vi.mocked(api.mockLog).mockResolvedValue([
+      ...(useMockStore.getState().logs["c1/users.mock.yaml"] ?? []),
+    ]);
     vi.mocked(api.clearMockLog).mockResolvedValue(null);
     show();
     await screen.findByRole("heading", { name: "Users" });
@@ -158,5 +158,75 @@ describe("MockTab", () => {
     ).toHaveTextContent("host");
     await userEvent.click(screen.getByRole("button", { name: "Clear log" }));
     expect(api.clearMockLog).toHaveBeenCalledWith("c1", "users.mock.yaml");
+  });
+});
+
+describe("MockTab 11c", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    useToastStore.setState({ toasts: [] });
+    useMockStore.setState({ byCollection: { c1: [summary()] }, logs: {} });
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "t1",
+          kind: "mock",
+          title: "Users",
+          mock: { collectionId: "c1", file: "users.mock.yaml" },
+        },
+      ],
+    });
+    vi.mocked(api.readMock).mockResolvedValue(stored());
+    vi.mocked(api.mockLog).mockResolvedValue([]);
+  });
+
+  it("saves the HTTPS, proxy and file settings", async () => {
+    vi.mocked(api.saveMock).mockResolvedValue(summary());
+    show();
+    await userEvent.click(await screen.findByLabelText("HTTPS"));
+    await userEvent.type(
+      screen.getByLabelText("Proxy target"),
+      "https://api.example.com",
+    );
+    await userEvent.type(
+      screen.getByLabelText("Response 1 file"),
+      "files/a.json",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const sent = vi.mocked(api.saveMock).mock.calls[0]![2];
+    expect(sent.tls).toBe(true);
+    expect(sent.proxy).toBe("https://api.example.com");
+    expect(sent.routes?.[0]?.responses?.[0]?.file).toBe("files/a.json");
+  });
+
+  it("creates a route from a logged request and shows it", async () => {
+    const entry = {
+      id: 1,
+      at_ms: 0,
+      method: "DELETE",
+      path: "/things/9",
+      query: "",
+      headers: [],
+      body_text: "",
+      body_truncated: false,
+      remote: "r",
+      route_id: null,
+      response_id: null,
+      status: 404,
+      duration_ms: 1,
+    };
+    vi.mocked(api.mockLog).mockResolvedValue([entry]);
+    show();
+    await screen.findByRole("heading", { name: "Users" });
+    await userEvent.click(screen.getByRole("tab", { name: /Log/ }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /DELETE \/things\/9/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create route from this request" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: /DELETE \/things\/9/ }),
+    ).toBeVisible();
   });
 });

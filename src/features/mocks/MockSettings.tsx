@@ -72,6 +72,15 @@ export function MockSettings({ mock, onChange }: MockSettingsProps) {
         <label>
           <input
             type="checkbox"
+            aria-label="HTTPS"
+            checked={mock.tls}
+            onChange={(e) => onChange({ ...mock, tls: e.target.checked })}
+          />
+          HTTPS with a self-signed certificate (clients must trust it)
+        </label>
+        <label>
+          <input
+            type="checkbox"
             aria-label="CORS"
             checked={mock.cors}
             onChange={(e) => onChange({ ...mock, cors: e.target.checked })}
@@ -79,6 +88,15 @@ export function MockSettings({ mock, onChange }: MockSettingsProps) {
           Answer CORS requests
         </label>
       </div>
+      <label>
+        Proxy unmatched requests to (empty = answer 404)
+        <input
+          aria-label="Proxy target"
+          value={mock.proxy}
+          placeholder="https://api.example.com"
+          onChange={(e) => onChange({ ...mock, proxy: e.target.value })}
+        />
+      </label>
       <HeadersEditor
         label="Global header"
         headers={mock.headers}

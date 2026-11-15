@@ -3,17 +3,21 @@
 pub mod commands;
 pub mod disk;
 pub mod engine;
+pub mod files;
 pub mod matcher;
 pub mod model;
+pub mod proxy;
 pub mod request;
 pub mod rules;
 pub mod server;
 #[cfg(test)]
 mod service_tests;
 pub mod template;
+pub mod tls;
 pub mod types;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -56,6 +60,7 @@ impl MockService {
         &self,
         collection_id: &str,
         file: &str,
+        root: PathBuf,
         mock: MockEnvironment,
     ) -> Result<u16, AppError> {
         let mut running = self.running.lock().await;
@@ -66,6 +71,7 @@ impl MockService {
         let shared = Arc::new(Shared::new(
             collection_id,
             file,
+            root,
             mock,
             Arc::clone(&self.sink),
         ));
@@ -90,13 +96,16 @@ impl MockService {
         }
     }
 
-    /// The port of a running mock.
-    pub async fn port_of(&self, collection_id: &str, file: &str) -> Option<u16> {
-        self.running
-            .lock()
-            .await
-            .get(&key(collection_id, file))
-            .map(|r| r.server.port)
+    /// Where a running mock listens, with the scheme it serves.
+    pub async fn url_of(&self, collection_id: &str, file: &str) -> Option<String> {
+        let running = self.running.lock().await;
+        let entry = running.get(&key(collection_id, file))?;
+        let scheme = if entry.shared.is_tls() {
+            "https"
+        } else {
+            "http"
+        };
+        Some(format!("{scheme}://127.0.0.1:{}", entry.server.port))
     }
 
     /// Newest last. Empty for a mock that is not running.
