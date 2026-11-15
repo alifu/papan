@@ -128,3 +128,48 @@ describe("11c fields", () => {
     );
   });
 });
+
+describe("11d fields", () => {
+  it("keeps data buckets, the fallback, callbacks and data routes through a normalize", () => {
+    const stored = {
+      name: "x",
+      data: [{ id: "b", name: "users", value: "[]" }],
+      fallback: { id: "f", status: 418 },
+      routes: [
+        {
+          id: "c",
+          method: "get",
+          endpoint: "users",
+          kind: "crud",
+          bucket: "b",
+          id_key: "uid",
+          responses: [],
+        },
+        {
+          id: "h",
+          method: "get",
+          endpoint: "a",
+          responses: [
+            {
+              id: "s",
+              status: 200,
+              callbacks: [{ method: "post", url: "https://x.test", body: "" }],
+            },
+          ],
+        },
+      ],
+    };
+    const mock = normalizeMock(stored as never);
+    expect(mock.data).toHaveLength(1);
+    expect(mock.fallback?.status).toBe(418);
+    expect(mock.routes[0]).toMatchObject({
+      kind: "crud",
+      bucket: "b",
+      id_key: "uid",
+      responses: [],
+    });
+    expect(mock.routes[1]?.responses[0]?.callbacks).toHaveLength(1);
+    expect(mock.routes[1]).toMatchObject({ kind: "http", id_key: "id" });
+    expect(endpointLabel(mock.routes[0]!)).toBe("DATA /users");
+  });
+});

@@ -6,8 +6,9 @@ use std::time::Duration;
 
 use rand::Rng;
 
+use super::crud::Buckets;
 use super::matcher::{find_route, strip_prefix, CompiledRoute};
-use super::model::{MockEnvironment, MAX_LATENCY_MS};
+use super::model::{MockEnvironment, MockResponse, MockRoute, RouteKind, MAX_LATENCY_MS};
 use super::request::RequestCtx;
 use super::rules::select;
 use super::template;
@@ -17,18 +18,31 @@ pub struct Compiled {
     pub mock: MockEnvironment,
     routes: Vec<Option<CompiledRoute>>,
     counters: Vec<AtomicU64>,
+    pub buckets: Buckets,
 }
 
 impl Compiled {
     pub fn new(mock: MockEnvironment) -> Self {
         let routes = mock.routes.iter().map(CompiledRoute::new).collect();
         let counters = mock.routes.iter().map(|_| AtomicU64::new(0)).collect();
+        let buckets = Buckets::new(&mock.data);
         Self {
             mock,
             routes,
             counters,
+            buckets,
         }
     }
+}
+
+/// A callback ready to send: the body is rendered, the URL is the one in the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedCallback {
+    pub method: String,
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: String,
+    pub delay: Duration,
 }
 
 /// What to send, plus what the log needs.
@@ -42,6 +56,8 @@ pub struct Reply {
     pub response_id: Option<String>,
     /// A collection file to send instead of `body`.
     pub file: Option<String>,
+    /// Requests to send once the answer is out.
+    pub callbacks: Vec<PreparedCallback>,
     /// No route matched and the mock has a proxy target: the server forwards the request.
     pub forward: bool,
 }
@@ -90,6 +106,7 @@ fn error_reply(status: u16, message: &str) -> Reply {
         response_id: None,
         file: None,
         forward: false,
+        callbacks: Vec::new(),
     }
 }
 
@@ -135,15 +152,39 @@ pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
             reply.headers.clear();
             return with_cors(reply, mock, &ctx);
         }
+        if let Some(fallback) = &mock.fallback {
+            let reply = build_reply(compiled, fallback, &mut ctx, None);
+            return with_cors(reply, mock, &ctx);
+        }
         let message = format!("No mock route matches {} {}.", ctx.method, ctx.path);
         return with_cors(error_reply(404, &message), mock, &ctx);
     };
     let route = &mock.routes[hit.index];
     ctx.params = hit.params;
     ctx.request_number = compiled.counters[hit.index].fetch_add(1, Ordering::Relaxed) + 1;
+    if route.kind == RouteKind::Crud {
+        return with_cors(crud_reply(compiled, route, &mut ctx), mock, &ctx);
+    }
     let random = rand::rng().random_range(0..route.responses.len());
     let response = select(route, &ctx, random);
+    with_cors(
+        build_reply(compiled, response, &mut ctx, Some(&route.id)),
+        mock,
+        &ctx,
+    )
+}
 
+/// The reply for a chosen response: headers, templated body (or file), callbacks, delay.
+fn build_reply(
+    compiled: &Compiled,
+    response: &MockResponse,
+    ctx: &mut RequestCtx,
+    route_id: Option<&str>,
+) -> Reply {
+    let mock = &compiled.mock;
+    if reads_data(response) {
+        ctx.data = compiled.buckets.snapshot();
+    }
     let mut headers: Vec<(String, String)> = Vec::new();
     for header in mock
         .headers
@@ -156,10 +197,10 @@ pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
     let (status, body) = if !response.file.is_empty() {
         (response.status, String::new())
     } else {
-        match template::render(&response.body, &ctx) {
+        match template::render(&response.body, ctx) {
             Ok(body) => (response.status, body),
             Err(problem) => {
-                tracing::warn!(route = %route.id, "mock template failed: {problem}");
+                tracing::warn!(route = ?route_id, "mock template failed: {problem}");
                 let reply = error_reply(500, &format!("Template error: {problem}"));
                 (reply.status, reply.body)
             }
@@ -176,17 +217,87 @@ pub fn respond(compiled: &Compiled, mut ctx: RequestCtx) -> Reply {
         };
         headers.push(("Content-Type".into(), kind.into()));
     }
-    let reply = Reply {
+    Reply {
         status,
         headers,
         body,
         delay: capped_delay(response.latency_ms.saturating_add(mock.latency_ms)),
-        route_id: Some(route.id.clone()),
+        route_id: route_id.map(str::to_string),
         response_id: Some(response.id.clone()),
         file,
         forward: false,
-    };
-    with_cors(reply, mock, &ctx)
+        callbacks: prepare_callbacks(response, ctx),
+    }
+}
+
+fn reads_data(response: &MockResponse) -> bool {
+    response.body.contains("data")
+        || response
+            .callbacks
+            .iter()
+            .any(|callback| callback.body.contains("data"))
+}
+
+/// Callback bodies are rendered now, with the request in hand; one that fails to render is
+/// skipped (and logged) rather than sent half-built.
+fn prepare_callbacks(response: &MockResponse, ctx: &RequestCtx) -> Vec<PreparedCallback> {
+    response
+        .callbacks
+        .iter()
+        .filter_map(|callback| match template::render(&callback.body, ctx) {
+            Ok(body) => Some(PreparedCallback {
+                method: callback.method.clone(),
+                url: callback.url.clone(),
+                headers: callback
+                    .headers
+                    .iter()
+                    .filter(|h| h.enabled)
+                    .map(|h| (h.name.clone(), h.value.clone()))
+                    .collect(),
+                body,
+                delay: capped_delay(callback.delay_ms),
+            }),
+            Err(problem) => {
+                tracing::warn!("mock callback template failed: {problem}");
+                None
+            }
+        })
+        .collect()
+}
+
+fn crud_reply(compiled: &Compiled, route: &MockRoute, ctx: &mut RequestCtx) -> Reply {
+    let mock = &compiled.mock;
+    let id = ctx
+        .params
+        .iter()
+        .position(|(name, _)| name == super::matcher::ITEM_ID_PARAM)
+        .map(|at| ctx.params.remove(at).1);
+    let outcome = compiled.buckets.call(
+        &route.bucket,
+        &route.id_key,
+        &ctx.method,
+        id.as_deref(),
+        ctx.body_json.as_ref(),
+    );
+    let mut headers: Vec<(String, String)> = Vec::new();
+    for header in mock.headers.iter().filter(|h| h.enabled) {
+        set_header(&mut headers, &header.name, header.value.clone());
+    }
+    set_header(&mut headers, "Content-Type", "application/json".into());
+    if let Some(allow) = outcome.allow {
+        set_header(&mut headers, "Allow", allow.into());
+    }
+    Reply {
+        status: outcome.status,
+        headers,
+        body: outcome.body.to_string(),
+        delay: capped_delay(mock.latency_ms),
+        route_id: Some(route.id.clone()),
+        response_id: None,
+        file: None,
+        forward: false,
+        callbacks: Vec::new(),
+    }
 }
 
 fn with_cors(mut reply: Reply, mock: &MockEnvironment, ctx: &RequestCtx) -> Reply {
@@ -324,6 +435,7 @@ mod tests {
             status: 201,
             default: false,
             file: String::new(),
+            callbacks: vec![],
             ..mock.routes[0].responses[0].clone()
         };
         mock.routes[0].responses.push(second);
@@ -343,6 +455,7 @@ mod tests {
             status: 202,
             default: false,
             file: String::new(),
+            callbacks: vec![],
             rules: vec![Rule {
                 target: RuleTarget::Header,
                 modifier: "x-role".into(),

@@ -101,6 +101,7 @@ async fn rules_read_the_request_body_and_sequential_cycles() {
         status: 201,
         default: false,
         file: String::new(),
+        callbacks: vec![],
         rules: vec![Rule {
             target: RuleTarget::Body,
             modifier: "user.role".into(),
@@ -139,6 +140,7 @@ async fn rules_read_the_request_body_and_sequential_cycles() {
         status: 202,
         default: false,
         file: String::new(),
+        callbacks: vec![],
         ..base_response
     });
     let (service, base, _) = start(seq).await;
@@ -456,4 +458,253 @@ fn risky_features_name_what_needs_trust() {
     assert!(super::risky_features(&response_with_file("a.json"))
         .unwrap()
         .contains("files"));
+}
+
+async fn json_of(response: reqwest::Response) -> serde_json::Value {
+    serde_json::from_str(&response.text().await.unwrap()).unwrap()
+}
+
+fn with_users_bucket() -> super::model::MockEnvironment {
+    use super::model::{DataBucket, MockRoute, RouteKind};
+    let mut mock = sample();
+    mock.data = vec![DataBucket {
+        id: "b1".into(),
+        name: "users".into(),
+        value: r#"[{"id": 1, "name": "Ada"}]"#.into(),
+    }];
+    mock.routes = vec![MockRoute {
+        id: "crud".into(),
+        method: "get".into(),
+        endpoint: "users".into(),
+        enabled: true,
+        mode: ResponseMode::Rules,
+        kind: RouteKind::Crud,
+        bucket: "b1".into(),
+        id_key: "id".into(),
+        responses: vec![],
+    }];
+    mock
+}
+
+#[tokio::test]
+async fn a_crud_route_serves_and_changes_its_bucket() {
+    let (service, base, _) = start(with_users_bucket()).await;
+    let client = reqwest::Client::new();
+    let list: serde_json::Value =
+        json_of(client.get(format!("{base}/users")).send().await.unwrap()).await;
+    assert_eq!(list[0]["name"], "Ada");
+    let created = client
+        .post(format!("{base}/users"))
+        .header("content-type", "application/json")
+        .body(r#"{"name": "Bo"}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 201);
+    let made: serde_json::Value = json_of(created).await;
+    let id = made["id"].as_str().unwrap().to_string();
+    let patched = client
+        .patch(format!("{base}/users/{id}"))
+        .header("content-type", "application/json")
+        .body(r#"{"age": 30}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), 200);
+    let one: serde_json::Value = json_of(
+        client
+            .get(format!("{base}/users/{id}"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        (one["name"].as_str(), one["age"].as_i64()),
+        (Some("Bo"), Some(30))
+    );
+    assert_eq!(
+        client
+            .delete(format!("{base}/users/1"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    assert_eq!(
+        client
+            .get(format!("{base}/users/1"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    let refused = client.delete(format!("{base}/users")).send().await.unwrap();
+    assert_eq!(refused.status(), 405);
+    assert_eq!(refused.headers()["allow"], "GET, POST");
+    service.stop_all().await;
+}
+
+#[tokio::test]
+async fn buckets_reset_on_restart_and_templates_read_them() {
+    let mut mock = with_users_bucket();
+    mock.routes.push({
+        let mut route = sample().routes.remove(0);
+        route.id = "t".into();
+        route.endpoint = "count".into();
+        route.responses[0].body = "{{data 'users' '[0].name'}}/{{data 'users'}}".into();
+        route
+    });
+    let (service, base, _) = start(mock.clone()).await;
+    let client = reqwest::Client::new();
+    client
+        .delete(format!("{base}/users/1"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .get(format!("{base}/count"))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap(),
+        "/[]"
+    );
+    service.stop_all().await;
+    let (again, base, _) = start(mock).await;
+    let text = reqwest::get(format!("{base}/count"))
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert_eq!(text, r#"Ada/[{"id":1,"name":"Ada"}]"#);
+    again.stop_all().await;
+}
+
+#[tokio::test]
+async fn the_fallback_answers_unmatched_requests_and_templates_run() {
+    let mut mock = sample();
+    let mut fallback = mock.routes[0].responses[0].clone();
+    fallback.id = "fb".into();
+    fallback.status = 418;
+    fallback.body = "no route for {{method}} {{path}}".into();
+    mock.fallback = Some(fallback);
+    let (service, base, _) = start(mock).await;
+    let reply = reqwest::get(format!("{base}/anything")).await.unwrap();
+    assert_eq!(reply.status(), 418);
+    assert_eq!(reply.headers()["access-control-allow-origin"], "*");
+    assert_eq!(reply.text().await.unwrap(), "no route for GET /anything");
+    let log = service.log("c1", "m.mock.yaml").await;
+    assert_eq!(
+        (log[0].route_id.clone(), log[0].response_id.as_deref()),
+        (None, Some("fb"))
+    );
+    assert_eq!(
+        reqwest::get(format!("{base}/users/1"))
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    service.stop_all().await;
+}
+
+#[tokio::test]
+async fn callbacks_send_the_rendered_body_after_the_answer() {
+    use super::model::{Callback, MockRoute};
+    let mut receiver = sample();
+    receiver.routes = vec![MockRoute {
+        method: "post".into(),
+        endpoint: "hook".into(),
+        ..sample().routes.remove(0)
+    }];
+    let (hook, hook_base, _) = start(receiver).await;
+    let mut mock = sample();
+    mock.routes[0].responses[0].callbacks = vec![Callback {
+        method: "post".into(),
+        url: format!("{hook_base}/hook"),
+        headers: vec![],
+        body: "got {{urlParam 'id'}}".into(),
+        delay_ms: 0,
+    }];
+    let sink = Arc::new(Collect::default());
+    let service = MockService::new(sink);
+    service
+        .start("c1", "front.mock.yaml", ".".into(), mock)
+        .await
+        .unwrap();
+    let base = service.url_of("c1", "front.mock.yaml").await.unwrap();
+    assert_eq!(
+        reqwest::get(format!("{base}/users/42"))
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let mut seen = Vec::new();
+    for _ in 0..40 {
+        seen = hook.log("c1", "m.mock.yaml").await;
+        if !seen.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(seen.len(), 1);
+    assert_eq!(
+        (seen[0].method.as_str(), seen[0].body_text.as_str()),
+        ("POST", "got 42")
+    );
+    service.stop_all().await;
+    hook.stop_all().await;
+}
+
+#[tokio::test]
+async fn a_delayed_callback_is_not_sent_after_the_mock_stops() {
+    use super::model::Callback;
+    let (hook, hook_base, _) = start(sample()).await;
+    let mut mock = sample();
+    mock.routes[0].responses[0].callbacks = vec![Callback {
+        method: "get".into(),
+        url: format!("{hook_base}/users/1"),
+        headers: vec![],
+        body: String::new(),
+        delay_ms: 300,
+    }];
+    let service = MockService::new(Arc::new(Collect::default()));
+    service
+        .start("c1", "front.mock.yaml", ".".into(), mock)
+        .await
+        .unwrap();
+    let base = service.url_of("c1", "front.mock.yaml").await.unwrap();
+    reqwest::get(format!("{base}/users/1")).await.unwrap();
+    service.stop("c1", "front.mock.yaml").await;
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    assert!(hook.log("c1", "m.mock.yaml").await.is_empty());
+    hook.stop_all().await;
+}
+
+#[tokio::test]
+async fn a_public_mock_cannot_send_callbacks_to_a_private_host() {
+    use super::model::{Callback, MockBind};
+    let mut mock = sample();
+    mock.bind = MockBind::AllInterfaces;
+    mock.routes[0].responses[0].callbacks = vec![Callback {
+        method: "post".into(),
+        url: "http://192.168.1.10/x".into(),
+        headers: vec![],
+        body: String::new(),
+        delay_ms: 0,
+    }];
+    let service = MockService::new(Arc::new(Collect::default()));
+    let error = service
+        .start("c1", "m.mock.yaml", ".".into(), mock)
+        .await
+        .unwrap_err();
+    assert!(error.message.contains("callbacks"), "{}", error.message);
 }

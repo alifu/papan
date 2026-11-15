@@ -20,7 +20,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{watch, Semaphore};
 use tokio::task::JoinSet;
 
-use super::engine::{failed_reply, respond, Compiled, Reply};
+use super::engine::{failed_reply, respond, Compiled, PreparedCallback, Reply};
 use super::model::{MockBind, MockEnvironment};
 use super::request::{parse_cookies, parse_pairs, RequestCtx};
 use super::types::MockLogEntry;
@@ -47,6 +47,19 @@ pub const MAX_REQUEST_BODY: usize = 1024 * 1024;
 const MAX_LOGGED_BODY: usize = 16 * 1024;
 pub const MAX_LOG_ENTRIES: usize = 500;
 
+const CALLBACK_TIMEOUT: Duration = Duration::from_secs(10);
+/// Callbacks past this many in flight are dropped, so a request flood cannot make the mock
+/// a flood of outgoing requests.
+const MAX_CALLBACKS_IN_FLIGHT: usize = 8;
+
+fn has_callbacks(mock: &MockEnvironment) -> bool {
+    mock.routes
+        .iter()
+        .flat_map(|route| &route.responses)
+        .chain(mock.fallback.as_ref())
+        .any(|response| !response.callbacks.is_empty())
+}
+
 /// What one running mock has served; shared with the connection tasks.
 pub struct Shared {
     collection_id: String,
@@ -54,6 +67,9 @@ pub struct Shared {
     compiled: Compiled,
     root: PathBuf,
     upstream: Option<reqwest::Client>,
+    callback_client: Option<reqwest::Client>,
+    callback_slots: Arc<Semaphore>,
+    closed: std::sync::atomic::AtomicBool,
     log: Mutex<VecDeque<MockLogEntry>>,
     next_id: AtomicU32,
     sink: Arc<dyn MockSink>,
@@ -67,6 +83,11 @@ impl Shared {
         mock: MockEnvironment,
         sink: Arc<dyn MockSink>,
     ) -> Self {
+        let callback_client = if has_callbacks(&mock) {
+            proxy::client_with_timeout(CALLBACK_TIMEOUT).ok()
+        } else {
+            None
+        };
         let upstream = if mock.proxy.is_empty() {
             None
         } else {
@@ -78,9 +99,33 @@ impl Shared {
             compiled: Compiled::new(mock),
             root,
             upstream,
+            callback_client,
+            callback_slots: Arc::new(Semaphore::new(MAX_CALLBACKS_IN_FLIGHT)),
+            closed: std::sync::atomic::AtomicBool::new(false),
             log: Mutex::new(VecDeque::new()),
             next_id: AtomicU32::new(1),
             sink,
+        }
+    }
+
+    /// Sends the callbacks of an answer in the background; none are sent once the mock stopped.
+    pub fn send_callbacks(self: &Arc<Self>, callbacks: Vec<PreparedCallback>) {
+        let Some(client) = &self.callback_client else {
+            return;
+        };
+        for callback in callbacks {
+            let Ok(slot) = Arc::clone(&self.callback_slots).try_acquire_owned() else {
+                tracing::warn!(mock = %self.file, "too many callbacks in flight; one dropped");
+                continue;
+            };
+            let (shared, client) = (Arc::clone(self), client.clone());
+            tokio::spawn(async move {
+                tokio::time::sleep(callback.delay).await;
+                if !shared.closed.load(Ordering::Relaxed) {
+                    send_callback(&client, &callback, &shared.file).await;
+                }
+                drop(slot);
+            });
         }
     }
 
@@ -107,12 +152,14 @@ impl Shared {
 
 pub struct RunningServer {
     pub port: u16,
+    shared: Arc<Shared>,
     stop: watch::Sender<bool>,
     task: tokio::task::JoinHandle<()>,
 }
 
 impl RunningServer {
     pub async fn stop(self) {
+        self.shared.closed.store(true, Ordering::Relaxed);
         let _ = self.stop.send(true);
         let _ = self.task.await;
     }
@@ -148,8 +195,13 @@ pub async fn start(shared: Arc<Shared>) -> Result<RunningServer, AppError> {
         None
     };
     let (stop, stopped) = watch::channel(false);
-    let task = tokio::spawn(accept_loop(socket, shared, acceptor, stopped));
-    Ok(RunningServer { port, stop, task })
+    let task = tokio::spawn(accept_loop(socket, Arc::clone(&shared), acceptor, stopped));
+    Ok(RunningServer {
+        port,
+        shared,
+        stop,
+        task,
+    })
 }
 
 /// A proxy target that points back at this mock would forward every request to itself.
@@ -247,17 +299,29 @@ pub(crate) fn is_internal_host(host: &str) -> bool {
 }
 
 pub(crate) fn refuse_exposed_internal_proxy(mock: &MockEnvironment) -> Result<(), AppError> {
-    if mock.bind != MockBind::AllInterfaces || mock.proxy.is_empty() {
+    if mock.bind != MockBind::AllInterfaces {
         return Ok(());
     }
-    let internal = url::Url::parse(&mock.proxy)
-        .ok()
-        .and_then(|url| url.host_str().map(is_internal_host))
-        .unwrap_or(true);
-    if internal {
-        return Err(AppError::invalid_input(
-            "A mock that listens on all interfaces cannot proxy to this computer or a private network. Listen on this computer only, or proxy to a public server.",
-        ));
+    let callbacks = mock
+        .routes
+        .iter()
+        .flat_map(|route| &route.responses)
+        .chain(mock.fallback.as_ref())
+        .flat_map(|response| &response.callbacks)
+        .map(|callback| callback.url.as_str());
+    let targets = std::iter::once(mock.proxy.as_str())
+        .filter(|target| !target.is_empty())
+        .chain(callbacks);
+    for target in targets {
+        let internal = url::Url::parse(target)
+            .ok()
+            .and_then(|url| url.host_str().map(is_internal_host))
+            .unwrap_or(true);
+        if internal {
+            return Err(AppError::invalid_input(
+                "A mock that listens on all interfaces cannot proxy or send callbacks to this computer or a private network. Listen on this computer only, or use a public server.",
+            ));
+        }
     }
     Ok(())
 }
@@ -430,6 +494,7 @@ fn context_of(parts: &http::request::Parts, remote: SocketAddr, body: &[u8]) -> 
         params: Vec::new(),
         ip: remote.ip().to_string(),
         request_number: 0,
+        data: serde_json::Value::Null,
     }
 }
 
@@ -438,6 +503,27 @@ struct Outgoing {
     status: u16,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+}
+
+async fn send_callback(client: &reqwest::Client, callback: &PreparedCallback, mock: &str) {
+    let Ok(method) = reqwest::Method::from_bytes(callback.method.to_ascii_uppercase().as_bytes())
+    else {
+        return;
+    };
+    let mut request = client.request(method, &callback.url);
+    for (name, value) in &callback.headers {
+        request = request.header(name, value);
+    }
+    match request.body(callback.body.clone()).send().await {
+        Ok(response) => {
+            tracing::debug!(
+                mock,
+                status = response.status().as_u16(),
+                "mock callback sent"
+            );
+        }
+        Err(source) => tracing::warn!(mock, %source, "mock callback failed"),
+    }
 }
 
 fn problem(status: u16, message: &str) -> Outgoing {
@@ -576,6 +662,7 @@ async fn handle(
         status,
         duration_ms,
     });
+    shared.send_callbacks(reply.callbacks);
     Ok(to_response(outgoing))
 }
 

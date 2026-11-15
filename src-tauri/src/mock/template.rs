@@ -209,6 +209,32 @@ fn float_helper(
     out.write(&format!("{value:.2}")).map_err(RenderError::from)
 }
 
+/// `{{data 'bucket'}}` or `{{data 'bucket' 'path'}}`: the bucket (or a part of it) as it is now.
+fn data_helper(
+    h: &Helper<'_>,
+    _: &Handlebars<'_>,
+    ctx: &Context,
+    _: &mut RenderContext<'_, '_>,
+    out: Out<'_>,
+) -> HelperResult {
+    let name = text_param(h, 0);
+    let path = text_param(h, 1);
+    let Some(bucket) = ctx.data().get("data").and_then(|data| data.get(&name)) else {
+        return Ok(());
+    };
+    let found = if path.is_empty() {
+        Some(bucket)
+    } else {
+        json_path(bucket, &path)
+    };
+    let text = match found {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Null) | None => String::new(),
+        Some(other) => other.to_string(),
+    };
+    out.write(&text).map_err(RenderError::from)
+}
+
 fn boolean_helper(
     _: &Helper<'_>,
     _: &Handlebars<'_>,
@@ -398,6 +424,7 @@ fn registry() -> &'static Handlebars<'static> {
         hb.register_helper("now", Box::new(now));
         hb.register_helper("timestamp", Box::new(timestamp));
         hb.register_helper("repeat", Box::new(repeat));
+        hb.register_helper("data", Box::new(data_helper));
         for op in ["add", "subtract", "multiply", "divide"] {
             hb.register_helper(op, Box::new(math(op)));
         }
@@ -431,7 +458,8 @@ fn data_of(ctx: &RequestCtx) -> Value {
             "form": pairs(&ctx.form),
             "bodyJson": ctx.body_json.clone().unwrap_or(Value::Null),
             "body": ctx.body_text,
-        }
+        },
+        "data": ctx.data,
     })
 }
 

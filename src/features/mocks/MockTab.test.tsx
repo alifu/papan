@@ -79,7 +79,7 @@ describe("MockTab", () => {
     expect(api.saveMock).toHaveBeenCalledTimes(1);
     const [, file, sent] = vi.mocked(api.saveMock).mock.calls[0]!;
     expect(file).toBe("users.mock.yaml");
-    expect(sent.routes?.[0]?.responses[0]?.status).toBe(201);
+    expect(sent.routes?.[0]?.responses?.[0]?.status).toBe(201);
   });
 
   it("refuses to save an invalid draft and says why", async () => {

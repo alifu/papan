@@ -146,6 +146,7 @@ mod tests {
             rules_operator: RulesOperator::And,
             default,
             file: String::new(),
+            callbacks: vec![],
         }
     }
 
@@ -166,6 +167,9 @@ mod tests {
             endpoint: "x".into(),
             enabled: true,
             mode,
+            kind: super::super::model::RouteKind::Http,
+            bucket: String::new(),
+            id_key: "id".into(),
             responses,
         }
     }

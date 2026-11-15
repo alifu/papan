@@ -1,4 +1,6 @@
 import type {
+  Callback,
+  DataBucket,
   KeyValue,
   MockEnvironment,
   MockLogEntry,
@@ -13,14 +15,21 @@ import type {
 // The generated types make serde-defaulted fields optional; the editors work on these,
 // where every field is present (`normalizeMock` fills them in after a read).
 export type MRule = Required<Rule>;
-export type MResponse = Required<Omit<MockResponse, "headers" | "rules">> & {
+export type MResponse = Required<
+  Omit<MockResponse, "headers" | "rules" | "callbacks">
+> & {
   headers: KeyValue[];
   rules: MRule[];
+  callbacks: Callback[];
 };
 export type MRoute = Required<Omit<MockRoute, "responses">> & {
   responses: MResponse[];
 };
-export type MEnv = Required<Omit<MockEnvironment, "headers" | "routes">> & {
+export type MEnv = Required<
+  Omit<MockEnvironment, "headers" | "routes" | "data" | "fallback">
+> & {
+  data: DataBucket[];
+  fallback: MResponse | null;
   headers: KeyValue[];
   routes: MRoute[];
 };
@@ -44,6 +53,7 @@ const normalizeResponse = (response: MockResponse): MResponse => ({
   rules_operator: response.rules_operator ?? "and",
   default: response.default ?? false,
   file: response.file ?? "",
+  callbacks: [...(response.callbacks ?? [])],
 });
 
 /** Fills in every field the file left to its default. */
@@ -56,6 +66,8 @@ export const normalizeMock = (mock: MockEnvironment): MEnv => ({
   cors: mock.cors ?? true,
   tls: mock.tls ?? false,
   proxy: mock.proxy ?? "",
+  data: [...(mock.data ?? [])],
+  fallback: mock.fallback ? normalizeResponse(mock.fallback) : null,
   headers: [...(mock.headers ?? [])],
   routes: (mock.routes ?? []).map((route) => ({
     id: route.id,
@@ -63,7 +75,10 @@ export const normalizeMock = (mock: MockEnvironment): MEnv => ({
     endpoint: route.endpoint,
     enabled: route.enabled ?? true,
     mode: route.mode ?? "rules",
-    responses: route.responses.map(normalizeResponse),
+    kind: route.kind ?? "http",
+    bucket: route.bucket ?? "",
+    id_key: route.id_key ?? "id",
+    responses: (route.responses ?? []).map(normalizeResponse),
   })),
 });
 
@@ -148,6 +163,7 @@ export const newResponse = (isDefault: boolean): MResponse => ({
   rules_operator: "and",
   default: isDefault,
   file: "",
+  callbacks: [],
 });
 
 export const newRoute = (): MRoute => ({
@@ -156,6 +172,9 @@ export const newRoute = (): MRoute => ({
   endpoint: "",
   enabled: true,
   mode: "rules",
+  kind: "http",
+  bucket: "",
+  id_key: "id",
   responses: [newResponse(true)],
 });
 
@@ -176,6 +195,8 @@ export const newMock = (name: string): MEnv => ({
   cors: true,
   tls: false,
   proxy: "",
+  data: [],
+  fallback: null,
   headers: [],
   routes: [],
 });
@@ -251,7 +272,7 @@ export function draftProblem(mock: MEnv): string | null {
 }
 
 export const endpointLabel = (route: MRoute): string =>
-  `${route.method.toUpperCase()} /${route.endpoint.replace(/^\/+/, "")}`;
+  `${route.kind === "crud" ? "DATA" : route.method.toUpperCase()} /${route.endpoint.replace(/^\/+/, "")}`;
 
 const slashes = /^\/+|\/+$/g;
 

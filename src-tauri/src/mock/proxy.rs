@@ -34,8 +34,13 @@ pub struct Forwarded {
 }
 
 pub fn client() -> Result<reqwest::Client, reqwest::Error> {
+    client_with_timeout(TIMEOUT)
+}
+
+/// The client for outgoing requests of a mock: no redirects, no system proxy, raw bodies.
+pub fn client_with_timeout(timeout: Duration) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
-        .timeout(TIMEOUT)
+        .timeout(timeout)
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .no_gzip()

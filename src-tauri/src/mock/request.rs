@@ -20,6 +20,8 @@ pub struct RequestCtx {
     pub host: String,
     /// How many requests this route has had, including this one.
     pub request_number: u64,
+    /// The data buckets by name, filled in only for templates that read them.
+    pub data: Value,
 }
 
 fn pairs_get<'a>(pairs: &'a [(String, String)], name: &str) -> Option<&'a str> {

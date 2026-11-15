@@ -1,6 +1,7 @@
 //! Mockoon-style mock server (plan 11).
 
 pub mod commands;
+pub mod crud;
 pub mod disk;
 pub mod engine;
 pub mod files;
@@ -36,7 +37,17 @@ pub fn risky_features(mock: &MockEnvironment) -> Option<&'static str> {
     } else if mock
         .routes
         .iter()
-        .any(|r| r.responses.iter().any(|s| !s.file.is_empty()))
+        .flat_map(|r| &r.responses)
+        .chain(mock.fallback.as_ref())
+        .any(|s| !s.callbacks.is_empty())
+    {
+        Some("sends requests to other servers")
+    } else if mock
+        .routes
+        .iter()
+        .flat_map(|r| &r.responses)
+        .chain(mock.fallback.as_ref())
+        .any(|s| !s.file.is_empty())
     {
         Some("sends files from the collection")
     } else {

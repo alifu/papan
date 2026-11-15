@@ -254,6 +254,18 @@ export type Body = { type: "none" } | { type: "json"; text: string } | { type: "
 
 export type BodyEncoding = "text" | "base64" | "none";
 
+/**
+ *  A request sent after a response (plan 11 §11). The URL is fixed text, never templated, so a
+ *  caller cannot choose where it goes; only the body is templated.
+ */
+export type Callback = {
+	method: string,
+	url: string,
+	headers?: KeyValue[],
+	body?: string,
+	delay_ms?: number,
+};
+
 export type Capture = {
 	summary: CaptureSummary,
 	query: string,
@@ -347,6 +359,13 @@ export type CookieInput = {
 export type CurlImport = {
 	content: RequestContent,
 	warnings: string[],
+};
+
+/**  Named JSON that CRUD routes serve and templates read (`{{data 'name'}}`); `value` is JSON text. */
+export type DataBucket = {
+	id: string,
+	name: string,
+	value?: string,
 };
 
 /**  A variable after layering. `value` is "" when secret; dynamic names are listed too. */
@@ -575,6 +594,9 @@ export type MockEnvironment = {
 	tls?: boolean,
 	/**  Forward requests that match no route to this `http(s)://` base URL; empty = off. */
 	proxy?: string,
+	data?: DataBucket[],
+	/**  Answer for requests that match no route (before the built-in 404); `rules` are ignored. */
+	fallback?: MockResponse | null,
 };
 
 /**  One request the mock served. */
@@ -613,6 +635,8 @@ export type MockResponse = {
 	default?: boolean,
 	/**  A file inside the collection to send instead of `body` (plan 11 §9); empty = use `body`. */
 	file?: string,
+	/**  Requests sent after this response is chosen. */
+	callbacks?: Callback[],
 };
 
 export type MockRoute = {
@@ -622,7 +646,16 @@ export type MockRoute = {
 	endpoint: string,
 	enabled?: boolean,
 	mode?: ResponseMode,
-	responses: MockResponse[],
+	/**
+	 *  `crud` routes ignore `method` and `responses` and serve `bucket` at `endpoint` and
+	 *  `endpoint/:id`.
+	 */
+	kind?: RouteKind,
+	/**  The data bucket's id (CRUD routes). */
+	bucket?: string,
+	/**  The item field that identifies an item (CRUD routes). */
+	id_key?: string,
+	responses?: MockResponse[],
 };
 
 /**  Emitted when a mock stops on its own. TS: `events.mockStopped`. */
@@ -836,6 +869,9 @@ export type ResponseMeta = {
 };
 
 export type ResponseMode = "rules" | "sequential" | "random" | "disable_rules";
+
+/**  What a route does: answer from its responses, or serve a data bucket as a REST resource. */
+export type RouteKind = "http" | "crud";
 
 export type Rule = {
 	target: RuleTarget,

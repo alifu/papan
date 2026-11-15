@@ -4,7 +4,7 @@
 
 use regex::Regex;
 
-use super::model::MockRoute;
+use super::model::{MockRoute, RouteKind};
 
 #[derive(Debug, Clone)]
 pub struct CompiledRoute {
@@ -21,7 +21,10 @@ pub struct Matched {
 }
 
 /// Regex source for an endpoint plus its param names; `None` when it cannot compile.
-fn compile_endpoint(endpoint: &str) -> Option<(Regex, Vec<String>)> {
+/// The param a CRUD route captures for the item id (`endpoint/<id>`).
+pub const ITEM_ID_PARAM: &str = "__id";
+
+fn compile_endpoint(endpoint: &str, crud: bool) -> Option<(Regex, Vec<String>)> {
     let mut source = String::from("(?i)^");
     let mut params = Vec::new();
     let trimmed = endpoint.trim().trim_matches('/');
@@ -41,6 +44,10 @@ fn compile_endpoint(endpoint: &str) -> Option<(Regex, Vec<String>)> {
             source.push_str(&literal);
         }
     }
+    if crud {
+        source.push_str("(?:/([^/]+))?");
+        params.push(ITEM_ID_PARAM.to_string());
+    }
     if trimmed.is_empty() {
         source.push('/');
     } else {
@@ -52,9 +59,14 @@ fn compile_endpoint(endpoint: &str) -> Option<(Regex, Vec<String>)> {
 
 impl CompiledRoute {
     pub fn new(route: &MockRoute) -> Option<Self> {
-        let (pattern, params) = compile_endpoint(&route.endpoint)?;
+        let crud = route.kind == RouteKind::Crud;
+        let (pattern, params) = compile_endpoint(&route.endpoint, crud)?;
         Some(Self {
-            method: route.method.clone(),
+            method: if crud {
+                "any".into()
+            } else {
+                route.method.clone()
+            },
             pattern,
             params,
         })
@@ -134,6 +146,9 @@ mod tests {
             endpoint: endpoint.into(),
             enabled,
             mode: ResponseMode::Rules,
+            kind: super::super::model::RouteKind::Http,
+            bucket: String::new(),
+            id_key: "id".into(),
             responses: vec![MockResponse {
                 id: "r".into(),
                 label: String::new(),
@@ -145,6 +160,7 @@ mod tests {
                 rules_operator: RulesOperator::And,
                 default: true,
                 file: String::new(),
+                callbacks: vec![],
             }],
         }
     }

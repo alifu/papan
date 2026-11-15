@@ -13,6 +13,9 @@ pub const MAX_HEADERS: usize = 100;
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 pub const MAX_LATENCY_MS: u32 = 60_000;
 pub const MAX_NAME_CHARS: usize = 100;
+pub const MAX_BUCKETS: usize = 20;
+pub const MAX_CALLBACKS: usize = 5;
+pub const MAX_CALLBACK_BODY_BYTES: usize = 64 * 1024;
 const MAX_FIELD_CHARS: usize = 2_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -77,6 +80,42 @@ pub struct Rule {
     pub invert: bool,
 }
 
+/// What a route does: answer from its responses, or serve a data bucket as a REST resource.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteKind {
+    #[default]
+    Http,
+    Crud,
+}
+
+/// A request sent after a response (plan 11 §11). The URL is fixed text, never templated, so a
+/// caller cannot choose where it goes; only the body is templated.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct Callback {
+    pub method: String,
+    pub url: String,
+    #[serde(default)]
+    pub headers: Vec<KeyValue>,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub delay_ms: u32,
+}
+
+/// Named JSON that CRUD routes serve and templates read (`{{data 'name'}}`); `value` is JSON text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DataBucket {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "empty_array")]
+    pub value: String,
+}
+
+fn empty_array() -> String {
+    "[]".to_string()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct MockResponse {
     pub id: String,
@@ -98,6 +137,9 @@ pub struct MockResponse {
     /// A file inside the collection to send instead of `body` (plan 11 §9); empty = use `body`.
     #[serde(default)]
     pub file: String,
+    /// Requests sent after this response is chosen.
+    #[serde(default)]
+    pub callbacks: Vec<Callback>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -110,7 +152,22 @@ pub struct MockRoute {
     pub enabled: bool,
     #[serde(default)]
     pub mode: ResponseMode,
+    /// `crud` routes ignore `method` and `responses` and serve `bucket` at `endpoint` and
+    /// `endpoint/:id`.
+    #[serde(default)]
+    pub kind: RouteKind,
+    /// The data bucket's id (CRUD routes).
+    #[serde(default)]
+    pub bucket: String,
+    /// The item field that identifies an item (CRUD routes).
+    #[serde(default = "default_id_key")]
+    pub id_key: String,
+    #[serde(default)]
     pub responses: Vec<MockResponse>,
+}
+
+pub fn default_id_key() -> String {
+    "id".to_string()
 }
 
 fn enabled() -> bool {
@@ -142,6 +199,11 @@ pub struct MockEnvironment {
     /// Forward requests that match no route to this `http(s)://` base URL; empty = off.
     #[serde(default)]
     pub proxy: String,
+    #[serde(default)]
+    pub data: Vec<DataBucket>,
+    /// Answer for requests that match no route (before the built-in 404); `rules` are ignored.
+    #[serde(default)]
+    pub fallback: Option<MockResponse>,
 }
 
 const METHODS: [&str; 8] = [
@@ -201,9 +263,13 @@ pub fn check_proxy(file: &str, target: &str) -> Result<(), AppError> {
     if target.is_empty() {
         return Ok(());
     }
-    check_text(file, "proxy", target, MAX_FIELD_CHARS)?;
-    let parsed =
-        url::Url::parse(target).map_err(|_| invalid(file, "proxy", "is not a valid URL"))?;
+    check_http_url(file, "proxy", target)
+}
+
+/// An absolute http(s) URL without credentials: where the server may send requests.
+pub fn check_http_url(file: &str, field: &str, target: &str) -> Result<(), AppError> {
+    check_text(file, field, target, MAX_FIELD_CHARS)?;
+    let parsed = url::Url::parse(target).map_err(|_| invalid(file, field, "is not a valid URL"))?;
     let ok = matches!(parsed.scheme(), "http" | "https")
         && parsed.host_str().is_some()
         && parsed.username().is_empty()
@@ -211,7 +277,7 @@ pub fn check_proxy(file: &str, target: &str) -> Result<(), AppError> {
     if !ok {
         return Err(invalid(
             file,
-            "proxy",
+            field,
             "must be an http or https URL without credentials",
         ));
     }
@@ -241,6 +307,16 @@ fn check_response(file: &str, at: &str, response: &MockResponse) -> Result<(), A
         return Err(invalid(file, &format!("{at}.rules"), "has too many rules"));
     }
     check_file(file, &format!("{at}.file"), &response.file)?;
+    if response.callbacks.len() > MAX_CALLBACKS {
+        return Err(invalid(
+            file,
+            &format!("{at}.callbacks"),
+            "has too many callbacks",
+        ));
+    }
+    for (n, callback) in response.callbacks.iter().enumerate() {
+        check_callback(file, &format!("{at}.callbacks[{n}]"), callback)?;
+    }
     super::template::check_depth(&response.body)
         .map_err(|problem| invalid(file, &format!("{at}.body"), &problem))?;
     check_text(
@@ -263,6 +339,91 @@ fn check_response(file: &str, at: &str, response: &MockResponse) -> Result<(), A
     Ok(())
 }
 
+fn check_callback(file: &str, at: &str, callback: &Callback) -> Result<(), AppError> {
+    let known = METHODS[..METHODS.len() - 1].contains(&callback.method.as_str());
+    if !known {
+        return Err(invalid(
+            file,
+            &format!("{at}.method"),
+            "is not a known method",
+        ));
+    }
+    check_http_url(file, &format!("{at}.url"), &callback.url)?;
+    check_headers(file, &format!("{at}.headers"), &callback.headers)?;
+    if callback.body.len() > MAX_CALLBACK_BODY_BYTES {
+        return Err(invalid(file, &format!("{at}.body"), "is over 64 KiB"));
+    }
+    super::template::check_depth(&callback.body)
+        .map_err(|problem| invalid(file, &format!("{at}.body"), &problem))?;
+    if callback.delay_ms > MAX_LATENCY_MS {
+        return Err(invalid(file, &format!("{at}.delay_ms"), "is over 60000"));
+    }
+    Ok(())
+}
+
+fn check_buckets(file: &str, buckets: &[DataBucket]) -> Result<(), AppError> {
+    if buckets.len() > MAX_BUCKETS {
+        return Err(invalid(file, "data", "has too many data buckets"));
+    }
+    for (n, bucket) in buckets.iter().enumerate() {
+        let at = format!("data[{n}]");
+        if bucket.name.trim().is_empty() {
+            return Err(invalid(file, &format!("{at}.name"), "is required"));
+        }
+        check_text(file, &format!("{at}.name"), &bucket.name, MAX_NAME_CHARS)?;
+        if buckets[..n]
+            .iter()
+            .any(|other| other.name == bucket.name || other.id == bucket.id)
+        {
+            return Err(invalid(file, &at, "repeats a bucket name or id"));
+        }
+        if bucket.value.len() > MAX_BODY_BYTES {
+            return Err(invalid(file, &format!("{at}.value"), "is over 1 MiB"));
+        }
+        serde_json::from_str::<serde_json::Value>(&bucket.value)
+            .map_err(|_| invalid(file, &format!("{at}.value"), "is not valid JSON"))?;
+    }
+    Ok(())
+}
+
+fn check_crud(
+    file: &str,
+    at: &str,
+    route: &MockRoute,
+    buckets: &[DataBucket],
+) -> Result<(), AppError> {
+    if route.endpoint.trim().trim_matches('/').is_empty() {
+        return Err(invalid(
+            file,
+            &format!("{at}.endpoint"),
+            "is required for a data route",
+        ));
+    }
+    let key = route.id_key.as_str();
+    if key.is_empty() || key.chars().count() > MAX_NAME_CHARS || key.chars().any(char::is_control) {
+        return Err(invalid(
+            file,
+            &format!("{at}.id_key"),
+            "is not a usable field name",
+        ));
+    }
+    let bucket = buckets
+        .iter()
+        .find(|b| b.id == route.bucket)
+        .ok_or_else(|| invalid(file, &format!("{at}.bucket"), "names no data bucket"))?;
+    let is_array = serde_json::from_str::<serde_json::Value>(&bucket.value)
+        .map(|v| v.is_array())
+        .unwrap_or(false);
+    if !is_array {
+        return Err(invalid(
+            file,
+            &format!("{at}.bucket"),
+            "must hold a JSON array",
+        ));
+    }
+    Ok(())
+}
+
 /// Checks everything the server relies on; `file` names the file in messages.
 pub fn validate(file: &str, mock: &MockEnvironment) -> Result<(), AppError> {
     if mock.name.trim().is_empty() {
@@ -275,6 +436,10 @@ pub fn validate(file: &str, mock: &MockEnvironment) -> Result<(), AppError> {
     }
     check_headers(file, "headers", &mock.headers)?;
     check_proxy(file, &mock.proxy)?;
+    check_buckets(file, &mock.data)?;
+    if let Some(fallback) = &mock.fallback {
+        check_response(file, "fallback", fallback)?;
+    }
     if mock.routes.len() > MAX_ROUTES {
         return Err(invalid(file, "routes", "has too many routes"));
     }
@@ -293,7 +458,12 @@ pub fn validate(file: &str, mock: &MockEnvironment) -> Result<(), AppError> {
             &route.endpoint,
             MAX_FIELD_CHARS,
         )?;
-        if route.responses.is_empty() || route.responses.len() > MAX_RESPONSES {
+        if route.kind == RouteKind::Crud {
+            check_crud(file, &at, route, &mock.data)?;
+        }
+        let needs_responses = route.kind == RouteKind::Http;
+        if (needs_responses && route.responses.is_empty()) || route.responses.len() > MAX_RESPONSES
+        {
             return Err(invalid(
                 file,
                 &format!("{at}.responses"),
@@ -322,12 +492,17 @@ pub mod tests_support {
             headers: vec![],
             tls: false,
             proxy: String::new(),
+            data: vec![],
+            fallback: None,
             routes: vec![MockRoute {
                 id: "r1".into(),
                 method: "get".into(),
                 endpoint: "users/:id".into(),
                 enabled: true,
                 mode: ResponseMode::Rules,
+                kind: RouteKind::Http,
+                bucket: String::new(),
+                id_key: default_id_key(),
                 responses: vec![MockResponse {
                     id: "s1".into(),
                     label: String::new(),
@@ -339,6 +514,7 @@ pub mod tests_support {
                     rules_operator: RulesOperator::And,
                     default: true,
                     file: String::new(),
+                    callbacks: vec![],
                 }],
             }],
         }
@@ -423,5 +599,61 @@ mod tests {
         mock.headers[0].value = "ok".into();
         mock.headers[0].name = "bad name".into();
         assert!(validate("f", &mock).is_err());
+    }
+
+    #[test]
+    fn data_routes_callbacks_and_the_fallback_are_checked() {
+        let mut mock = sample();
+        mock.data = vec![DataBucket {
+            id: "b".into(),
+            name: "users".into(),
+            value: "[]".into(),
+        }];
+        let mut crud = mock.routes[0].clone();
+        crud.kind = RouteKind::Crud;
+        crud.bucket = "b".into();
+        crud.responses.clear();
+        mock.routes = vec![crud.clone()];
+        assert!(validate("f", &mock).is_ok());
+
+        let mut bad = mock.clone();
+        bad.routes[0].bucket = "nope".into();
+        assert!(validate("f", &bad).unwrap_err().message.contains("bucket"));
+        let mut bad = mock.clone();
+        bad.data[0].value = r#"{"a": 1}"#.into();
+        assert!(validate("f", &bad).unwrap_err().message.contains("array"));
+        let mut bad = mock.clone();
+        bad.data[0].value = "not json".into();
+        assert!(validate("f", &bad).is_err());
+        let mut bad = mock.clone();
+        bad.data.push(bad.data[0].clone());
+        assert!(validate("f", &bad).is_err());
+        let mut bad = mock.clone();
+        bad.routes[0].endpoint = "/".into();
+        assert!(validate("f", &bad).is_err());
+
+        let mut http = sample();
+        http.routes[0].responses[0].callbacks = vec![Callback {
+            method: "post".into(),
+            url: "https://hooks.example.com/x".into(),
+            headers: vec![],
+            body: "{}".into(),
+            delay_ms: 0,
+        }];
+        assert!(validate("f", &http).is_ok());
+        for url in ["ftp://x", "https://u:p@h", "nope"] {
+            let mut bad = http.clone();
+            bad.routes[0].responses[0].callbacks[0].url = url.into();
+            assert!(validate("f", &bad).is_err(), "{url}");
+        }
+        let mut bad = http.clone();
+        bad.routes[0].responses[0].callbacks[0].method = "any".into();
+        assert!(validate("f", &bad).is_err());
+
+        let mut with_fallback = sample();
+        let mut fallback = with_fallback.routes[0].responses[0].clone();
+        fallback.status = 99;
+        with_fallback.fallback = Some(fallback);
+        assert!(validate("f", &with_fallback).is_err());
     }
 }

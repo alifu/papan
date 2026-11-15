@@ -122,6 +122,17 @@ function ResponseEditor({
 }
 
 export function RouteEditor({ route, onChange }: RouteEditorProps) {
+  if (route.kind === "crud") {
+    return (
+      <div className="mock-route">
+        <p className="empty-text">
+          Data route: serves the data bucket “{route.bucket}” at /
+          {route.endpoint} and /{route.endpoint}/:id. Edit it in the mock’s
+          .mock.yaml file for now.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mock-route">
       <div className="mock-row">
