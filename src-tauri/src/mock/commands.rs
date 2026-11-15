@@ -38,6 +38,53 @@ impl MockSink for TauriSink {
     }
 }
 
+/// Collects every HTTP-like request of a collection (name, method, URL) in tree order.
+fn sources_of(
+    store: &mut crate::store::Store,
+    collection_id: &str,
+) -> MockResult<(String, PathBuf, Vec<super::from_collection::Source>)> {
+    use crate::store::types::{NodeKind, RequestKind, RequestLocation, TreeNode};
+
+    fn walk(nodes: &[TreeNode], out: &mut Vec<String>) {
+        for node in nodes {
+            match node.kind {
+                NodeKind::Folder => walk(&node.children, out),
+                NodeKind::Request
+                    if matches!(
+                        node.request_kind,
+                        None | Some(RequestKind::Http | RequestKind::Graphql | RequestKind::Soap)
+                    ) =>
+                {
+                    out.push(node.path.clone());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let tree = store.read_tree(collection_id)?;
+    let root = store.collection_root(collection_id)?;
+    let mut paths = Vec::new();
+    walk(&tree.children, &mut paths);
+    let sources = paths
+        .into_iter()
+        .filter_map(|path| {
+            let location = RequestLocation::Collection {
+                collection_id: collection_id.to_string(),
+                path,
+            };
+            // A request that cannot be read is left out; the rest still make a mock.
+            let doc = store.read_request(&location).ok()?;
+            Some(super::from_collection::Source {
+                name: doc.name,
+                method: doc.content.method,
+                url: doc.content.url,
+            })
+        })
+        .collect();
+    Ok((tree.collection.name, root, sources))
+}
+
 fn root_of(state: &StoreState, collection_id: &str) -> MockResult<PathBuf> {
     state.lock_store().collection_root(collection_id)
 }
@@ -194,4 +241,93 @@ pub async fn clear_mock_log(
 ) -> MockResult<()> {
     service.clear_log(&collection_id, &file).await;
     Ok(())
+}
+
+/// Writes a new mock with one route per HTTP, GraphQL and SOAP request of the collection.
+#[tauri::command]
+#[specta::specta]
+pub async fn mock_from_collection(
+    state: State<'_, StoreState>,
+    collection_id: String,
+) -> MockResult<MockSummary> {
+    let store = Arc::clone(&state.store);
+    let made = tauri::async_runtime::spawn_blocking(move || {
+        let mut guard = store
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (name, root, sources) = sources_of(&mut guard, &collection_id)?;
+        drop(guard);
+        let mock = super::from_collection::mock_from(&name, &sources);
+        if mock.routes.is_empty() {
+            return Err(AppError::invalid_input(
+                "This collection has no HTTP, GraphQL or SOAP requests to mock.",
+            ));
+        }
+        let file = disk::write(&root, None, &mock)?;
+        Ok(MockSummary::of(&file, &mock))
+    })
+    .await
+    .map_err(|source| {
+        AppError::internal("Could not create the mock.").with_detail(source.to_string())
+    })?;
+    logged(made)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::types::{RequestContent, RequestKind, RequestLocation};
+    use crate::store::Store;
+
+    #[test]
+    fn a_collection_becomes_a_mock_with_one_route_per_http_request() {
+        let app = tempfile::tempdir().unwrap();
+        let work = tempfile::tempdir().unwrap();
+        let mut store = Store::new(app.path()).unwrap();
+        let tree = store.create_collection(work.path(), "Shop").unwrap();
+        let id = tree.collection.id.clone();
+        store.create_folder(&id, "", "Items").unwrap();
+        for (parent, name, kind, method, url) in [
+            ("", "Health", RequestKind::Http, "GET", "{{base}}/health"),
+            (
+                "Items",
+                "Get item",
+                RequestKind::Http,
+                "GET",
+                "{{base}}/items/{{id}}",
+            ),
+            (
+                "Items",
+                "Socket",
+                RequestKind::Ws,
+                "GET",
+                "wss://x.test/live",
+            ),
+        ] {
+            let change = store.create_request(&id, parent, name, kind).unwrap();
+            let location = RequestLocation::Collection {
+                collection_id: id.clone(),
+                path: change.path.unwrap(),
+            };
+            let content = RequestContent {
+                kind,
+                ..RequestContent::new(method, url)
+            };
+            store.write_request(&location, &content).unwrap();
+        }
+
+        let (name, root, sources) = sources_of(&mut store, &id).unwrap();
+        let mock = super::super::from_collection::mock_from(&name, &sources);
+        let routes: Vec<_> = mock
+            .routes
+            .iter()
+            .map(|r| (r.method.as_str(), r.endpoint.as_str()))
+            .collect();
+        assert_eq!(routes.len(), 2, "{routes:?}");
+        assert!(routes.contains(&("get", "health")));
+        assert!(routes.contains(&("get", "items/:id")));
+        let file = disk::write(&root, None, &mock).unwrap();
+        assert_eq!(file, "shop-mock.mock.yaml");
+        assert_eq!(disk::read(&root, &file).unwrap().routes.len(), 2);
+    }
 }

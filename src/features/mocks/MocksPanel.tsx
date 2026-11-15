@@ -37,6 +37,16 @@ export function MocksPanel() {
     }
   };
 
+  const fromRequests = async (collectionId: string) => {
+    try {
+      const made = await api.mockFromCollection(collectionId);
+      await useMockStore.getState().load(collectionId);
+      useTabsStore.getState().openMock(collectionId, made.file, made.name);
+    } catch (err) {
+      reportError(err);
+    }
+  };
+
   const available = trees.filter((t) => t.collection.available);
   if (available.length === 0)
     return (
@@ -61,6 +71,11 @@ export function MocksPanel() {
                 label="New Mock"
                 aria-label={`New mock in ${collection.name}`}
                 onClick={() => void create(collection.id)}
+              />
+              <Button
+                label="From Requests"
+                aria-label={`Mock from the requests of ${collection.name}`}
+                onClick={() => void fromRequests(collection.id)}
               />
             </div>
             {mocks.length === 0 ? (

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useTabsStore } from "../../shell/tabsStore";
+import { useToastStore } from "../../ui/toastStore";
 import { makeTree } from "../../test/fixtures";
 import { useCollectionsStore } from "../collections/collectionsStore";
 import * as api from "./api";
@@ -27,6 +28,7 @@ describe("MocksPanel", () => {
     vi.resetAllMocks();
     useCollectionsStore.setState({ trees: [makeTree()] });
     useMockStore.setState({ byCollection: {}, logs: {} });
+    useToastStore.setState({ toasts: [] });
     useTabsStore.setState({ tabs: [], activeTabId: null });
     vi.mocked(api.listMocks).mockResolvedValue(listed());
   });
@@ -77,5 +79,40 @@ describe("MocksPanel", () => {
     );
     await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(api.deleteMock).toHaveBeenCalledWith("c1", "users.mock.yaml");
+  });
+
+  it("creates a mock from the collection's requests and opens it", async () => {
+    vi.mocked(api.mockFromCollection).mockResolvedValue({
+      ...listed()[0]!,
+      file: "my-api-mock.mock.yaml",
+      name: "My API mock",
+    });
+    render(<MocksPanel />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Mock from the requests of My API" }),
+    );
+    await vi.waitFor(() =>
+      expect(useTabsStore.getState().tabs).toHaveLength(1),
+    );
+    expect(api.mockFromCollection).toHaveBeenCalledWith("c1");
+    expect(useTabsStore.getState().tabs[0]).toMatchObject({
+      kind: "mock",
+      mock: { file: "my-api-mock.mock.yaml" },
+    });
+  });
+
+  it("reports why a mock could not be made", async () => {
+    vi.mocked(api.mockFromCollection).mockRejectedValue({
+      code: "invalid_input",
+      message: "No requests to mock.",
+    });
+    render(<MocksPanel />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Mock from the requests of My API" }),
+    );
+    await vi.waitFor(() =>
+      expect(useToastStore.getState().toasts).toHaveLength(1),
+    );
+    expect(useTabsStore.getState().tabs).toHaveLength(0);
   });
 });

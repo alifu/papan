@@ -18,6 +18,9 @@ export const saveMock = (
   file: string | null,
   mock: MockEnvironment,
 ): Promise<MockSummary> => commands.saveMock(collectionId, file, mock);
+export const mockFromCollection = (
+  collectionId: string,
+): Promise<MockSummary> => commands.mockFromCollection(collectionId);
 export const deleteMock = (collectionId: string, file: string): Promise<null> =>
   commands.deleteMock(collectionId, file);
 export const startMock = (

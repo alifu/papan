@@ -111,6 +111,8 @@ export const commands = {
 	stopMock: (collectionId: string, file: string) => __TAURI_INVOKE<null>("stop_mock", { collectionId, file }),
 	mockLog: (collectionId: string, file: string) => __TAURI_INVOKE<MockLogEntry[]>("mock_log", { collectionId, file }),
 	clearMockLog: (collectionId: string, file: string) => __TAURI_INVOKE<null>("clear_mock_log", { collectionId, file }),
+	/**  Writes a new mock with one route per HTTP, GraphQL and SOAP request of the collection. */
+	mockFromCollection: (collectionId: string) => __TAURI_INVOKE<MockSummary>("mock_from_collection", { collectionId }),
 	gitStatus: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_status", { collectionId }),
 	gitInit: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_init", { collectionId }),
 	/**

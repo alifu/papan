@@ -5,6 +5,7 @@ pub mod crud;
 pub mod disk;
 pub mod engine;
 pub mod files;
+pub mod from_collection;
 pub mod matcher;
 pub mod model;
 pub mod proxy;
