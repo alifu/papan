@@ -98,6 +98,19 @@ export const commands = {
 	postmanImportDiscard: (token: string) => __TAURI_INVOKE<null>("postman_import_discard", { token }),
 	/**  `None` when the folder pick is cancelled. */
 	postmanExport: (options: ExportOptions) => __TAURI_INVOKE<PostmanExportResult | null>("postman_export", { options }),
+	listMocks: (collectionId: string) => __TAURI_INVOKE<MockSummary[]>("list_mocks", { collectionId }),
+	readMock: (collectionId: string, file: string) => __TAURI_INVOKE<MockEnvironment>("read_mock", { collectionId, file }),
+	/**
+	 *  Saves a mock (a new file when `file` is null). A running mock restarts with the new
+	 *  definition.
+	 */
+	saveMock: (collectionId: string, file: string | null, mock: MockEnvironment) => __TAURI_INVOKE<MockSummary>("save_mock", { collectionId, file, mock }),
+	deleteMock: (collectionId: string, file: string) => __TAURI_INVOKE<null>("delete_mock", { collectionId, file }),
+	/**  Starts the mock and returns its URL. */
+	startMock: (collectionId: string, file: string) => __TAURI_INVOKE<string>("start_mock", { collectionId, file }),
+	stopMock: (collectionId: string, file: string) => __TAURI_INVOKE<null>("stop_mock", { collectionId, file }),
+	mockLog: (collectionId: string, file: string) => __TAURI_INVOKE<MockLogEntry[]>("mock_log", { collectionId, file }),
+	clearMockLog: (collectionId: string, file: string) => __TAURI_INVOKE<null>("clear_mock_log", { collectionId, file }),
 	gitStatus: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_status", { collectionId }),
 	gitInit: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_init", { collectionId }),
 	/**
@@ -207,6 +220,8 @@ export const commands = {
 export const events = {
 	collectionChanged: makeEvent<CollectionChanged, CollectionChanged>("collection-changed"),
 	grpcEvent: makeEvent<GrpcEvent, GrpcEvent>("grpc-event"),
+	mockLogged: makeEvent<MockLogged, MockLogged>("mock-logged"),
+	mockStopped: makeEvent<MockStopped, MockStopped>("mock-stopped"),
 	webhookCaptured: makeEvent<WebhookCaptured, WebhookCaptured>("webhook-captured"),
 	webhookStopped: makeEvent<WebhookStopped, WebhookStopped>("webhook-stopped"),
 	wsEvent: makeEvent<WsEvent, WsEvent>("ws-event"),
@@ -543,6 +558,86 @@ export type KeyValue = {
 	enabled: boolean,
 };
 
+export type MockBind = "loopback" | "all_interfaces";
+
+export type MockEnvironment = {
+	name: string,
+	/**  0 means any free port. */
+	port?: number,
+	bind?: MockBind,
+	/**  Path prefix without slashes at the ends, e.g. `api/v1`. */
+	prefix?: string,
+	latency_ms?: number,
+	cors?: boolean,
+	headers?: KeyValue[],
+	routes?: MockRoute[],
+};
+
+/**  One request the mock served. */
+export type MockLogEntry = {
+	id: number,
+	at_ms: number | null,
+	method: string,
+	path: string,
+	query: string,
+	headers: KeyValue[],
+	body_text: string,
+	body_truncated: boolean,
+	remote: string,
+	route_id: string | null,
+	response_id: string | null,
+	status: number,
+	duration_ms: number,
+};
+
+/**  Emitted for each request a running mock served. TS: `events.mockLogged`. */
+export type MockLogged = {
+	collection_id: string,
+	file: string,
+	entry: MockLogEntry,
+};
+
+export type MockResponse = {
+	id: string,
+	label?: string,
+	status: number,
+	headers?: KeyValue[],
+	body?: string,
+	latency_ms?: number,
+	rules?: Rule[],
+	rules_operator?: RulesOperator,
+	default?: boolean,
+};
+
+export type MockRoute = {
+	id: string,
+	/**  `get`, `post`, `put`, `patch`, `delete`, `head`, `options` or `any`. */
+	method: string,
+	endpoint: string,
+	enabled?: boolean,
+	mode?: ResponseMode,
+	responses: MockResponse[],
+};
+
+/**  Emitted when a mock stops on its own. TS: `events.mockStopped`. */
+export type MockStopped = {
+	collection_id: string,
+	file: string,
+	error: AppError | null,
+};
+
+export type MockSummary = {
+	file: string,
+	name: string,
+	port: number,
+	routes: number,
+	running: boolean,
+	/**  Where it listens right now. */
+	url: string | null,
+	/**  Why the file cannot be used, when it cannot. */
+	error: string | null,
+};
+
 export type NetworkSettings = {
 	proxy: ProxySettings,
 	certificates: ClientCertificate[],
@@ -733,6 +828,23 @@ export type ResponseMeta = {
 	/**  Variable names that were sent as typed because they did not resolve. */
 	unresolved: string[],
 };
+
+export type ResponseMode = "rules" | "sequential" | "random" | "disable_rules";
+
+export type Rule = {
+	target: RuleTarget,
+	/**  Query/header/param/cookie name, or the body path (`a.b[0]`); unused for the rest. */
+	modifier?: string,
+	operator: RuleOperator,
+	value?: string,
+	invert?: boolean,
+};
+
+export type RuleOperator = "equals" | "regex" | "regex_i" | "null" | "empty_array" | "array_includes";
+
+export type RuleTarget = "body" | "query" | "header" | "params" | "cookie" | "request_number" | "path";
+
+export type RulesOperator = "and" | "or";
 
 /**  Where a cached schema came from: an introspection result or an SDL file. */
 export type SchemaSource = { type: "introspection"; json: string } | { type: "sdl"; text: string };

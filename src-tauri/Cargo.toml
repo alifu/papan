@@ -80,6 +80,10 @@ tonic-prost = "=0.14.9"
 tonic-reflection = { version = "=0.14.9", default-features = false }
 prost = "=0.14.4"
 prost-types = "=0.14.4"
+# Mock server (plan 11 §4): templating, rule regexes, random responses.
+handlebars = "6"
+regex = "1"
+rand = "0.9"
 prost-reflect = { version = "=0.16.5", features = ["serde"] }
 protox = "=0.10.0"
 

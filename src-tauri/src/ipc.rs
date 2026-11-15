@@ -25,6 +25,8 @@ use crate::engine::ws::types::WsEvent;
 use crate::error::AppError;
 use crate::git::commands as git;
 use crate::interop::postman::commands as postman;
+use crate::mock::commands as mock;
+use crate::mock::types::{MockLogged, MockStopped};
 use crate::store::commands as store;
 use crate::store::types::CollectionChanged;
 use crate::vars::commands as vars;
@@ -100,6 +102,14 @@ pub fn builder() -> Builder<tauri::Wry> {
             postman::postman_import_commit,
             postman::postman_import_discard,
             postman::postman_export,
+            mock::list_mocks,
+            mock::read_mock,
+            mock::save_mock,
+            mock::delete_mock,
+            mock::start_mock,
+            mock::stop_mock,
+            mock::mock_log,
+            mock::clear_mock_log,
             git::git_status,
             git::git_init,
             git::git_clone,
@@ -153,7 +163,9 @@ pub fn builder() -> Builder<tauri::Wry> {
             WsEvent,
             GrpcEvent,
             WebhookCaptured,
-            WebhookStopped
+            WebhookStopped,
+            MockLogged,
+            MockStopped
         ])
         .typ::<AppError>()
         .disable_serde_phases()

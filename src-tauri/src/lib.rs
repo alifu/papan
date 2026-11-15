@@ -53,6 +53,9 @@ pub fn run() {
             app.manage(engine::ws::WsEngine::default());
             app.manage(engine::graphql::subscription_service::Subscriptions::default());
             app.manage(open_webhooks(app.handle())?);
+            app.manage(mock::MockService::new(mock::commands::TauriSink::arc(
+                app.handle().clone(),
+            )));
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");
@@ -65,6 +68,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 if let Some(engine) = app.try_state::<engine::http::HttpEngine>() {
                     tauri::async_runtime::block_on(engine.cookies().flush());
+                }
+                if let Some(mocks) = app.try_state::<mock::MockService>() {
+                    tauri::async_runtime::block_on(mocks.stop_all());
                 }
                 if let Some(webhooks) = app.try_state::<webhook::WebhookService>() {
                     tauri::async_runtime::block_on(webhooks.stop_all());

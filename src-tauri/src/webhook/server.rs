@@ -235,7 +235,7 @@ async fn handle(
 }
 
 /// How reading a request body ended.
-enum BodyRead {
+pub(crate) enum BodyRead {
     Complete(Bytes),
     /// More than the cap arrived; `seen` bytes were read before giving up.
     TooLarge {
@@ -246,7 +246,7 @@ enum BodyRead {
 }
 
 /// Reads `body` up to `limit` bytes, all within `timeout`.
-async fn collect_body<B>(mut body: B, limit: usize, timeout: Duration) -> BodyRead
+pub(crate) async fn collect_body<B>(mut body: B, limit: usize, timeout: Duration) -> BodyRead
 where
     B: Body<Data = Bytes> + Unpin,
 {
