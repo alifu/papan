@@ -3,7 +3,10 @@ import type { ConflictSide, GitBranch, GitStatus } from "../../ipc/bindings";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { reportError, showToast } from "../../ui/toastStore";
+import { useTabsStore } from "../../shell/tabsStore";
 import { useCollectionsStore } from "../collections/collectionsStore";
+import { collectionLocation } from "../locations";
+import { isDirty } from "../request/requestStore";
 import * as api from "./api";
 import {
   changeLabel,
@@ -15,6 +18,18 @@ import {
 export interface GitDialogProps {
   readonly collectionId: string;
   readonly onClose: () => void;
+}
+
+/** True when an open tab of the collection has unsaved edits. */
+function hasDirtyTabs(collectionId: string): boolean {
+  return useTabsStore
+    .getState()
+    .tabs.some(
+      (t) =>
+        t.location?.scope === "collection" &&
+        t.location.collection_id === collectionId &&
+        isDirty(t.id),
+    );
 }
 
 /** Collection row menu > Git…: status, diff, commit, pull, push, branches, conflicts. */
@@ -29,6 +44,9 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const closed = useRef(false);
+  /** Only the newest status/diff answer is shown; older ones are dropped. */
+  const refreshSeq = useRef(0);
+  const diffSeq = useRef(0);
   const name = useCollectionsStore(
     (s) =>
       s.trees.find((t) => t.collection.id === collectionId)?.collection.name,
@@ -42,11 +60,16 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
   }, []);
 
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current;
+    const stale = () => closed.current || seq !== refreshSeq.current;
     try {
       const next = await api.status(collectionId);
-      if (closed.current) return;
+      if (stale()) return;
+      const usable = next.is_repo && next.unsafe_config === null;
+      const list = usable ? await api.branches(collectionId) : [];
+      if (stale()) return;
       setStatus(next);
-      setBranches(next.is_repo ? await api.branches(collectionId) : []);
+      setBranches(list);
     } catch (err) {
       reportError(err);
     }
@@ -60,10 +83,25 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
   const act = async (
     work: () => Promise<{ message: string } | GitStatus | void>,
     clearMessage = false,
+    changesFiles = false,
   ) => {
+    if (changesFiles && hasDirtyTabs(collectionId)) {
+      showToast({
+        kind: "info",
+        message:
+          "Save or discard the unsaved changes in this collection's open tabs first.",
+      });
+      return;
+    }
     setBusy(true);
     try {
       const result = await work();
+      if (changesFiles) {
+        // Open tabs hold the old file contents; reopen them from disk on demand.
+        useTabsStore
+          .getState()
+          .closeByLocation(collectionLocation(collectionId, ""));
+      }
       if (result && "message" in result && typeof result.message === "string") {
         showToast({ kind: "info", message: result.message });
       }
@@ -79,9 +117,11 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
   };
 
   const showDiff = async (path: string) => {
+    const seq = ++diffSeq.current;
     try {
       const text = await api.diff(collectionId, path);
-      if (!closed.current) setSelected({ path, text });
+      if (!closed.current && seq === diffSeq.current)
+        setSelected({ path, text });
     } catch (err) {
       reportError(err);
     }
@@ -98,6 +138,17 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
     return (
       <Dialog open title={title} onClose={onClose} cancelLabel="Close">
         <p role="alert">Git could not be started. Install Git and try again.</p>
+      </Dialog>
+    );
+  }
+  if (status.unsafe_config) {
+    return (
+      <Dialog open title={title} onClose={onClose} cancelLabel="Close">
+        <p role="alert">
+          This repository's .git/config sets “{status.unsafe_config}”, which
+          would run a program on your machine. Git actions are off until that
+          setting is removed from .git/config.
+        </p>
       </Dialog>
     );
   }
@@ -133,7 +184,7 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
     (status.files.length > 0 || status.merging);
 
   const resolve = (path: string, side: ConflictSide) =>
-    void act(() => api.resolve(collectionId, path, side));
+    void act(() => api.resolve(collectionId, path, side), false, true);
 
   return (
     <Dialog open title={title} onClose={onClose} cancelLabel="Close">
@@ -145,7 +196,11 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
             value={status.branch ?? ""}
             disabled={busy}
             onChange={(e) =>
-              void act(() => api.switchBranch(collectionId, e.target.value))
+              void act(
+                () => api.switchBranch(collectionId, e.target.value),
+                false,
+                true,
+              )
             }
           >
             {status.branch === null ? (
@@ -164,7 +219,7 @@ export function GitDialog({ collectionId, onClose }: GitDialogProps) {
         <Button
           label="Pull"
           disabled={busy}
-          onClick={() => void act(() => api.pull(collectionId))}
+          onClick={() => void act(() => api.pull(collectionId), false, true)}
         />
         <Button
           label="Push"

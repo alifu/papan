@@ -29,6 +29,7 @@ dependencies = [
  "hyper-util",
  "jsonschema",
  "keyring",
+ "libc",
  "md-5",
  "mime",
  "notify",

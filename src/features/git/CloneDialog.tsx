@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
-import { reportError } from "../../ui/toastStore";
+import { reportError, showToast } from "../../ui/toastStore";
 import {
   expandKey,
   useCollectionsStore,
@@ -24,6 +24,13 @@ export function CloneDialog({ onClose }: CloneDialogProps) {
       if (!tree) return; // folder picker cancelled
       await useCollectionsStore.getState().load();
       useCollectionsStore.getState().expand(expandKey(tree.collection.id, ""));
+      if (!tree.collection.scripts_trusted) {
+        showToast({
+          kind: "info",
+          message:
+            "Cloned. Its scripts stay off until you choose Trust scripts… in the collection menu.",
+        });
+      }
       onClose();
     } catch (err) {
       reportError(err);

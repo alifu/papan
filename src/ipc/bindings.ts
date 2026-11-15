@@ -21,6 +21,8 @@ export const commands = {
 	writeRequest: (location: RequestLocation, content: RequestContent) => __TAURI_INVOKE<null>("write_request", { location, content }),
 	/**  Folder or collection scripts (plan 05 §5); request scripts travel in `RequestContent`. */
 	readScripts: (target: ScriptTarget) => __TAURI_INVOKE<Scripts>("read_scripts", { target }),
+	/**  The user's decision to let a collection's scripts run (or stop them again). */
+	setScriptsTrusted: (collectionId: string, trusted: boolean) => __TAURI_INVOKE<null>("set_scripts_trusted", { collectionId, trusted }),
 	writeScripts: (target: ScriptTarget, scripts: Scripts) => __TAURI_INVOKE<null>("write_scripts", { target, scripts }),
 	listScratch: () => __TAURI_INVOKE<ScratchItem[]>("list_scratch"),
 	createScratch: (kind: RequestKind) => __TAURI_INVOKE<ScratchItem>("create_scratch", { kind }),
@@ -285,6 +287,11 @@ export type CollectionSummary = {
 	path: string,
 	/**  False when the collection folder is missing or unreadable. */
 	available: boolean,
+	/**
+	 *  False for a collection that came from outside (a Git clone) until the user trusts
+	 *  it: its scripts do not run.
+	 */
+	scripts_trusted: boolean,
 };
 
 export type CollectionTree = {
@@ -411,6 +418,11 @@ export type GitStatus = {
 	behind: number,
 	merging: boolean,
 	files: GitFileChange[],
+	/**
+	 *  Set when the repository's own config names a program Git would run (a shared
+	 *  folder can carry one). Nothing but `status` runs until it is removed.
+	 */
+	unsafe_config: string | null,
 };
 
 export type GlobalsClash = "keep" | "overwrite";

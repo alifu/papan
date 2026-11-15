@@ -31,6 +31,7 @@ pub mod secrets;
 pub mod service;
 pub mod subscription_model;
 pub mod tree_ops;
+pub mod trust;
 pub mod types;
 pub mod watcher;
 pub mod ws_model;

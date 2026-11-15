@@ -3,6 +3,7 @@
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -13,6 +14,37 @@ pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(120);
 /// Per stream; a larger diff is cut with a marker.
 pub const MAX_OUTPUT: usize = 1024 * 1024;
 const POLL: Duration = Duration::from_millis(20);
+/// How long to wait for output after git exited; a grandchild may still hold the pipe.
+const DRAIN_GRACE: Duration = Duration::from_secs(2);
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// A path that is not a hooks directory, so no hook of a shared repository runs.
+#[cfg(unix)]
+const NO_HOOKS: &str = "core.hooksPath=/dev/null";
+#[cfg(windows)]
+const NO_HOOKS: &str = "core.hooksPath=NUL";
+
+/// Options on every call: only the transports Papan needs, no hooks, no fsmonitor, so no
+/// program named by a repository's own config runs on status, diff or commit.
+const SAFE_OPTIONS: [&str; 16] = [
+    "-c",
+    "protocol.allow=never",
+    "-c",
+    "protocol.https.allow=always",
+    "-c",
+    "protocol.ssh.allow=always",
+    "-c",
+    "protocol.git.allow=always",
+    "-c",
+    "protocol.file.allow=always",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    NO_HOOKS,
+    "-c",
+    "core.pager=cat",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitRun {
@@ -79,12 +111,35 @@ fn read_capped(mut stream: impl Read) -> String {
     text
 }
 
-/// Runs `git <args>` in `dir`. A non-zero exit is `Ok` with `success: false`; failing to
-/// start git or hitting the timeout is an error.
-pub fn run(dir: &Path, args: &[&str], timeout: Duration) -> Result<GitRun, AppError> {
-    let mut child = Command::new("git")
-        .arg("-c")
-        .arg("protocol.ext.allow=never")
+/// Reads a stream on its own thread; the text arrives on the returned channel.
+fn spawn_reader(stream: impl Read + Send + 'static) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(read_capped(stream));
+    });
+    rx
+}
+
+/// Stops git and, on Unix, everything it started (ssh helpers, credential daemons).
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    {
+        if let Ok(pid) = i32::try_from(child.id()) {
+            // SAFETY: the child was started as leader of its own process group
+            // (`process_group(0)`), so `-pid` names only that group.
+            unsafe {
+                libc::kill(-pid, libc::SIGKILL);
+            }
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn command(dir: &Path, args: &[&str]) -> Command {
+    let mut command = Command::new("git");
+    command
+        .args(SAFE_OPTIONS)
         .args(args)
         .current_dir(dir)
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -92,28 +147,30 @@ pub fn run(dir: &Path, args: &[&str], timeout: Duration) -> Result<GitRun, AppEr
         .env("LC_ALL", "C")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|source| {
-            AppError::not_found("Git could not be started. Is it installed?")
-                .with_detail(source.to_string())
-        })?;
-    let stdout = child
-        .stdout
-        .take()
-        .map(|s| thread::spawn(move || read_capped(s)));
-    let stderr = child
-        .stderr
-        .take()
-        .map(|s| thread::spawn(move || read_capped(s)));
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+    command
+}
+
+/// Runs `git <args>` in `dir`. A non-zero exit is `Ok` with `success: false`; failing to
+/// start git or hitting the timeout is an error.
+pub fn run(dir: &Path, args: &[&str], timeout: Duration) -> Result<GitRun, AppError> {
+    let mut child = command(dir, args).spawn().map_err(|source| {
+        AppError::not_found("Git could not be started. Is it installed?")
+            .with_detail(source.to_string())
+    })?;
+    let stdout = child.stdout.take().map(spawn_reader);
+    let stderr = child.stderr.take().map(spawn_reader);
 
     let deadline = Instant::now() + timeout;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_tree(&mut child);
                 return Err(AppError::new(
                     crate::error::ErrorCode::Timeout,
                     "Git took too long and was stopped.",
@@ -127,13 +184,14 @@ pub fn run(dir: &Path, args: &[&str], timeout: Duration) -> Result<GitRun, AppEr
             }
         }
     };
-    let join = |handle: Option<thread::JoinHandle<String>>| {
-        handle.and_then(|h| h.join().ok()).unwrap_or_default()
+    let drain = |rx: Option<mpsc::Receiver<String>>| {
+        rx.and_then(|rx| rx.recv_timeout(DRAIN_GRACE).ok())
+            .unwrap_or_default()
     };
     Ok(GitRun {
         success: status.success(),
-        stdout: join(stdout),
-        stderr: redact(&join(stderr)),
+        stdout: drain(stdout),
+        stderr: redact(&drain(stderr)),
     })
 }
 
@@ -149,7 +207,8 @@ pub fn run_ok(dir: &Path, args: &[&str], timeout: Duration) -> Result<GitRun, Ap
     } else {
         message
     };
-    Err(AppError::invalid_input(redact(message)).with_detail(format!("git {}", args.join(" "))))
+    Err(AppError::invalid_input(redact(message))
+        .with_detail(redact(&format!("git {}", args.join(" ")))))
 }
 
 #[cfg(test)]

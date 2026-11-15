@@ -48,6 +48,8 @@ export async function subscribeCollectionChanged(
 ): Promise<() => void> {
   return events.collectionChanged.listen((event) => onChange(event.payload.collection_id));
 }
+export const setScriptsTrusted = (collectionId: string, trusted: boolean): Promise<null> =>
+  commands.setScriptsTrusted(collectionId, trusted);
 export const readScripts = (target: ScriptTarget): Promise<Scripts> => commands.readScripts(target);
 export const writeScripts = (target: ScriptTarget, scripts: Scripts): Promise<null> =>
   commands.writeScripts(target, scripts);

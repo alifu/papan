@@ -59,6 +59,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             store::read_request,
             store::write_request,
             store::read_scripts,
+            store::set_scripts_trusted,
             store::write_scripts,
             store::list_scratch,
             store::create_scratch,

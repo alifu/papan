@@ -102,3 +102,7 @@ jsonschema = { version = "=0.60.2", default-features = false }
 # gRPC test server (plan 08 §2): resolver 2 keeps these features out of the app build.
 tonic = { version = "=0.14.9", default-features = false, features = ["channel", "server", "router"] }
 tonic-reflection = { version = "=0.14.9" }
+
+[target.'cfg(unix)'.dependencies]
+# Kill git's whole process group on timeout (plan 10 review).
+libc = "0.2"

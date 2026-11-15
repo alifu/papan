@@ -11,6 +11,9 @@ pub struct CollectionSummary {
     pub path: String,
     /// False when the collection folder is missing or unreadable.
     pub available: bool,
+    /// False for a collection that came from outside (a Git clone) until the user trusts
+    /// it: its scripts do not run.
+    pub scripts_trusted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]

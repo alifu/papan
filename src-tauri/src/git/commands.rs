@@ -9,6 +9,7 @@ use tauri_plugin_dialog::DialogExt;
 use super::service;
 use super::types::{ConflictSide, GitBranch, GitOutput, GitStatus};
 use crate::error::AppError;
+use crate::store::collection::Collection;
 use crate::store::types::CollectionTree;
 use crate::store::StoreState;
 
@@ -77,19 +78,21 @@ pub async fn git_clone(
         AppError::invalid_input("That folder cannot be used.").with_detail(source.to_string())
     })?;
     let cloned = blocking(move || service::clone(&url, &parent)).await?;
-    let opened = logged(state.lock_store().open_collection(&cloned));
-    match opened {
-        Ok(tree) => Ok(Some(tree)),
-        Err(error) => {
-            if let Err(cleanup) = std::fs::remove_dir_all(&cloned) {
-                tracing::warn!(%cleanup, "could not remove the rejected clone");
-            }
-            Err(
-                AppError::invalid_input("That repository is not a Papan collection.")
-                    .with_detail(format!("{} ({:?})", error.message, error.detail)),
-            )
+    // Only a folder that is not a Papan collection is removed; any other failure keeps the clone.
+    if let Err(error) = Collection::open(&cloned) {
+        if let Err(cleanup) = std::fs::remove_dir_all(&cloned) {
+            tracing::warn!(%cleanup, "could not remove the rejected clone");
         }
+        return Err(
+            AppError::invalid_input("That repository is not a Papan collection.")
+                .with_detail(error.message),
+        );
     }
+    let tree = logged(state.lock_store().open_collection(&cloned))?;
+    // Scripts from a repository someone else wrote do not run until the user trusts them.
+    let mut store = state.lock_store();
+    logged(store.set_scripts_trusted(&tree.collection.id, false))?;
+    Ok(Some(logged(store.read_tree(&tree.collection.id))?))
 }
 
 #[tauri::command]

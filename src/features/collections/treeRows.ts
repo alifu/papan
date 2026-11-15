@@ -20,6 +20,8 @@ export interface TreeRowModel {
   readonly childCount: number;
   readonly expanded: boolean | undefined;
   readonly available: boolean;
+  /** Collection rows only: false until the user trusts a cloned collection's scripts. */
+  readonly scriptsTrusted: boolean;
 }
 
 function nodeRows(
@@ -47,6 +49,7 @@ function nodeRows(
       childCount: node.children.length,
       expanded: isFolder ? isOpen : undefined,
       available: true,
+      scriptsTrusted: true,
     };
     const below = isOpen ? nodeRows(collectionId, node.children, node.path, level + 1, expanded) : [];
     return [row, ...below];
@@ -76,6 +79,7 @@ export function visibleRows(
       childCount: tree.children.length,
       expanded: tree.collection.available ? isOpen : undefined,
       available: tree.collection.available,
+      scriptsTrusted: tree.collection.scripts_trusted,
     };
     return [root, ...(isOpen ? nodeRows(id, tree.children, "", 2, expanded) : [])];
   });

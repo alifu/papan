@@ -16,6 +16,27 @@ fn is_repo_root(root: &Path) -> Result<bool, AppError> {
     Ok(found.success && found.stdout.trim().is_empty())
 }
 
+/// Config keys of the repository itself that make Git run a program of the repo's choosing.
+const RISKY_CONFIG: &str = r"^(core\.(sshcommand|askpass|gitproxy|hookspath|fsmonitor|editor)|credential\..*helper|diff\.external|diff\..*\.(command|textconv)|filter\..*\.(clean|smudge|process)|merge\..*\.driver|gpg\..*program)$";
+
+/// The first risky key in the repository's own `.git/config`, if any.
+fn risky_config(root: &Path) -> Result<Option<String>, AppError> {
+    let found = run(
+        root,
+        &[
+            "config",
+            "--local",
+            "--name-only",
+            "--get-regexp",
+            RISKY_CONFIG,
+        ],
+        LOCAL_TIMEOUT,
+    )?;
+    Ok(found
+        .success
+        .then(|| found.stdout.lines().next().unwrap_or_default().to_string()))
+}
+
 pub fn status(root: &Path) -> Result<GitStatus, AppError> {
     let is_repo = match is_repo_root(root) {
         Ok(is_repo) => is_repo,
@@ -25,6 +46,14 @@ pub fn status(root: &Path) -> Result<GitStatus, AppError> {
     if !is_repo {
         return Ok(GitStatus {
             git_available: true,
+            ..GitStatus::default()
+        });
+    }
+    if let Some(key) = risky_config(root)? {
+        return Ok(GitStatus {
+            git_available: true,
+            is_repo: true,
+            unsafe_config: Some(key),
             ..GitStatus::default()
         });
     }
@@ -62,6 +91,11 @@ fn require_repo(root: &Path) -> Result<GitStatus, AppError> {
         return Err(AppError::invalid_input(
             "This collection is not a Git repository yet.",
         ));
+    }
+    if let Some(key) = &current.unsafe_config {
+        return Err(AppError::invalid_input(format!(
+            "This repository's .git/config sets “{key}”, which would run a program. Remove it to use Git here."
+        )));
     }
     Ok(current)
 }
@@ -133,7 +167,13 @@ pub fn clone(url: &str, parent: &Path) -> Result<std::path::PathBuf, AppError> {
         )));
     }
     let target_arg = target.to_string_lossy().into_owned();
-    run_ok(parent, &["clone", "--", url, &target_arg], NETWORK_TIMEOUT)?;
+    // `target` did not exist a moment ago, so whatever is there now is ours to remove.
+    if let Err(error) = run_ok(parent, &["clone", "--", url, &target_arg], NETWORK_TIMEOUT) {
+        if let Err(cleanup) = std::fs::remove_dir_all(&target) {
+            tracing::debug!(%cleanup, "no partial clone to remove");
+        }
+        return Err(error);
+    }
     Ok(target)
 }
 
@@ -173,23 +213,23 @@ pub fn diff(root: &Path, path: &str) -> Result<String, AppError> {
         LOCAL_TIMEOUT,
     )?
     .success;
-    let result = if change.index == "?" {
-        // Exit code 1 only means "there are differences".
-        run(
-            root,
-            &["diff", "--no-index", "--no-color", "--", "/dev/null", path],
-            LOCAL_TIMEOUT,
-        )?
-    } else if change.conflicted || !has_head {
-        run_ok(root, &["diff", "--no-color", "--", path], LOCAL_TIMEOUT)?
+    let untracked = change.index == "?";
+    let mut args = vec!["diff", "--no-ext-diff", "--no-textconv", "--no-color"];
+    if untracked {
+        args.extend(["--no-index", "--", "/dev/null", path]);
+    } else if change.conflicted {
+        args.extend(["--", path]);
+    } else if !has_head {
+        args.extend(["--cached", "--", path]);
     } else {
-        run_ok(
-            root,
-            &["diff", "--no-color", "HEAD", "--", path],
-            LOCAL_TIMEOUT,
-        )?
-    };
-    Ok(result.stdout)
+        args.extend(["HEAD", "--", path]);
+    }
+    let result = run(root, &args, LOCAL_TIMEOUT)?;
+    // `--no-index` exits 1 when the files differ; anything else non-zero is a real failure.
+    if result.success || (untracked && result.stdout.starts_with("diff ")) {
+        return Ok(result.stdout);
+    }
+    Err(AppError::invalid_input(result.stderr.trim().to_string()))
 }
 
 pub fn commit(root: &Path, message: &str) -> Result<GitOutput, AppError> {
@@ -242,6 +282,17 @@ pub fn pull(root: &Path) -> Result<GitOutput, AppError> {
 
 pub fn push(root: &Path) -> Result<GitOutput, AppError> {
     let current = require_repo(root)?;
+    if current.branch.is_none() {
+        return Err(AppError::invalid_input(
+            "Switch to a branch before pushing.",
+        ));
+    }
+    let remotes = run_ok(root, &["remote"], LOCAL_TIMEOUT)?;
+    if remotes.stdout.trim().is_empty() {
+        return Err(AppError::invalid_input(
+            "This repository has no remote. Add one with: git remote add origin <url>",
+        ));
+    }
     let done = match (&current.upstream, &current.branch) {
         (None, Some(branch)) => run_ok(
             root,
@@ -296,8 +347,19 @@ pub fn create_branch(root: &Path, name: &str) -> Result<GitStatus, AppError> {
 pub fn resolve(root: &Path, path: &str, side: ConflictSide) -> Result<GitStatus, AppError> {
     let path = safe_rel(path)?;
     let current = require_repo(root)?;
-    if !find_change(&current.files, path)?.conflicted {
+    let change = find_change(&current.files, path)?;
+    if !change.conflicted {
         return Err(AppError::invalid_input("That file is not in conflict."));
+    }
+    // Delete/modify and one-sided add conflicts: the chosen side has no file to keep.
+    let xy = format!("{}{}", change.index, change.worktree);
+    let side_missing = match side {
+        ConflictSide::Mine => matches!(xy.as_str(), "DU" | "UA" | "DD"),
+        ConflictSide::Theirs => matches!(xy.as_str(), "UD" | "AU" | "DD"),
+    };
+    if side_missing {
+        run_ok(root, &["rm", "-q", "--", path], LOCAL_TIMEOUT)?;
+        return status(root);
     }
     let flag = match side {
         ConflictSide::Mine => "--ours",

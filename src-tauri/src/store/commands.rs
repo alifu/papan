@@ -222,6 +222,19 @@ pub fn read_scripts(state: State<'_, StoreState>, target: ScriptTarget) -> Store
     with_store(&state, |store| store.read_scripts(&target))
 }
 
+/// The user's decision to let a collection's scripts run (or stop them again).
+#[tauri::command]
+#[specta::specta]
+pub fn set_scripts_trusted(
+    state: State<'_, StoreState>,
+    collection_id: String,
+    trusted: bool,
+) -> StoreResult<()> {
+    with_store(&state, |store| {
+        store.set_scripts_trusted(&collection_id, trusted)
+    })
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn write_scripts(

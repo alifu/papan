@@ -330,3 +330,50 @@ fn a_graphql_body_maps_to_its_json_and_back() {
     );
     assert_eq!(not_graphql.body, Body::Text { text: "[1]".into() });
 }
+
+#[test]
+fn scripts_of_an_untrusted_collection_do_not_run_until_trusted() {
+    use crate::store::types::{RequestLocation, ScriptTarget, Scripts};
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = crate::store::Store::new(&dir.path().join("app")).unwrap();
+    let tree = store.create_collection(dir.path(), "Shop").unwrap();
+    let id = tree.collection.id;
+    let scripts = Scripts {
+        enabled: true,
+        pre_request: "pm.environment.set('a','1')".into(),
+        post_response: String::new(),
+    };
+    store
+        .write_scripts(
+            &ScriptTarget::Collection {
+                collection_id: id.clone(),
+            },
+            &scripts,
+        )
+        .unwrap();
+    let location = RequestLocation::Collection {
+        collection_id: id.clone(),
+        path: "r.http.yaml".into(),
+    };
+    let none = Scripts::default();
+    assert_eq!(
+        collect_chains(&store, &location, &none)
+            .unwrap()
+            .pre_request
+            .len(),
+        2
+    );
+    store.set_scripts_trusted(&id, false).unwrap();
+    assert!(collect_chains(&store, &location, &none)
+        .unwrap()
+        .pre_request
+        .is_empty());
+    store.set_scripts_trusted(&id, true).unwrap();
+    assert_eq!(
+        collect_chains(&store, &location, &none)
+            .unwrap()
+            .pre_request
+            .len(),
+        2
+    );
+}

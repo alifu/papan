@@ -16,7 +16,7 @@ export const node = (
 
 /** Collection "c1": health, auth/{login, logout}, broken (invalid). */
 export const makeTree = (id = "c1", name = "My API", available = true): CollectionTree => ({
-  collection: { id, name, path: `/tmp/${id}`, available },
+  collection: { id, name, path: `/tmp/${id}`, available, scripts_trusted: true },
   children: [
     node("health.http.yaml", "request"),
     node("auth", "folder", [

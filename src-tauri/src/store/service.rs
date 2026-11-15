@@ -13,6 +13,7 @@ use super::registry::{Registry, RegistryEntry};
 use super::request_emit::normalise;
 use super::scratch::Scratch;
 use super::secrets::{redact, SessionSecrets};
+use super::trust::ScriptTrust;
 use super::types::{
     CollectionSummary, CollectionTree, RequestContent, RequestDoc, RequestKind, RequestLocation,
     ScratchItem, TreeChange,
@@ -28,9 +29,14 @@ pub struct Store {
     fingerprints: HashMap<String, u64>,
     secrets: SessionSecrets,
     history: History,
+    trust: ScriptTrust,
 }
 
-fn summary(entry: &RegistryEntry, collection: Option<&Collection>) -> CollectionSummary {
+fn summary(
+    entry: &RegistryEntry,
+    collection: Option<&Collection>,
+    scripts_trusted: bool,
+) -> CollectionSummary {
     let fallback = || {
         entry
             .path
@@ -43,12 +49,17 @@ fn summary(entry: &RegistryEntry, collection: Option<&Collection>) -> Collection
         name: collection.map_or_else(fallback, |c| c.name.clone()),
         path: entry.path.display().to_string(),
         available: collection.is_some(),
+        scripts_trusted,
     }
 }
 
-fn tree_of(entry: &RegistryEntry, collection: Option<&Collection>) -> CollectionTree {
+fn tree_of(
+    entry: &RegistryEntry,
+    collection: Option<&Collection>,
+    scripts_trusted: bool,
+) -> CollectionTree {
     CollectionTree {
-        collection: summary(entry, collection),
+        collection: summary(entry, collection, scripts_trusted),
         children: collection.map(Collection::tree).unwrap_or_default(),
     }
 }
@@ -84,6 +95,7 @@ impl Store {
             fingerprints: HashMap::new(),
             secrets: SessionSecrets::default(),
             history: History::new(app_data),
+            trust: ScriptTrust::load(app_data),
         })
     }
 
@@ -93,6 +105,23 @@ impl Store {
 
     fn entry(&self, id: &str) -> Result<RegistryEntry, AppError> {
         self.registry.find(id).cloned()
+    }
+
+    pub fn scripts_trusted(&self, collection_id: &str) -> bool {
+        self.trust.is_trusted(collection_id)
+    }
+
+    pub fn set_scripts_trusted(
+        &mut self,
+        collection_id: &str,
+        trusted: bool,
+    ) -> Result<(), AppError> {
+        self.entry(collection_id)?;
+        if trusted {
+            self.trust.trust(collection_id)
+        } else {
+            self.trust.distrust(collection_id)
+        }
     }
 
     /// Folder of an open collection, for Git (plan 10).
@@ -126,7 +155,7 @@ impl Store {
                         self.remember(&entry.id, collection);
                     }
                 }
-                tree_of(entry, collection.as_ref())
+                tree_of(entry, collection.as_ref(), self.trust.is_trusted(&entry.id))
             })
             .collect()
     }
@@ -162,7 +191,11 @@ impl Store {
         let entry = self.registry.add(&root)?;
         collection.sweep_temp_files();
         self.remember(&entry.id, &collection);
-        Ok(tree_of(&entry, Some(&collection)))
+        Ok(tree_of(
+            &entry,
+            Some(&collection),
+            self.trust.is_trusted(&entry.id),
+        ))
     }
 
     /// Forgets the collection; its files are untouched.
@@ -175,7 +208,11 @@ impl Store {
     pub fn read_tree(&self, id: &str) -> Result<CollectionTree, AppError> {
         let entry = self.entry(id)?;
         let collection = open_registered(&entry).ok();
-        Ok(tree_of(&entry, collection.as_ref()))
+        Ok(tree_of(
+            &entry,
+            collection.as_ref(),
+            self.trust.is_trusted(&entry.id),
+        ))
     }
 
     /// Runs one tree operation, then refreshes the fingerprint and returns the new tree.
@@ -189,7 +226,7 @@ impl Store {
         self.remember(id, &collection);
         let path = result?;
         Ok(TreeChange {
-            tree: tree_of(&entry, Some(&collection)),
+            tree: tree_of(&entry, Some(&collection), self.trust.is_trusted(&entry.id)),
             path,
         })
     }

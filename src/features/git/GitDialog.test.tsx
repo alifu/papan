@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitStatus } from "../../ipc/bindings";
+import { useTabsStore } from "../../shell/tabsStore";
+import { useRequestStore } from "../request/requestStore";
 import { useToastStore } from "../../ui/toastStore";
 import * as collectionsApi from "../collections/api";
 import * as api from "./api";
@@ -19,6 +21,7 @@ const repo = (over: Partial<GitStatus> = {}): GitStatus => ({
   behind: 0,
   merging: false,
   files: [],
+  unsafe_config: null,
   ...over,
 });
 
@@ -27,6 +30,8 @@ describe("GitDialog", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     useToastStore.setState({ toasts: [] });
+    useTabsStore.setState({ tabs: [] });
+    useRequestStore.setState({ byTab: {} });
     vi.mocked(api.branches).mockResolvedValue([
       { name: "main", current: true },
     ]);
@@ -143,5 +148,40 @@ describe("GitDialog", () => {
     await vi.waitFor(() =>
       expect(useToastStore.getState().toasts).toHaveLength(1),
     );
+  });
+
+  it("shows an alert and no actions when the repo config would run a program", async () => {
+    vi.mocked(api.status).mockResolvedValue(
+      repo({ unsafe_config: "core.sshcommand" }),
+    );
+    render(<GitDialog collectionId="c1" onClose={onClose} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "core.sshcommand",
+    );
+    expect(screen.queryByRole("button", { name: "Pull" })).toBeNull();
+    expect(api.branches).not.toHaveBeenCalled();
+  });
+
+  it("refuses to pull while a tab of the collection has unsaved edits", async () => {
+    vi.mocked(api.status).mockResolvedValue(repo());
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "t1",
+          kind: "request",
+          title: "x",
+          location: {
+            scope: "collection",
+            collection_id: "c1",
+            path: "a.http.yaml",
+          },
+        },
+      ],
+    });
+    useRequestStore.setState({ byTab: { t1: { draft: {} } } } as never);
+    render(<GitDialog collectionId="c1" onClose={onClose} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Pull" }));
+    expect(api.pull).not.toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(1);
   });
 });

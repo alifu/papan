@@ -253,3 +253,87 @@ fn operations_need_a_repo() {
     assert_eq!(pull(tmp.path()).unwrap_err().code, ErrorCode::InvalidInput);
     assert!(branches(tmp.path()).is_err());
 }
+
+#[test]
+fn a_repo_config_that_runs_a_program_blocks_git_work() {
+    let w = world();
+    git(&w.a, &["config", "core.sshCommand", "touch pwned"]);
+    let s = status(&w.a).unwrap();
+    assert_eq!(s.unsafe_config.as_deref(), Some("core.sshcommand"));
+    assert!(s.files.is_empty());
+    assert!(pull(&w.a).unwrap_err().message.contains("core.sshcommand"));
+    assert!(!w.a.join("pwned").exists());
+}
+
+#[test]
+fn hooks_of_the_repository_do_not_run() {
+    let w = world();
+    identify(&w.a);
+    let hooks = w.a.join(".git/hooks");
+    fs::create_dir_all(&hooks).unwrap();
+    let hook = hooks.join("pre-commit");
+    fs::write(&hook, "#!/bin/sh\ntouch hook-ran\n").unwrap();
+    #[cfg(unix)]
+    fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    fs::write(w.a.join("shared.yaml"), "name: hooked\n").unwrap();
+    commit(&w.a, "go");
+    assert!(!w.a.join("hook-ran").exists());
+}
+
+#[test]
+fn other_transports_are_refused_and_a_failed_clone_leaves_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    assert!(clone("foo::bar", tmp.path()).is_err());
+    let missing = tmp.path().join("nope.git");
+    assert!(clone(missing.to_str().unwrap(), tmp.path()).is_err());
+    assert!(!tmp.path().join("nope").exists());
+}
+
+#[test]
+fn errors_never_carry_url_credentials() {
+    let tmp = tempfile::tempdir().unwrap();
+    let error = clone("https://user:s3cret@127.0.0.1:1/x.git", tmp.path()).unwrap_err();
+    let all = format!("{} {:?}", error.message, error.detail);
+    assert!(!all.contains("s3cret"), "{all}");
+}
+
+#[test]
+fn delete_modify_conflicts_can_be_resolved() {
+    let w = world();
+    identify(&w.a);
+    identify(&w.b);
+    git(&w.a, &["rm", "-q", "shared.yaml"]);
+    commit(&w.a, "delete");
+    push(&w.a).unwrap();
+    fs::write(w.b.join("shared.yaml"), "name: kept\n").unwrap();
+    commit(&w.b, "modify");
+    pull(&w.b).unwrap();
+    let s = status(&w.b).unwrap();
+    assert!(s.files.iter().any(|f| f.conflicted));
+    // Theirs deleted the file: taking theirs removes it, taking mine keeps it.
+    resolve(&w.b, "shared.yaml", ConflictSide::Theirs).unwrap();
+    assert!(!w.b.join("shared.yaml").exists());
+    assert!(!status(&w.b).unwrap().files.iter().any(|f| f.conflicted));
+}
+
+#[test]
+fn diff_works_for_staged_files_in_an_empty_repo_and_reports_errors() {
+    let tmp = tempfile::tempdir().unwrap();
+    init(tmp.path()).unwrap();
+    fs::write(tmp.path().join("a.yaml"), "x: 1\n").unwrap();
+    git(tmp.path(), &["add", "a.yaml"]);
+    assert!(diff(tmp.path(), "a.yaml").unwrap().contains("+x: 1"));
+    assert!(diff(tmp.path(), "missing.yaml").is_err());
+}
+
+#[test]
+fn push_explains_a_missing_remote_and_a_detached_head() {
+    let tmp = tempfile::tempdir().unwrap();
+    init(tmp.path()).unwrap();
+    identify(tmp.path());
+    fs::write(tmp.path().join("a.yaml"), "x: 1\n").unwrap();
+    commit(tmp.path(), "first");
+    assert!(push(tmp.path()).unwrap_err().message.contains("no remote"));
+    git(tmp.path(), &["checkout", "--detach"]);
+    assert!(push(tmp.path()).unwrap_err().message.contains("branch"));
+}

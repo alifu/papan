@@ -60,6 +60,13 @@ pub fn collect_chains(
         path,
     } = location
     {
+        if !store.scripts_trusted(collection_id) {
+            // Scripts of a collection that came from outside do not run until trusted.
+            return Ok(Chains {
+                pre_request: Vec::new(),
+                post_response: Vec::new(),
+            });
+        }
         let collection = store.collection(collection_id)?;
         sources.push(("collection".into(), collection.read_collection_scripts()?));
         for folder in folders_of(path) {

@@ -26,6 +26,9 @@ pub struct GitStatus {
     pub behind: u32,
     pub merging: bool,
     pub files: Vec<GitFileChange>,
+    /// Set when the repository's own config names a program Git would run (a shared
+    /// folder can carry one). Nothing but `status` runs until it is removed.
+    pub unsafe_config: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
