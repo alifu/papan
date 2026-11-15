@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   draftProblem,
   endpointLabel,
+  newBucket,
+  newCallback,
+  newDataRoute,
+  newFallback,
   newMock,
   newRoute,
   normalizeMock,
@@ -171,5 +175,73 @@ describe("11d fields", () => {
     expect(mock.routes[1]?.responses[0]?.callbacks).toHaveLength(1);
     expect(mock.routes[1]).toMatchObject({ kind: "http", id_key: "id" });
     expect(endpointLabel(mock.routes[0]!)).toBe("DATA /users");
+  });
+});
+
+describe("draftProblem for 11d", () => {
+  const withData = (value: string) => {
+    const mock = newMock("m");
+    const bucket = { ...newBucket("users"), value };
+    return { mock: { ...mock, data: [bucket] }, bucket };
+  };
+
+  it("checks buckets, data routes and the fallback", () => {
+    const { mock, bucket } = withData("[]");
+    const route = { ...newDataRoute(bucket.id), endpoint: "users" };
+    expect(draftProblem({ ...mock, routes: [route] })).toBeNull();
+    expect(
+      draftProblem({ ...mock, routes: [{ ...route, endpoint: "/" }] }),
+    ).toMatch(/endpoint/);
+    expect(
+      draftProblem({ ...mock, routes: [{ ...route, bucket: "x" }] }),
+    ).toMatch(/bucket/);
+    expect(
+      draftProblem({ ...mock, routes: [{ ...route, id_key: " " }] }),
+    ).toMatch(/id field/);
+    const object = withData('{"a": 1}');
+    expect(
+      draftProblem({
+        ...object.mock,
+        routes: [{ ...route, bucket: object.bucket.id }],
+      }),
+    ).toMatch(/array/);
+    expect(draftProblem(withData("nope").mock)).toMatch(/not valid JSON/);
+    expect(
+      draftProblem({ ...mock, data: [bucket, { ...bucket, id: "other" }] }),
+    ).toMatch(/twice/);
+    expect(
+      draftProblem({ ...mock, fallback: { ...newFallback(), status: 99 } }),
+    ).toMatch(/fallback/i);
+    expect(draftProblem({ ...mock, fallback: newFallback() })).toBeNull();
+  });
+
+  it("checks callback URLs, delays and counts", () => {
+    const route = newRoute();
+    const mockWith = (callbacks: ReturnType<typeof newCallback>[]) => ({
+      ...newMock("m"),
+      routes: [
+        { ...route, responses: [{ ...route.responses[0]!, callbacks }] },
+      ],
+    });
+    expect(
+      draftProblem(mockWith([{ ...newCallback(), url: "https://a.test/x" }])),
+    ).toBeNull();
+    for (const url of ["", "ftp://a", "https://u:p@a.test"]) {
+      expect(draftProblem(mockWith([{ ...newCallback(), url }])), url).toMatch(
+        /callback/,
+      );
+    }
+    expect(
+      draftProblem(
+        mockWith([
+          { ...newCallback(), url: "https://a.test", delay_ms: 70_000 },
+        ]),
+      ),
+    ).toMatch(/delay/);
+    const six = Array.from({ length: 6 }, () => ({
+      ...newCallback(),
+      url: "https://a.test",
+    }));
+    expect(draftProblem(mockWith(six))).toMatch(/too many/);
   });
 });

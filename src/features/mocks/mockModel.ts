@@ -178,6 +178,38 @@ export const newRoute = (): MRoute => ({
   responses: [newResponse(true)],
 });
 
+export const MAX_CALLBACKS = 5;
+export const MAX_BUCKETS = 20;
+
+export const newCallback = (): Callback => ({
+  method: "post",
+  url: "",
+  headers: [],
+  body: "",
+  delay_ms: 0,
+});
+
+export const newBucket = (name: string): DataBucket => ({
+  id: newId(),
+  name,
+  value: "[]",
+});
+
+/** A route that serves a data bucket as a REST resource. */
+export const newDataRoute = (bucketId: string): MRoute => ({
+  ...newRoute(),
+  kind: "crud",
+  bucket: bucketId,
+  responses: [],
+});
+
+/** The answer for requests that match no route. */
+export const newFallback = (): MResponse => ({
+  ...newResponse(true),
+  status: 404,
+  body: '{"error": "Not found"}',
+});
+
 export const newRule = (): MRule => ({
   target: "query",
   modifier: "",
@@ -242,6 +274,72 @@ const isInsideCollection = (path: string): boolean =>
     path.split(/[/\\]/).some((part) => part === ".." || part.startsWith("."))
   );
 
+const HTTP_URL = /^https?:\/\/[^/\s@?#]+([/?#]|$)/i;
+
+const parsesAsJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+function bucketsProblem(buckets: readonly DataBucket[]): string | null {
+  if (buckets.length > MAX_BUCKETS) return "There are too many data buckets.";
+  for (const [n, bucket] of buckets.entries()) {
+    if (bucket.name.trim() === "") return `Data bucket ${n + 1} needs a name.`;
+    if (buckets.slice(0, n).some((b) => b.name === bucket.name))
+      return `Data bucket name “${bucket.name}” is used twice.`;
+    if (parsesAsJson(bucket.value ?? "[]") === undefined)
+      return `Data bucket “${bucket.name}” is not valid JSON.`;
+  }
+  return null;
+}
+
+function dataRouteProblem(
+  at: string,
+  route: MRoute,
+  buckets: readonly DataBucket[],
+): string | null {
+  if (route.endpoint.replace(/^\/+|\/+$/g, "") === "")
+    return `${at}: a data route needs an endpoint.`;
+  if (route.id_key.trim() === "") return `${at}: give the id field a name.`;
+  const bucket = buckets.find((b) => b.id === route.bucket);
+  if (!bucket) return `${at}: choose a data bucket.`;
+  if (!Array.isArray(parsesAsJson(bucket.value ?? "[]")))
+    return `${at}: the data bucket “${bucket.name}” must hold a JSON array.`;
+  return null;
+}
+
+function callbacksProblem(
+  at: string,
+  callbacks: readonly Callback[],
+): string | null {
+  if (callbacks.length > MAX_CALLBACKS) return `${at}: too many callbacks.`;
+  for (const callback of callbacks) {
+    if (!HTTP_URL.test(callback.url))
+      return `${at}: a callback needs an http or https URL without credentials.`;
+    if (
+      (callback.delay_ms ?? 0) < 0 ||
+      (callback.delay_ms ?? 0) > MAX_LATENCY_MS
+    )
+      return `${at}: a callback delay must be 0 to 60000 ms.`;
+  }
+  return null;
+}
+
+function responseProblem(at: string, response: MResponse): string | null {
+  if (
+    !Number.isInteger(response.status) ||
+    response.status < 100 ||
+    response.status > 599
+  )
+    return `${at}: the status must be 100 to 599.`;
+  if (!isInsideCollection(response.file))
+    return `${at}: the file must be a relative path inside the collection, with no hidden parts.`;
+  return callbacksProblem(at, response.callbacks);
+}
+
 /** What blocks saving, or null. Mirrors the checks Rust makes. */
 export function draftProblem(mock: MEnv): string | null {
   if (mock.name.trim() === "") return "Give the mock a name.";
@@ -249,10 +347,22 @@ export function draftProblem(mock: MEnv): string | null {
     return "The port must be 0 to 65535.";
   if (mock.latency_ms < 0 || mock.latency_ms > MAX_LATENCY_MS)
     return "Latency must be 0 to 60000 ms.";
-  if (mock.proxy !== "" && !/^https?:\/\/[^/\s@?#]+([/?#]|$)/i.test(mock.proxy))
+  if (mock.proxy !== "" && !HTTP_URL.test(mock.proxy))
     return "The proxy target must be an http or https URL without credentials.";
+  const bucketProblem = bucketsProblem(mock.data);
+  if (bucketProblem) return bucketProblem;
+  if (mock.fallback) {
+    const problem = responseProblem("The fallback", mock.fallback);
+    if (problem) return problem;
+  }
   for (const [n, route] of mock.routes.entries()) {
+    if (route.kind === "crud") {
+      const problem = dataRouteProblem(`Route ${n + 1}`, route, mock.data);
+      if (problem) return problem;
+    }
     for (const response of route.responses) {
+      const problem = callbacksProblem(`Route ${n + 1}`, response.callbacks);
+      if (problem) return problem;
       if (!isInsideCollection(response.file)) {
         return `Route ${n + 1}: the file must be a relative path inside the collection, with no hidden parts.`;
       }

@@ -230,3 +230,116 @@ describe("MockTab 11c", () => {
     ).toBeVisible();
   });
 });
+
+describe("MockTab data, fallback and callbacks", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    useToastStore.setState({ toasts: [] });
+    useMockStore.setState({ byCollection: { c1: [summary()] }, logs: {} });
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "t1",
+          kind: "mock",
+          title: "Users",
+          mock: { collectionId: "c1", file: "users.mock.yaml" },
+        },
+      ],
+    });
+    vi.mocked(api.readMock).mockResolvedValue(stored());
+    vi.mocked(api.mockLog).mockResolvedValue([]);
+    vi.mocked(api.saveMock).mockResolvedValue(summary());
+  });
+
+  it("adds a data route with its bucket and saves both", async () => {
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add data route" }),
+    );
+    expect(screen.getByLabelText("Data bucket")).toHaveDisplayValue("users");
+    await userEvent.type(screen.getByLabelText("Endpoint"), "people");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const sent = vi.mocked(api.saveMock).mock.calls[0]![2];
+    expect(sent.data).toHaveLength(1);
+    expect(sent.routes?.[1]).toMatchObject({
+      kind: "crud",
+      endpoint: "people",
+      id_key: "id",
+    });
+    expect(sent.routes?.[1]?.bucket).toBe(sent.data?.[0]?.id);
+  });
+
+  it("edits bucket JSON, flags invalid JSON and keeps used buckets", async () => {
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add data route" }),
+    );
+    await userEvent.click(screen.getByRole("tab", { name: /Data/ }));
+    expect(
+      screen.getByRole("button", { name: "Remove bucket 1" }),
+    ).toBeDisabled();
+    const json = screen.getByLabelText("Bucket 1 JSON");
+    await userEvent.clear(json);
+    await userEvent.type(json, "{{");
+    expect(screen.getByRole("alert")).toHaveTextContent(/Not valid JSON/);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(api.saveMock).not.toHaveBeenCalled();
+    expect(useToastStore.getState().toasts[0]?.message).toMatch(
+      /not valid JSON/,
+    );
+  });
+
+  it("adds a fallback response and saves it", async () => {
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add fallback response" }),
+    );
+    const status = screen.getByLabelText("Fallback status");
+    await userEvent.clear(status);
+    await userEvent.type(status, "418");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(vi.mocked(api.saveMock).mock.calls[0]![2].fallback).toMatchObject({
+      status: 418,
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove fallback" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Add fallback response" }),
+    ).toBeVisible();
+  });
+
+  it("adds a callback to a response and refuses a bad URL", async () => {
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add Response 1 callback" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Response 1 callback 1 URL"),
+      "ftp://nope",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(api.saveMock).not.toHaveBeenCalled();
+    expect(useToastStore.getState().toasts[0]?.message).toMatch(/callback/);
+    const url = screen.getByLabelText("Response 1 callback 1 URL");
+    await userEvent.clear(url);
+    await userEvent.type(url, "https://hooks.example.com/x");
+    await userEvent.type(
+      screen.getByLabelText("Response 1 callback 1 body"),
+      "hi",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(
+      vi.mocked(api.saveMock).mock.calls[0]![2].routes?.[0]?.responses?.[0]
+        ?.callbacks?.[0],
+    ).toMatchObject({
+      method: "post",
+      url: "https://hooks.example.com/x",
+      body: "hi",
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Response 1 callback 1" }),
+    );
+    expect(screen.queryByLabelText("Response 1 callback 1 URL")).toBeNull();
+  });
+});

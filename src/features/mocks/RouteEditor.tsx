@@ -1,5 +1,6 @@
-import type { ResponseMode } from "../../ipc/bindings";
+import type { DataBucket, ResponseMode } from "../../ipc/bindings";
 import { Button } from "../../ui/Button";
+import { CallbacksEditor } from "./CallbacksEditor";
 import { HeadersEditor } from "./HeadersEditor";
 import {
   METHODS,
@@ -17,6 +18,8 @@ export const MAX_RESPONSES = 50;
 
 export interface RouteEditorProps {
   readonly route: MRoute;
+  /** The mock's data buckets, for data routes. */
+  readonly buckets: readonly DataBucket[];
   readonly onChange: (route: MRoute) => void;
 }
 
@@ -117,20 +120,19 @@ function ResponseEditor({
         />
       </label>
       <RulesEditor response={response} onChange={set} />
+      <CallbacksEditor
+        label={`Response ${n}`}
+        callbacks={response.callbacks}
+        onChange={(callbacks) => set({ ...response, callbacks })}
+      />
     </fieldset>
   );
 }
 
-export function RouteEditor({ route, onChange }: RouteEditorProps) {
+export function RouteEditor({ route, buckets, onChange }: RouteEditorProps) {
   if (route.kind === "crud") {
     return (
-      <div className="mock-route">
-        <p className="empty-text">
-          Data route: serves the data bucket “{route.bucket}” at /
-          {route.endpoint} and /{route.endpoint}/:id. Edit it in the mock’s
-          .mock.yaml file for now.
-        </p>
-      </div>
+      <DataRouteEditor route={route} buckets={buckets} onChange={onChange} />
     );
   }
   return (
@@ -199,6 +201,58 @@ export function RouteEditor({ route, onChange }: RouteEditorProps) {
           })
         }
       />
+    </div>
+  );
+}
+
+function DataRouteEditor({ route, buckets, onChange }: RouteEditorProps) {
+  return (
+    <div className="mock-route">
+      <p className="empty-text">
+        A data route serves a bucket as a REST resource: GET, POST at the
+        endpoint, and GET, PUT, PATCH, DELETE at the endpoint followed by an
+        item id.
+      </p>
+      <div className="mock-row">
+        <input
+          aria-label="Endpoint"
+          value={route.endpoint}
+          placeholder="users"
+          onChange={(e) => onChange({ ...route, endpoint: e.target.value })}
+        />
+        <label>
+          Data bucket
+          <select
+            aria-label="Data bucket"
+            value={route.bucket}
+            onChange={(e) => onChange({ ...route, bucket: e.target.value })}
+          >
+            <option value="">Choose…</option>
+            {buckets.map((bucket) => (
+              <option key={bucket.id} value={bucket.id}>
+                {bucket.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Id field
+          <input
+            aria-label="Id field"
+            value={route.id_key}
+            onChange={(e) => onChange({ ...route, id_key: e.target.value })}
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            aria-label="Route enabled"
+            checked={route.enabled}
+            onChange={(e) => onChange({ ...route, enabled: e.target.checked })}
+          />
+          Enabled
+        </label>
+      </div>
     </div>
   );
 }

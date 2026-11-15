@@ -5,12 +5,16 @@ import { Tabs } from "../../ui/Tabs";
 import { reportError, showToast } from "../../ui/toastStore";
 import { copyText } from "../response/clipboard";
 import * as api from "./api";
+import { DataEditor } from "./DataEditor";
+import { FallbackEditor } from "./FallbackEditor";
 import { MockLog } from "./MockLog";
 import { MockSettings } from "./MockSettings";
 import {
   draftProblem,
   endpointLabel,
+  newDataRoute,
   newRoute,
+  newBucket,
   removeAt,
   replaceAt,
   routeFromRequest,
@@ -113,6 +117,17 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
     setSelected(draft.routes.length);
   };
 
+  const addDataRoute = () => {
+    const bucket = draft.data[0] ?? newBucket("users");
+    const data = draft.data.length === 0 ? [bucket] : draft.data;
+    setDraft({
+      ...draft,
+      data,
+      routes: [...draft.routes, newDataRoute(bucket.id)],
+    });
+    setSelected(draft.routes.length);
+  };
+
   const removeRoute = () => {
     setDraft({ ...draft, routes: [...removeAt(draft.routes, selected)] });
     setSelected(Math.max(0, selected - 1));
@@ -146,12 +161,25 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
         label="Mock sections"
         tabs={[
           { id: "design", label: "Routes" },
+          { id: "data", label: "Data", count: draft.data.length },
           { id: "log", label: "Log", count: entries.length },
         ]}
         selectedId={view}
         onSelect={setView}
       >
-        {view === "log" ? (
+        {view === "data" ? (
+          <DataEditor
+            buckets={draft.data}
+            inUse={
+              new Set(
+                draft.routes
+                  .filter((r) => r.kind === "crud")
+                  .map((r) => r.bucket),
+              )
+            }
+            onChange={(data) => setDraft({ ...draft, data })}
+          />
+        ) : view === "log" ? (
           <MockLog
             entries={entries}
             onClear={() => void store.clearLog(collectionId, file)}
@@ -192,16 +220,31 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
                 <li>
                   <Button icon="plus" label="Add route" onClick={addRoute} />
                 </li>
+                <li>
+                  <Button
+                    icon="plus"
+                    label="Add data route"
+                    onClick={addDataRoute}
+                  />
+                </li>
               </ul>
               {route ? (
                 <div className="mock-route-pane">
-                  <RouteEditor route={route} onChange={setRoute} />
+                  <RouteEditor
+                    route={route}
+                    buckets={draft.data}
+                    onChange={setRoute}
+                  />
                   <Button label="Delete route" onClick={removeRoute} />
                 </div>
               ) : (
                 <p className="empty-text">Add a route to start.</p>
               )}
             </div>
+            <FallbackEditor
+              fallback={draft.fallback}
+              onChange={(fallback) => setDraft({ ...draft, fallback })}
+            />
           </>
         )}
       </Tabs>
