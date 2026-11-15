@@ -1,5 +1,6 @@
 import { CollectionsPanel } from "../features/collections/CollectionsPanel";
 import { HistoryPanel } from "../features/history/HistoryPanel";
+import { MocksPanel } from "../features/mocks/MocksPanel";
 import { ScratchPanel } from "../features/scratch/ScratchPanel";
 import { WebhooksPanel } from "../features/webhooks/WebhooksPanel";
 import { Button } from "../ui/Button";
@@ -11,6 +12,7 @@ function renderSection(section: NavSection, emptyText: string) {
   if (section === "collections") return <CollectionsPanel />;
   if (section === "scratch") return <ScratchPanel />;
   if (section === "webhooks") return <WebhooksPanel />;
+  if (section === "mocks") return <MocksPanel />;
   if (section === "history") return <HistoryPanel />;
   return <p className="empty-text">{emptyText}</p>;
 }
@@ -24,7 +26,11 @@ export function Sidebar() {
   if (collapsed) {
     return (
       <nav aria-label="Navigation" className="sidebar sidebar-rail">
-        <Button icon="chevron-right" aria-label="Expand sidebar" onClick={toggleSidebar} />
+        <Button
+          icon="chevron-right"
+          aria-label="Expand sidebar"
+          onClick={toggleSidebar}
+        />
       </nav>
     );
   }
@@ -35,7 +41,10 @@ export function Sidebar() {
         const meta = NAV_SECTION_META[section];
         const expanded = section === activeSection;
         return (
-          <section key={section} className={expanded ? "accordion accordion-open" : "accordion"}>
+          <section
+            key={section}
+            className={expanded ? "accordion accordion-open" : "accordion"}
+          >
             <div className="accordion-header">
               <h2>
                 <button
@@ -50,7 +59,11 @@ export function Sidebar() {
                 </button>
               </h2>
               {index === 0 ? (
-                <Button icon="chevron-left" aria-label="Collapse sidebar" onClick={toggleSidebar} />
+                <Button
+                  icon="chevron-left"
+                  aria-label="Collapse sidebar"
+                  onClick={toggleSidebar}
+                />
               ) : null}
             </div>
             {expanded ? (

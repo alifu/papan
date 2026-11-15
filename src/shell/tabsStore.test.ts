@@ -7,7 +7,9 @@ import { useScratchStore } from "../features/scratch/scratchStore";
 import { WELCOME_TAB, useTabsStore } from "./tabsStore";
 
 vi.mock("../features/scratch/api", () => ({
-  createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
+  createScratch: vi
+    .fn()
+    .mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
 }));
 
 const state = () => useTabsStore.getState();
@@ -47,7 +49,11 @@ describe("tabsStore", () => {
   it("newTab creates a scratch request and opens it", async () => {
     await state().newTab();
 
-    expect(state().tabs[1]).toMatchObject({ kind: "request", title: "Untitled", location: scratchLocation("s1") });
+    expect(state().tabs[1]).toMatchObject({
+      kind: "request",
+      title: "Untitled",
+      location: scratchLocation("s1"),
+    });
     expect(state().activeTabId).toBe("tab-1");
   });
 
@@ -55,7 +61,10 @@ describe("tabsStore", () => {
     state().openRequest(scratchLocation("s1"), "Old");
     state().retarget(scratchLocation("s1"), loc("x.http.yaml"), "New");
 
-    expect(state().tabs[1]).toMatchObject({ title: "New", location: loc("x.http.yaml") });
+    expect(state().tabs[1]).toMatchObject({
+      title: "New",
+      location: loc("x.http.yaml"),
+    });
   });
 
   it("retarget rewrites tabs below a folder and keeps their titles", () => {
@@ -63,14 +72,20 @@ describe("tabsStore", () => {
     state().openRequest(loc("other.http.yaml"), "Other");
     state().retarget(loc("auth"), loc("sec"), "ignored");
 
-    expect(state().tabs[1]).toMatchObject({ title: "Login", location: loc("sec/login.http.yaml") });
+    expect(state().tabs[1]).toMatchObject({
+      title: "Login",
+      location: loc("sec/login.http.yaml"),
+    });
     expect(state().tabs[2]).toMatchObject({ location: loc("other.http.yaml") });
   });
 
   it("retarget keeps the title when none is given", () => {
     state().openRequest(loc("a.http.yaml"), "A");
     state().retarget(loc("a.http.yaml"), loc("b.http.yaml"));
-    expect(state().tabs[1]).toMatchObject({ title: "A", location: loc("b.http.yaml") });
+    expect(state().tabs[1]).toMatchObject({
+      title: "A",
+      location: loc("b.http.yaml"),
+    });
   });
 
   it("closeByLocation closes the tab and tabs below a folder, and fixes the active tab", () => {
@@ -139,7 +154,12 @@ describe("tabsStore dirty close", () => {
   const dirtyTab = () => {
     const id = useTabsStore.getState().openRequest(loc("a.http.yaml"), "A");
     useRequestStore.setState({
-      byTab: { [id]: { ...useRequestStore.getState().byTab[id], draft: {} as never } as never },
+      byTab: {
+        [id]: {
+          ...useRequestStore.getState().byTab[id],
+          draft: {} as never,
+        } as never,
+      },
     });
     return id;
   };
@@ -165,24 +185,34 @@ describe("tabsStore dirty close", () => {
   it("openWebhook focuses an existing listener tab; retitle and close act on it", () => {
     const first = useTabsStore.getState().openWebhook("w1", "Hook");
     expect(useTabsStore.getState().openWebhook("w1", "Hook")).toBe(first);
-    expect(useTabsStore.getState().tabs.filter((t) => t.kind === "webhook")).toHaveLength(1);
+    expect(
+      useTabsStore.getState().tabs.filter((t) => t.kind === "webhook"),
+    ).toHaveLength(1);
 
     useTabsStore.getState().retitleWebhook("w1", "Renamed");
-    expect(useTabsStore.getState().tabs.find((t) => t.id === first)?.title).toBe("Renamed");
+    expect(
+      useTabsStore.getState().tabs.find((t) => t.id === first)?.title,
+    ).toBe("Renamed");
 
     useTabsStore.getState().closeWebhook("w1");
-    expect(useTabsStore.getState().tabs.some((t) => t.webhookId === "w1")).toBe(false);
+    expect(useTabsStore.getState().tabs.some((t) => t.webhookId === "w1")).toBe(
+      false,
+    );
   });
 });
 
 describe("tabsStore ws release", () => {
   it("closing a tab releases its websocket connection, by tab and by location", () => {
-    const release = vi.spyOn(useWsStore.getState(), "release").mockResolvedValue();
+    const release = vi
+      .spyOn(useWsStore.getState(), "release")
+      .mockResolvedValue();
     useTabsStore.setState(useTabsStore.getInitialState(), true);
     const id = useTabsStore.getState().openRequest(scratchLocation("w1"), "W1");
     useTabsStore.getState().discardTab(id);
     expect(release).toHaveBeenCalledWith(id);
-    const id2 = useTabsStore.getState().openRequest(scratchLocation("w2"), "W2");
+    const id2 = useTabsStore
+      .getState()
+      .openRequest(scratchLocation("w2"), "W2");
     useTabsStore.getState().closeByLocation(scratchLocation("w2"));
     expect(release).toHaveBeenCalledWith(id2);
     release.mockRestore();
@@ -191,12 +221,16 @@ describe("tabsStore ws release", () => {
 
 describe("tabsStore grpc release", () => {
   it("closing a tab releases its gRPC call, by tab and by location", () => {
-    const release = vi.spyOn(useGrpcStore.getState(), "release").mockResolvedValue();
+    const release = vi
+      .spyOn(useGrpcStore.getState(), "release")
+      .mockResolvedValue();
     useTabsStore.setState(useTabsStore.getInitialState(), true);
     const id = useTabsStore.getState().openRequest(scratchLocation("g1"), "G1");
     useTabsStore.getState().discardTab(id);
     expect(release).toHaveBeenCalledWith(id);
-    const id2 = useTabsStore.getState().openRequest(scratchLocation("g2"), "G2");
+    const id2 = useTabsStore
+      .getState()
+      .openRequest(scratchLocation("g2"), "G2");
     useTabsStore.getState().closeByLocation(scratchLocation("g2"));
     expect(release).toHaveBeenCalledWith(id2);
     release.mockRestore();

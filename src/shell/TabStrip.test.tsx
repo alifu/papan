@@ -6,10 +6,13 @@ import { TabStrip } from "./TabStrip";
 import { useTabsStore } from "./tabsStore";
 
 vi.mock("../features/scratch/api", () => ({
-  createScratch: vi.fn().mockResolvedValue({ id: "s2", name: "Untitled 1", method: "GET" }),
+  createScratch: vi
+    .fn()
+    .mockResolvedValue({ id: "s2", name: "Untitled 1", method: "GET" }),
 }));
 
-const openUntitled = () => useTabsStore.getState().openRequest(scratchLocation("s1"), "Untitled 1");
+const openUntitled = () =>
+  useTabsStore.getState().openRequest(scratchLocation("s1"), "Untitled 1");
 
 describe("TabStrip", () => {
   beforeEach(() => {
@@ -20,8 +23,14 @@ describe("TabStrip", () => {
     openUntitled();
     render(<TabStrip />);
 
-    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByRole("tab", { name: "Untitled 1" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: "Untitled 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("activates on click", async () => {
@@ -47,13 +56,17 @@ describe("TabStrip", () => {
 
   it("closes a tab with its close button", async () => {
     render(<TabStrip />);
-    await userEvent.click(screen.getByRole("button", { name: "Close Welcome" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close Welcome" }),
+    );
     expect(useTabsStore.getState().tabs).toHaveLength(0);
   });
 
   it("adds a tab with the new tab button", async () => {
     render(<TabStrip />);
     await userEvent.click(screen.getByRole("button", { name: "New tab" }));
-    expect(await screen.findByRole("tab", { name: "Untitled 1" })).toBeVisible();
+    expect(
+      await screen.findByRole("tab", { name: "Untitled 1" }),
+    ).toBeVisible();
   });
 });

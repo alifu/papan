@@ -14,8 +14,12 @@ export function TabStrip() {
   const newTab = useTabsStore((s) => s.newTab);
   const byTab = useRequestStore((s) => s.byTab);
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    const offset =
+      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     if (offset === 0) return;
     event.preventDefault();
     const target = tabs[(index + offset + tabs.length) % tabs.length];

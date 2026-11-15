@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useCollectionsStore } from "../features/collections/collectionsStore";
 import { useEnvStore } from "../features/environments/envStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
+import { useMockStore } from "../features/mocks/mockStore";
 import { useWebhookStore } from "../features/webhooks/webhookStore";
 import { useNetworkStore } from "../features/network/networkStore";
 import { ToastHost } from "../ui/Toast";
@@ -31,10 +32,12 @@ export function AppShell() {
     void useWebhookStore.getState().load();
     const unlistenEnv = useEnvStore.getState().subscribe();
     const unlistenWebhooks = useWebhookStore.getState().subscribe();
+    const unlistenMocks = useMockStore.getState().subscribe();
     return () => {
       void unlisten.then((fn) => fn());
       void unlistenEnv.then((fn) => fn());
       void unlistenWebhooks.then((fn) => fn());
+      void unlistenMocks.then((fn) => fn());
     };
   }, []);
   const width = useLayoutStore((s) => s.sidebarWidth);

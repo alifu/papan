@@ -19,12 +19,20 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const headers = screen.getAllByRole("button", { expanded: true });
-    expect(screen.getByRole("button", { name: "Collections" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Collections" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     expect(headers).toHaveLength(1);
     for (const name of ["Scratch", "Mocks", "Journeys"]) {
-      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByRole("button", { name })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
     }
-    expect(screen.getByRole("region", { name: "Collections" })).toHaveTextContent("No collections yet.");
+    expect(
+      screen.getByRole("region", { name: "Collections" }),
+    ).toHaveTextContent("No collections yet.");
     expect(screen.getAllByRole("region")).toHaveLength(1);
   });
 
@@ -32,17 +40,23 @@ describe("Sidebar", () => {
     render(<Sidebar />);
     await userEvent.click(screen.getByRole("button", { name: "Mocks" }));
 
-    expect(screen.getByRole("region", { name: "Mocks" })).toHaveTextContent("No mock servers yet.");
+    expect(screen.getByRole("region", { name: "Mocks" })).toHaveTextContent(
+      "No mock servers yet.",
+    );
     expect(screen.queryByText("No collections yet.")).toBeNull();
     expect(useLayoutStore.getState().activeSection).toBe("mocks");
   });
 
   it("collapses to a rail and expands again", async () => {
     render(<Sidebar />);
-    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Collapse sidebar" }),
+    );
 
     expect(screen.queryByRole("button", { name: "Collections" })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Expand sidebar" }),
+    );
     expect(screen.getByRole("button", { name: "Collections" })).toBeVisible();
   });
 
@@ -50,7 +64,9 @@ describe("Sidebar", () => {
     render(<Sidebar />);
     await userEvent.click(screen.getByRole("button", { name: "Webhooks" }));
 
-    expect(screen.getByRole("region", { name: "Webhooks" })).toHaveTextContent("No webhook listeners yet.");
+    expect(screen.getByRole("region", { name: "Webhooks" })).toHaveTextContent(
+      "No webhook listeners yet.",
+    );
     expect(useLayoutStore.getState().activeSection).toBe("webhooks");
   });
 });

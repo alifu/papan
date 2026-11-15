@@ -8,7 +8,9 @@ import { useTabsStore } from "./tabsStore";
 import { Toolbar } from "./Toolbar";
 
 vi.mock("../features/scratch/api", () => ({
-  createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
+  createScratch: vi
+    .fn()
+    .mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
 }));
 
 describe("Toolbar", () => {
@@ -26,7 +28,9 @@ describe("Toolbar", () => {
   it("New Tab adds a tab", async () => {
     render(<Toolbar />);
     await userEvent.click(screen.getByRole("button", { name: "New Tab" }));
-    await vi.waitFor(() => expect(useTabsStore.getState().tabs).toHaveLength(2));
+    await vi.waitFor(() =>
+      expect(useTabsStore.getState().tabs).toHaveLength(2),
+    );
   });
 
   it("Toggle sidebar flips the collapsed state and aria-pressed", async () => {

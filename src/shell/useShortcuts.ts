@@ -23,9 +23,13 @@ const SHIFT_ACTIONS: Readonly<Record<string, () => void>> = {
 function handleKeyDown(event: KeyboardEvent): void {
   if (event.altKey) return;
   const mac = isMac();
-  const modPressed = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  const modPressed = mac
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey;
   if (!modPressed) return;
-  const action = (event.shiftKey ? SHIFT_ACTIONS : ACTIONS)[event.key.toLowerCase()];
+  const action = (event.shiftKey ? SHIFT_ACTIONS : ACTIONS)[
+    event.key.toLowerCase()
+  ];
   if (!action) return;
   event.preventDefault();
   action();

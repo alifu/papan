@@ -1,3 +1,4 @@
+import { MockTab } from "../features/mocks/MockTab";
 import { RequestEditor } from "../features/request/RequestEditor";
 import { WebhookTab } from "../features/webhooks/WebhookTab";
 import { Button } from "../ui/Button";
@@ -23,7 +24,18 @@ function Welcome() {
 }
 
 function renderTab(tab: Tab) {
-  if (tab.kind === "webhook" && tab.webhookId) return <WebhookTab key={tab.id} webhookId={tab.webhookId} />;
+  if (tab.kind === "mock" && tab.mock) {
+    return (
+      <MockTab
+        key={tab.id}
+        tabId={tab.id}
+        collectionId={tab.mock.collectionId}
+        file={tab.mock.file}
+      />
+    );
+  }
+  if (tab.kind === "webhook" && tab.webhookId)
+    return <WebhookTab key={tab.id} webhookId={tab.webhookId} />;
   if (tab.kind === "welcome" || !tab.location) return <Welcome />;
   return <RequestEditor key={tab.id} tabId={tab.id} location={tab.location} />;
 }
@@ -36,7 +48,12 @@ export function TabPanel() {
 
   if (!active) {
     return (
-      <div role="tabpanel" id={TAB_PANEL_ID} aria-label="No open tabs" className="tabpanel">
+      <div
+        role="tabpanel"
+        id={TAB_PANEL_ID}
+        aria-label="No open tabs"
+        className="tabpanel"
+      >
         <p className="empty-text">No open tabs.</p>
         <Button icon="plus" label="New Tab" onClick={() => void newTab()} />
       </div>
@@ -44,7 +61,12 @@ export function TabPanel() {
   }
 
   return (
-    <div role="tabpanel" id={TAB_PANEL_ID} aria-labelledby={tabButtonId(active.id)} className="tabpanel">
+    <div
+      role="tabpanel"
+      id={TAB_PANEL_ID}
+      aria-labelledby={tabButtonId(active.id)}
+      className="tabpanel"
+    >
       {renderTab(active)}
       <DiscardDialog />
     </div>

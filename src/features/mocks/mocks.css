@@ -1,0 +1,88 @@
+.mocks-panel section + section {
+  margin-top: 8px;
+}
+
+.mock-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 8px;
+  overflow: auto;
+}
+
+.mock-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mock-head h1 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mock-url {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  user-select: all;
+}
+
+.mock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.mock-row input:not([type="checkbox"]):not([type="radio"]) {
+  min-width: 80px;
+}
+
+.mock-routes {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+
+.mock-route-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mock-route-item {
+  width: 100%;
+  text-align: left;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.mock-route-active {
+  font-weight: bold;
+}
+
+.mock-response,
+.mock-rules,
+.mock-settings {
+  margin: 6px 0;
+}
+
+.mock-response textarea {
+  display: block;
+  width: 100%;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.mock-log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.mock-log-detail pre {
+  overflow: auto;
+}

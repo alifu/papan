@@ -1,6 +1,13 @@
 import { create } from "zustand";
 
-export type ShellDialog = "network" | "cookies" | "import-curl" | "import-postman" | "export-postman" | "git" | "clone-git";
+export type ShellDialog =
+  | "network"
+  | "cookies"
+  | "import-curl"
+  | "import-postman"
+  | "export-postman"
+  | "git"
+  | "clone-git";
 
 interface DialogsState {
   readonly open: ShellDialog | null;
@@ -14,6 +21,7 @@ interface DialogsState {
 export const useDialogsStore = create<DialogsState>()((set) => ({
   open: null,
   collectionId: null,
-  show: (dialog, collectionId) => set({ open: dialog, collectionId: collectionId ?? null }),
+  show: (dialog, collectionId) =>
+    set({ open: dialog, collectionId: collectionId ?? null }),
   close: () => set({ open: null, collectionId: null }),
 }));

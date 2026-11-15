@@ -174,6 +174,7 @@ export async function mockTauri(page: Page): Promise<void> {
     const scratchList = () => scratch.map(({ id, name, method }) => ({ id, name, method }));
 
     const handlers: Record<string, (a: Args) => unknown> = {
+      list_mocks: () => [],
       app_info: () => ({ name: "Papan", version: "0.0.0-e2e" }),
       list_collections: () => collections.map(tree),
       create_collection: (a) => {

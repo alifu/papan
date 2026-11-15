@@ -23,26 +23,62 @@ export function MenuBar() {
         label="File"
         items={[
           { label: "New Tab", shortcut: shortcutLabel("N"), onSelect: newTab },
-          { label: "Save", shortcut: shortcutLabel("S"), onSelect: saveActiveRequest },
+          {
+            label: "Save",
+            shortcut: shortcutLabel("S"),
+            onSelect: saveActiveRequest,
+          },
           { label: "Import cURL…", onSelect: () => showDialog("import-curl") },
-          { label: "Import Postman…", onSelect: () => showDialog("import-postman") },
-          { label: "Export to Postman…", onSelect: () => showDialog("export-postman") },
-          { label: "Clone Repository…", onSelect: () => showDialog("clone-git") },
-          { label: "Close Tab", shortcut: shortcutLabel("W"), onSelect: closeActiveTab },
+          {
+            label: "Import Postman…",
+            onSelect: () => showDialog("import-postman"),
+          },
+          {
+            label: "Export to Postman…",
+            onSelect: () => showDialog("export-postman"),
+          },
+          {
+            label: "Clone Repository…",
+            onSelect: () => showDialog("clone-git"),
+          },
+          {
+            label: "Close Tab",
+            shortcut: shortcutLabel("W"),
+            onSelect: closeActiveTab,
+          },
         ]}
       />
-      <Menu label="Edit" items={[{ label: "Network settings…", onSelect: () => showDialog("network") }]} />
+      <Menu
+        label="Edit"
+        items={[
+          { label: "Network settings…", onSelect: () => showDialog("network") },
+        ]}
+      />
       <Menu
         label="Request"
         items={[
-          { label: "Send", shortcut: shortcutLabel("Enter"), onSelect: sendActiveRequest },
-          { label: "Copy as cURL", shortcut: shortcutLabel("Shift+C"), onSelect: () => void copyAsCurl() },
+          {
+            label: "Send",
+            shortcut: shortcutLabel("Enter"),
+            onSelect: sendActiveRequest,
+          },
+          {
+            label: "Copy as cURL",
+            shortcut: shortcutLabel("Shift+C"),
+            onSelect: () => void copyAsCurl(),
+          },
           { label: "Manage cookies…", onSelect: () => showDialog("cookies") },
         ]}
       />
       <Menu
         label="View"
-        items={[{ label: "Toggle Sidebar", shortcut: shortcutLabel("B"), onSelect: toggleSidebar }]}
+        items={[
+          {
+            label: "Toggle Sidebar",
+            shortcut: shortcutLabel("B"),
+            onSelect: toggleSidebar,
+          },
+        ]}
       />
     </div>
   );

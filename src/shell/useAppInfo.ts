@@ -15,7 +15,10 @@ export function useAppInfo(): AppInfoState {
     commands
       .appInfo()
       .then((info) => active && setState({ status: "ready", info }))
-      .catch((err: unknown) => active && setState({ status: "error", message: toUserMessage(err) }));
+      .catch(
+        (err: unknown) =>
+          active && setState({ status: "error", message: toUserMessage(err) }),
+      );
     return () => {
       active = false;
     };

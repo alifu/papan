@@ -10,7 +10,7 @@ import { useGrpcStore } from "../features/grpc/grpcStore";
 import { useWsStore } from "../features/ws/wsStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 
-export type TabKind = "welcome" | "request" | "webhook";
+export type TabKind = "welcome" | "request" | "webhook" | "mock";
 export interface Tab {
   readonly id: string;
   readonly kind: TabKind;
@@ -18,9 +18,15 @@ export interface Tab {
   readonly location?: RequestLocation;
   /** Set on `webhook` tabs: the listener the tab shows. */
   readonly webhookId?: string;
+  /** Set on `mock` tabs: the mock file the tab designs. */
+  readonly mock?: { readonly collectionId: string; readonly file: string };
 }
 
-export const WELCOME_TAB: Tab = { id: "welcome", kind: "welcome", title: "Welcome" };
+export const WELCOME_TAB: Tab = {
+  id: "welcome",
+  kind: "welcome",
+  title: "Welcome",
+};
 
 export interface TabsState {
   readonly tabs: readonly Tab[];
@@ -32,12 +38,22 @@ export interface TabsState {
   openRequest: (location: RequestLocation, title: string) => string;
   /** Focuses the tab for the webhook listener or adds one. Returns its id. */
   openWebhook: (webhookId: string, title: string) => string;
+  /** Focuses the tab for the mock file or adds one. Returns its id. */
+  openMock: (collectionId: string, file: string, title: string) => string;
+  /** Renames a mock tab. */
+  retitleMock: (tabId: string, title: string) => void;
+  /** Closes the tabs of a mock (it was deleted). */
+  closeMock: (collectionId: string, file: string) => void;
   /** Renames the tab of a webhook listener. */
   retitleWebhook: (webhookId: string, title: string) => void;
   /** Closes the tab of a webhook listener (it has no draft to discard). */
   closeWebhook: (webhookId: string) => void;
   /** Points tabs at `from` (or below it) to the same place under `to`. */
-  retarget: (from: RequestLocation, to: RequestLocation, title?: string) => void;
+  retarget: (
+    from: RequestLocation,
+    to: RequestLocation,
+    title?: string,
+  ) => void;
   /** Closes tabs at `location` or below it. */
   closeByLocation: (location: RequestLocation) => void;
   /** Closes the tab; a dirty tab first asks via `pendingCloseId`. */
@@ -55,7 +71,8 @@ function activeAfterRemoval(
   after: readonly Tab[],
   activeTabId: string | null,
 ): string | null {
-  if (activeTabId !== null && after.some((t) => t.id === activeTabId)) return activeTabId;
+  if (activeTabId !== null && after.some((t) => t.id === activeTabId))
+    return activeTabId;
   const index = before.findIndex((t) => t.id === activeTabId);
   const neighbour = after[Math.max(index, 0)] ?? after[after.length - 1];
   return neighbour?.id ?? null;
@@ -71,13 +88,24 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
   },
   openRequest: (location, title) => {
     const { tabs, nextTabNumber } = get();
-    const existing = tabs.find((t) => t.location && sameLocation(t.location, location));
+    const existing = tabs.find(
+      (t) => t.location && sameLocation(t.location, location),
+    );
     if (existing) {
       set({ activeTabId: existing.id });
       return existing.id;
     }
-    const tab: Tab = { id: `tab-${nextTabNumber}`, kind: "request", title, location };
-    set({ tabs: [...tabs, tab], activeTabId: tab.id, nextTabNumber: nextTabNumber + 1 });
+    const tab: Tab = {
+      id: `tab-${nextTabNumber}`,
+      kind: "request",
+      title,
+      location,
+    };
+    set({
+      tabs: [...tabs, tab],
+      activeTabId: tab.id,
+      nextTabNumber: nextTabNumber + 1,
+    });
     return tab.id;
   },
   openWebhook: (webhookId, title) => {
@@ -87,12 +115,58 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
       set({ activeTabId: existing.id });
       return existing.id;
     }
-    const tab: Tab = { id: `tab-${nextTabNumber}`, kind: "webhook", title, webhookId };
-    set({ tabs: [...tabs, tab], activeTabId: tab.id, nextTabNumber: nextTabNumber + 1 });
+    const tab: Tab = {
+      id: `tab-${nextTabNumber}`,
+      kind: "webhook",
+      title,
+      webhookId,
+    };
+    set({
+      tabs: [...tabs, tab],
+      activeTabId: tab.id,
+      nextTabNumber: nextTabNumber + 1,
+    });
     return tab.id;
   },
+  openMock: (collectionId, file, title) => {
+    const { tabs, nextTabNumber } = get();
+    const existing = tabs.find(
+      (t) => t.mock?.collectionId === collectionId && t.mock.file === file,
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const tab: Tab = {
+      id: `tab-${nextTabNumber}`,
+      kind: "mock",
+      title,
+      mock: { collectionId, file },
+    };
+    set({
+      tabs: [...tabs, tab],
+      activeTabId: tab.id,
+      nextTabNumber: nextTabNumber + 1,
+    });
+    return tab.id;
+  },
+  retitleMock: (tabId, title) => {
+    set({
+      tabs: get().tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
+    });
+  },
+  closeMock: (collectionId, file) => {
+    const tab = get().tabs.find(
+      (t) => t.mock?.collectionId === collectionId && t.mock.file === file,
+    );
+    if (tab) get().discardTab(tab.id);
+  },
   retitleWebhook: (webhookId, title) => {
-    set({ tabs: get().tabs.map((t) => (t.webhookId === webhookId ? { ...t, title } : t)) });
+    set({
+      tabs: get().tabs.map((t) =>
+        t.webhookId === webhookId ? { ...t, title } : t,
+      ),
+    });
   },
   closeWebhook: (webhookId) => {
     const tab = get().tabs.find((t) => t.webhookId === webhookId);
@@ -103,21 +177,33 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
       tabs: get().tabs.map((tab) => {
         const next = tab.location ? relocate(from, to, tab.location) : null;
         if (!next) return tab;
-        const exact = tab.location !== undefined && sameLocation(tab.location, from);
-        return { ...tab, location: next, title: exact && title !== undefined ? title : tab.title };
+        const exact =
+          tab.location !== undefined && sameLocation(tab.location, from);
+        return {
+          ...tab,
+          location: next,
+          title: exact && title !== undefined ? title : tab.title,
+        };
       }),
     });
   },
   closeByLocation: (location) => {
     const { tabs, activeTabId } = get();
-    const remaining = tabs.filter((t) => !(t.location && locationWithin(location, t.location)));
+    const remaining = tabs.filter(
+      (t) => !(t.location && locationWithin(location, t.location)),
+    );
     if (remaining.length === tabs.length) return;
-    tabs.filter((t) => !remaining.includes(t)).forEach((t) => {
-      useRequestStore.getState().drop(t.id);
-      void useWsStore.getState().release(t.id);
-      void useGrpcStore.getState().release(t.id);
+    tabs
+      .filter((t) => !remaining.includes(t))
+      .forEach((t) => {
+        useRequestStore.getState().drop(t.id);
+        void useWsStore.getState().release(t.id);
+        void useGrpcStore.getState().release(t.id);
+      });
+    set({
+      tabs: remaining,
+      activeTabId: activeAfterRemoval(tabs, remaining, activeTabId),
     });
-    set({ tabs: remaining, activeTabId: activeAfterRemoval(tabs, remaining, activeTabId) });
   },
   closeTab: (id) => {
     if (!get().tabs.some((t) => t.id === id)) return;

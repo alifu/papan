@@ -4,13 +4,23 @@ import { useDialogsStore } from "./dialogsStore";
 import { ShellDialogs } from "./ShellDialogs";
 import { useTabsStore } from "./tabsStore";
 
-vi.mock("../features/network/NetworkDialog", () => ({ NetworkDialog: () => <div>network dialog</div> }));
-vi.mock("../features/curl/ImportCurlDialog", () => ({ ImportCurlDialog: () => <div>import dialog</div> }));
-vi.mock("../features/postman/ImportPostmanDialog", () => ({ ImportPostmanDialog: () => <div>postman import dialog</div> }));
-vi.mock("../features/postman/ExportPostmanDialog", () => ({
-  ExportPostmanDialog: ({ collectionId }: { collectionId: string | null }) => <div>postman export {collectionId}</div>,
+vi.mock("../features/network/NetworkDialog", () => ({
+  NetworkDialog: () => <div>network dialog</div>,
 }));
-vi.mock("../features/cookies/CookieManager", () => ({ CookieManager: () => <div>cookie dialog</div> }));
+vi.mock("../features/curl/ImportCurlDialog", () => ({
+  ImportCurlDialog: () => <div>import dialog</div>,
+}));
+vi.mock("../features/postman/ImportPostmanDialog", () => ({
+  ImportPostmanDialog: () => <div>postman import dialog</div>,
+}));
+vi.mock("../features/postman/ExportPostmanDialog", () => ({
+  ExportPostmanDialog: ({ collectionId }: { collectionId: string | null }) => (
+    <div>postman export {collectionId}</div>
+  ),
+}));
+vi.mock("../features/cookies/CookieManager", () => ({
+  CookieManager: () => <div>cookie dialog</div>,
+}));
 
 beforeEach(() => {
   useDialogsStore.setState({ open: null });

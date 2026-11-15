@@ -22,7 +22,8 @@ describe("layoutStore", () => {
     vi.unstubAllGlobals();
   });
 
-  const persisted = () => JSON.parse(storage.getItem(LAYOUT_STORAGE_KEY) ?? "null");
+  const persisted = () =>
+    JSON.parse(storage.getItem(LAYOUT_STORAGE_KEY) ?? "null");
 
   it("has default values", () => {
     const state = useLayoutStore.getState();
@@ -63,7 +64,11 @@ describe("layoutStore", () => {
   it("loadLayout reads a valid snapshot and clamps width", () => {
     storage.setItem(
       LAYOUT_STORAGE_KEY,
-      JSON.stringify({ sidebarWidth: 9000, sidebarCollapsed: true, activeSection: "journeys" }),
+      JSON.stringify({
+        sidebarWidth: 9000,
+        sidebarCollapsed: true,
+        activeSection: "journeys",
+      }),
     );
     expect(loadLayout()).toEqual({
       sidebarWidth: SIDEBAR_MAX_WIDTH,

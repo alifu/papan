@@ -12,14 +12,20 @@ function Harness() {
 }
 
 function press(init: KeyboardEventInit): boolean {
-  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+  const event = new KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
   window.dispatchEvent(event);
   return event.defaultPrevented;
 }
 
 vi.mock("../features/curl/copyAsCurl", () => ({ copyAsCurl: vi.fn() }));
 vi.mock("../features/scratch/api", () => ({
-  createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
+  createScratch: vi
+    .fn()
+    .mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
 }));
 
 describe("useShortcuts", () => {
@@ -44,7 +50,9 @@ describe("useShortcuts", () => {
 
     it("Mod+N opens a tab", async () => {
       expect(press({ key: "n", ...mod })).toBe(true);
-      await vi.waitFor(() => expect(useTabsStore.getState().tabs).toHaveLength(2));
+      await vi.waitFor(() =>
+        expect(useTabsStore.getState().tabs).toHaveLength(2),
+      );
     });
 
     it("Mod+W closes the active tab, and is harmless with none", () => {

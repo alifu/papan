@@ -1,8 +1,14 @@
-import { THEME_MODES, useThemeStore, type ThemeMode } from "../theme/themeStore";
+import {
+  THEME_MODES,
+  useThemeStore,
+  type ThemeMode,
+} from "../theme/themeStore";
 import { Button } from "../ui/Button";
 import type { IconName } from "../ui/icons";
 
-const MODE_META: Readonly<Record<ThemeMode, { label: string; icon: IconName }>> = {
+const MODE_META: Readonly<
+  Record<ThemeMode, { label: string; icon: IconName }>
+> = {
   system: { label: "System", icon: "monitor" },
   light: { label: "Light", icon: "sun" },
   dark: { label: "Dark", icon: "moon" },

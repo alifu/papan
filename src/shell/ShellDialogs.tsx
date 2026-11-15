@@ -23,9 +23,12 @@ export function ShellDialogs() {
   if (open === "network") return <NetworkDialog onClose={close} />;
   if (open === "import-curl") return <ImportCurlDialog onClose={close} />;
   if (open === "import-postman") return <ImportPostmanDialog onClose={close} />;
-  if (open === "export-postman") return <ExportPostmanDialog collectionId={collectionId} onClose={close} />;
+  if (open === "export-postman")
+    return <ExportPostmanDialog collectionId={collectionId} onClose={close} />;
   if (open === "clone-git") return <CloneDialog onClose={close} />;
-  if (open === "git" && collectionId) return <GitDialog collectionId={collectionId} onClose={close} />;
-  if (open === "cookies" && location) return <CookieManager location={location} onClose={close} />;
+  if (open === "git" && collectionId)
+    return <GitDialog collectionId={collectionId} onClose={close} />;
+  if (open === "cookies" && location)
+    return <CookieManager location={location} onClose={close} />;
   return null;
 }

@@ -24,7 +24,9 @@ describe("StatusBar", () => {
     appInfo.mockRejectedValue({ code: "io", message: "Disk is on fire" });
     render(<StatusBar />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Disk is on fire");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Disk is on fire",
+    );
     expect(screen.queryByRole("status")).toBeNull();
   });
 

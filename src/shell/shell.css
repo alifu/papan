@@ -1,6 +1,8 @@
 .shell {
   display: grid;
-  grid-template-rows: var(--menubar-height) var(--toolbar-height) 1fr var(--statusbar-height);
+  grid-template-rows: var(--menubar-height) var(--toolbar-height) 1fr var(
+      --statusbar-height
+    );
   height: 100vh;
   overflow: hidden;
 }

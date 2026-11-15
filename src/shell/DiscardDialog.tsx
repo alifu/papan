@@ -4,7 +4,9 @@ import { useTabsStore } from "./tabsStore";
 /** Asks before closing a tab with unsaved changes. */
 export function DiscardDialog() {
   const pendingCloseId = useTabsStore((s) => s.pendingCloseId);
-  const title = useTabsStore((s) => s.tabs.find((t) => t.id === s.pendingCloseId)?.title);
+  const title = useTabsStore(
+    (s) => s.tabs.find((t) => t.id === s.pendingCloseId)?.title,
+  );
   const discardTab = useTabsStore((s) => s.discardTab);
   const cancelClose = useTabsStore((s) => s.cancelClose);
   if (pendingCloseId === null) return null;

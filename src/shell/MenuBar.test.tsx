@@ -8,7 +8,9 @@ import { MenuBar } from "./MenuBar";
 import { useTabsStore } from "./tabsStore";
 
 vi.mock("../features/scratch/api", () => ({
-  createScratch: vi.fn().mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
+  createScratch: vi
+    .fn()
+    .mockResolvedValue({ id: "s1", name: "Untitled", method: "GET" }),
 }));
 
 describe("MenuBar", () => {
@@ -26,14 +28,18 @@ describe("MenuBar", () => {
     render(<MenuBar />);
     await userEvent.click(screen.getByRole("menuitem", { name: "File" }));
     await userEvent.click(screen.getByRole("menuitem", { name: /New Tab/ }));
-    await vi.waitFor(() => expect(useTabsStore.getState().tabs).toHaveLength(2));
+    await vi.waitFor(() =>
+      expect(useTabsStore.getState().tabs).toHaveLength(2),
+    );
   });
 
   it("File > Close Tab closes the active tab and is a no-op with none", async () => {
     render(<MenuBar />);
     for (const expected of [0, 0]) {
       await userEvent.click(screen.getByRole("menuitem", { name: "File" }));
-      await userEvent.click(screen.getByRole("menuitem", { name: /Close Tab/ }));
+      await userEvent.click(
+        screen.getByRole("menuitem", { name: /Close Tab/ }),
+      );
       expect(useTabsStore.getState().tabs).toHaveLength(expected);
     }
   });
@@ -41,7 +47,9 @@ describe("MenuBar", () => {
   it("View > Toggle Sidebar collapses the sidebar", async () => {
     render(<MenuBar />);
     await userEvent.click(screen.getByRole("menuitem", { name: "View" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Toggle Sidebar/ }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /Toggle Sidebar/ }),
+    );
     expect(useLayoutStore.getState().sidebarCollapsed).toBe(true);
   });
 

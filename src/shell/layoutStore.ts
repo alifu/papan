@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { z } from "zod";
 import { readStored, writeStored } from "../ui/safeStorage";
 
-export type NavSection = "collections" | "scratch" | "webhooks" | "mocks" | "journeys" | "history";
+export type NavSection =
+  "collections" | "scratch" | "webhooks" | "mocks" | "journeys" | "history";
 export const NAV_SECTIONS: readonly NavSection[] = [
   "collections",
   "scratch",
@@ -38,12 +39,22 @@ const DEFAULT_LAYOUT: LayoutSnapshot = {
 const layoutSchema = z.object({
   sidebarWidth: z.number().finite(),
   sidebarCollapsed: z.boolean(),
-  activeSection: z.enum(["collections", "scratch", "webhooks", "mocks", "journeys", "history"]),
+  activeSection: z.enum([
+    "collections",
+    "scratch",
+    "webhooks",
+    "mocks",
+    "journeys",
+    "history",
+  ]),
 });
 
 export function clampSidebarWidth(width: number): number {
   if (Number.isNaN(width)) return SIDEBAR_DEFAULT_WIDTH;
-  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
+  return Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)),
+  );
 }
 
 export function loadLayout(): LayoutSnapshot {
@@ -52,7 +63,10 @@ export function loadLayout(): LayoutSnapshot {
   try {
     const parsed = layoutSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return DEFAULT_LAYOUT;
-    return { ...parsed.data, sidebarWidth: clampSidebarWidth(parsed.data.sidebarWidth) };
+    return {
+      ...parsed.data,
+      sidebarWidth: clampSidebarWidth(parsed.data.sidebarWidth),
+    };
   } catch {
     return DEFAULT_LAYOUT;
   }
@@ -71,7 +85,8 @@ export const useLayoutStore = create<LayoutState>()((set, get) => {
   };
   return {
     ...loadLayout(),
-    setSidebarWidth: (width) => update({ sidebarWidth: clampSidebarWidth(width) }),
+    setSidebarWidth: (width) =>
+      update({ sidebarWidth: clampSidebarWidth(width) }),
     toggleSidebar: () => update({ sidebarCollapsed: !get().sidebarCollapsed }),
     setActiveSection: (activeSection) => update({ activeSection }),
   };
