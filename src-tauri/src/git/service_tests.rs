@@ -59,6 +59,13 @@ fn world() -> World {
     fs::create_dir(&parent_b).unwrap();
     let a = clone(url, &parent_a).unwrap();
     let b = clone(url, &parent_b).unwrap();
+    // The clones were checked out under the machine's autocrlf (CRLF on Windows runners).
+    // Turn it off and rebuild the index and files so they match the committed bytes.
+    for dir in [&a, &b] {
+        git(dir, &["config", "core.autocrlf", "false"]);
+        git(dir, &["rm", "--cached", "-r", "-q", "."]);
+        git(dir, &["reset", "-q", "--hard"]);
+    }
     World {
         _tmp: tmp,
         remote,
