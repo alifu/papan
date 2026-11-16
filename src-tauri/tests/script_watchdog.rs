@@ -97,9 +97,10 @@ fn abandoned_threads_are_counted_and_new_chains_refused_at_the_cap() {
         timeout: Duration::from_millis(30),
         ..Limits::default()
     };
-    // Long enough to outlive the test's own chains, short enough to end on its own.
+    // Long enough to outlive the test's own chains (4 x (timeout + grace) = about 1.1 s; the
+    // Windows runner scans several times faster than a Mac), short enough to end on its own.
     let slow = "const s = 'a'.repeat(8e6);
-                new Array(40).fill(s).map(String.prototype.lastIndexOf.bind(s, 'b'))";
+                new Array(200).fill(s).map(String.prototype.lastIndexOf.bind(s, 'b'))";
     let probe = [Script::new("probe", slow)];
 
     for _ in 0..MAX_STRAY_THREADS {
