@@ -61,6 +61,18 @@ impl JourneyRuns {
     }
 }
 
+/// Frees the journey's slot when the run ends, also if it panics.
+struct RunSlot<'a> {
+    runs: &'a JourneyRuns,
+    key: &'a str,
+}
+
+impl Drop for RunSlot<'_> {
+    fn drop(&mut self) {
+        self.runs.end(self.key);
+    }
+}
+
 fn key(collection_id: &str, file: &str) -> String {
     format!("{collection_id}/{file}")
 }
@@ -158,6 +170,10 @@ pub async fn run_journey(
     let Some(handle) = runs.begin(&id) else {
         return Err(AppError::invalid_input("That journey is already running."));
     };
+    let _slot = RunSlot {
+        runs: &runs,
+        key: &id,
+    };
     let secrets = {
         let store = Arc::clone(&state.store);
         let service = vars.service.clone();
@@ -173,7 +189,6 @@ pub async fn run_journey(
         .await
     };
     let Ok(secrets) = secrets else {
-        runs.end(&id);
         return logged(secrets.map(|_| unreachable_summary()));
     };
     let trusted = state.lock_store().scripts_trusted(&collection_id);
@@ -208,9 +223,7 @@ pub async fn run_journey(
             }
         }),
     );
-    let summary = run(&host, &journey, &run_id).await;
-    runs.end(&id);
-    Ok(summary)
+    Ok(run(&host, &journey, &run_id).await)
 }
 
 fn unreachable_summary() -> RunSummary {

@@ -22,6 +22,7 @@ struct Fake {
     cancel_after: Option<usize>,
     script_sets: Vec<(String, String)>,
     files: HashMap<String, Result<Vec<Row>, String>>,
+    run_limit: Option<std::time::Duration>,
 }
 
 impl Fake {
@@ -103,6 +104,10 @@ impl Host for Fake {
 
     fn emit(&self, event: RunEvent) {
         self.events.lock().unwrap().push(event);
+    }
+
+    fn run_limit(&self) -> std::time::Duration {
+        self.run_limit.unwrap_or(super::runner::MAX_RUN)
     }
 }
 
@@ -526,6 +531,67 @@ async fn a_loop_runs_once_per_data_row_with_the_columns_as_variables() {
     assert_eq!(asked[0].1.get("name").map(String::as_str), Some("ann"));
     assert_eq!(asked[1].1.get("name").map(String::as_str), Some("bob"));
     assert_eq!(asked[1].1.get("row_index").map(String::as_str), Some("1"));
+}
+
+#[tokio::test]
+async fn a_column_a_row_lacks_does_not_keep_the_value_of_the_row_before() {
+    let mut host = Fake::default()
+        .answer("body", 200, "{}")
+        .answer("after", 200, "{}");
+    host.files.insert(
+        "users.json".into(),
+        Ok(vec![
+            row(&[("name", "ann"), ("nick", "annie")]),
+            row(&[("name", "bob")]),
+        ]),
+    );
+    let done = run(&host, &data_loop("users.json"), "r").await;
+    assert_eq!(done.status, RunStatus::Passed);
+    let asked = host.asked.lock().unwrap();
+    assert_eq!(asked[0].1.get("nick").map(String::as_str), Some("annie"));
+    assert_eq!(asked[1].1.get("nick"), None);
+    assert_eq!(asked[1].1.get("name").map(String::as_str), Some("bob"));
+}
+
+#[tokio::test]
+async fn a_run_that_outlasts_its_time_limit_is_stopped() {
+    let j = journey(
+        vec![node("s", NodeType::Start), request("a", "a")],
+        vec![("s", "a", "")],
+    );
+    let host = Fake {
+        run_limit: Some(std::time::Duration::ZERO),
+        ..Fake::default()
+    }
+    .answer("a", 200, "");
+    let done = run(&host, &j, "r").await;
+    assert_eq!(done.status, RunStatus::Failed);
+    assert!(done.message.contains("minutes"), "{}", done.message);
+    assert!(host.asked().is_empty());
+}
+
+#[tokio::test]
+async fn a_variable_is_cut_to_its_size_limit() {
+    let j = journey(
+        vec![
+            node("s", NodeType::Start),
+            JourneyNode {
+                script: "x".into(),
+                ..node("sc", NodeType::Script)
+            },
+            request("a", "a"),
+        ],
+        vec![("s", "sc", ""), ("sc", "a", "")],
+    );
+    let host = Fake {
+        script_sets: vec![("big".into(), "x".repeat(200 * 1024))],
+        ..Fake::default()
+    }
+    .answer("a", 200, "");
+    let done = run(&host, &j, "r").await;
+    assert_eq!(done.status, RunStatus::Passed);
+    let asked = host.asked.lock().unwrap();
+    assert_eq!(asked[0].1["big"].len(), 64 * 1024);
 }
 
 #[tokio::test]

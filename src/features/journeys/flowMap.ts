@@ -49,15 +49,29 @@ export function edgeLabel(e: JourneyEdge): string | undefined {
   return [e.when, mapped].filter(Boolean).join(" ") || undefined;
 }
 
+/** What is picked on the canvas, so the nodes and edges can be drawn selected. */
+export interface PickedItem {
+  readonly kind: "node" | "edge";
+  readonly id: string;
+}
+
+export type NodeSizes = Readonly<
+  Record<string, { readonly width: number; readonly height: number }>
+>;
+
 export function toFlow(
   journey: Journey,
   run: RunState,
+  picked: PickedItem | null = null,
+  sizes: NodeSizes = {},
 ): { nodes: StepNode[]; edges: Edge[] } {
   const nodes = (journey.nodes ?? []).map((node, index): StepNode => ({
     id: node.id,
     type: "step",
     position: { x: node.x ?? index * SPREAD_X, y: node.y ?? 0 },
     deletable: node.type !== "start",
+    selected: picked?.kind === "node" && picked.id === node.id,
+    ...(sizes[node.id] ? { measured: sizes[node.id] } : {}),
     data: {
       node,
       status: run.status[node.id] ?? null,
@@ -68,7 +82,8 @@ export function toFlow(
     id: e.id,
     source: e.from,
     target: e.to,
-    label: e.when || undefined,
+    label: edgeLabel(e),
+    selected: picked?.kind === "edge" && picked.id === e.id,
   }));
   return { nodes, edges };
 }

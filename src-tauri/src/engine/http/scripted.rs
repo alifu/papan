@@ -76,11 +76,34 @@ pub async fn run_send_with(
     content: &RequestContent,
     overlay: &BTreeMap<String, String>,
 ) -> Result<SendOutcome, AppError> {
+    run_send_tracked(
+        deps,
+        request_id,
+        location,
+        content,
+        overlay,
+        &mut Vec::new(),
+    )
+    .await
+}
+
+/// [`run_send_with`] that also adds every secret value the send used to `seen`: those of
+/// all scopes, the ones a script put into the request and the ones a script wrote. A journey
+/// masks its events with them, on success and on failure.
+pub async fn run_send_tracked(
+    deps: &SendDeps<'_>,
+    request_id: &str,
+    location: &RequestLocation,
+    content: &RequestContent,
+    overlay: &BTreeMap<String, String>,
+    seen: &mut Vec<String>,
+) -> Result<SendOutcome, AppError> {
     let sent_at_ms = now_ms();
     let started = Instant::now();
     let id = validate_id(request_id)?;
     let run = deps.engine.script_run(&id);
     let prepared = prepare(deps, location, content).await?;
+    note_secrets(seen, secrets_of(&prepared.scopes));
     let runner = ChainRunner {
         engine: deps.engine,
         location,
@@ -124,6 +147,7 @@ pub async fn run_send_with(
     );
     let result = deps.engine.send_resolved(&id, location, &resolved).await;
     context.extra_secrets = resolved.secret_values.clone();
+    note_secrets(seen, resolved.secret_values.clone());
 
     if let (Ok(meta), true) = (&result, prepared.chains.has_post()) {
         let body = match deps.engine.body_file(&id) {
@@ -138,6 +162,7 @@ pub async fn run_send_with(
         context = after;
         reports.push(report);
     }
+    note_secrets(seen, context.secret_values());
 
     let scripts = persist(deps, location, &prepared, &context, reports).await;
     record_history(
@@ -163,6 +188,14 @@ pub async fn run_send_with(
             })
         }
         Err(error) => Err(error),
+    }
+}
+
+fn note_secrets(seen: &mut Vec<String>, found: Vec<String>) {
+    for secret in found {
+        if !secret.is_empty() && !seen.contains(&secret) {
+            seen.push(secret);
+        }
     }
 }
 

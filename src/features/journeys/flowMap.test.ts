@@ -121,3 +121,27 @@ describe("flowMap", () => {
     expect(nodeSummary(j.nodes![1]!)).toBe("rows of data/u.csv");
   });
 });
+
+describe("toFlow selection and sizes", () => {
+  const j = connect(
+    addNode(newJourney("J"), "end", { x: 0, y: 0 }),
+    "n1",
+    "n2",
+  );
+
+  it("marks the picked node or edge as selected", () => {
+    const node = toFlow(j, EMPTY_RUN, { kind: "node", id: "n2" });
+    expect(node.nodes.map((n) => n.selected)).toEqual([false, true]);
+    const edge = toFlow(j, EMPTY_RUN, { kind: "edge", id: j.edges![0]!.id });
+    expect(edge.edges[0]!.selected).toBe(true);
+    expect(edge.nodes.some((n) => n.selected)).toBe(false);
+  });
+
+  it("passes the measured sizes back so a rebuild keeps them", () => {
+    const { nodes } = toFlow(j, EMPTY_RUN, null, {
+      n1: { width: 180, height: 60 },
+    });
+    expect(nodes[0]!.measured).toEqual({ width: 180, height: 60 });
+    expect(nodes[1]!.measured).toBeUndefined();
+  });
+});

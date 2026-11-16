@@ -81,7 +81,7 @@ export function MockTab({ collectionId, file, tabId }: MockTabProps) {
     try {
       await api.saveMock(collectionId, file, draft);
       setSaved(draft);
-      useTabsStore.getState().retitleMock(tabId, draft.name);
+      useTabsStore.getState().retitleTab(tabId, draft.name);
       await store.load(collectionId);
       return true;
     } catch (err) {

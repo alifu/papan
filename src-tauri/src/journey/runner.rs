@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::time::{Duration, Instant};
 
 use futures_util::future::BoxFuture;
 
@@ -20,6 +21,11 @@ use super::types::{
 /// Longest body text an event carries.
 const PREVIEW_BYTES: usize = 16 * 1024;
 const DEFAULT_LOOP_VAR: &str = "item";
+/// Longest value one journey variable keeps, and the most all of them hold together.
+const MAX_VAR_BYTES: usize = 64 * 1024;
+const MAX_VARS_BYTES: usize = 4 * 1024 * 1024;
+/// Longest a whole run may take.
+pub const MAX_RUN: Duration = Duration::from_secs(60 * 60);
 
 /// What a Script node leaves behind.
 #[derive(Debug, Default)]
@@ -48,6 +54,10 @@ pub trait Host: Sync {
     /// The rows of a Loop node's data file.
     fn rows(&self, file: &str) -> Result<Vec<Row>, String>;
     fn emit(&self, event: RunEvent);
+    /// How long the run may take before it is stopped.
+    fn run_limit(&self) -> Duration {
+        MAX_RUN
+    }
     /// Hides secret values in text that leaves the run (events, messages).
     fn mask(&self, text: &str) -> String {
         text.to_string()
@@ -108,13 +118,20 @@ struct Walk<'a, H: Host> {
     failures: u32,
     active_loops: Vec<String>,
     stopped: Option<Stopped>,
+    started: Instant,
+}
+
+/// `text` cut to at most `max` bytes, at a character boundary.
+fn cut(text: &str, max: usize) -> &str {
+    let mut end = text.len().min(max);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
 }
 
 fn summary_of(sent: &Sent, mask: &dyn Fn(&str) -> String) -> ResponseSummary {
-    let mut cut = sent.body.len().min(PREVIEW_BYTES);
-    while !sent.body.is_char_boundary(cut) {
-        cut -= 1;
-    }
+    let preview = cut(&sent.body, PREVIEW_BYTES);
     ResponseSummary {
         status: sent.status,
         headers: sent
@@ -125,8 +142,8 @@ fn summary_of(sent: &Sent, mask: &dyn Fn(&str) -> String) -> ResponseSummary {
                 value: mask(value),
             })
             .collect(),
-        body_preview: mask(&sent.body[..cut]),
-        body_truncated: cut < sent.body.len(),
+        body_preview: mask(preview),
+        body_truncated: preview.len() < sent.body.len(),
     }
 }
 
@@ -168,7 +185,7 @@ impl<'a, H: Host> Walk<'a, H> {
                 .iter()
                 .map(|set| VarSet {
                     name: set.name.clone(),
-                    value: mask(&set.value),
+                    value: mask(cut(&set.value, PREVIEW_BYTES)),
                 })
                 .collect(),
             console: done.console.iter().map(|line| mask(line)).collect(),
@@ -177,6 +194,16 @@ impl<'a, H: Host> Walk<'a, H> {
     }
 
     fn set(&mut self, name: &str, value: String, done: &mut Done) {
+        let value = cut(&value, MAX_VAR_BYTES).to_string();
+        let held: usize = self.vars.iter().map(|(k, v)| k.len() + v.len()).sum();
+        if held + name.len() + value.len() > MAX_VARS_BYTES {
+            done.status = NodeStatus::Failed;
+            done.message = format!(
+                "The journey variables grew past {} MiB.",
+                MAX_VARS_BYTES >> 20
+            );
+            return;
+        }
         done.vars.push(VarSet {
             name: name.to_string(),
             value: value.clone(),
@@ -318,6 +345,13 @@ impl<'a, H: Host> Walk<'a, H> {
             let Some(node) = self.node(id) else {
                 return Flow::Done;
             };
+            if self.started.elapsed() > self.host.run_limit() {
+                let minutes = self.host.run_limit().as_secs() / 60;
+                self.stopped = Some(Stopped::Failed(format!(
+                    "The run stopped after {minutes} minutes."
+                )));
+                return Flow::Stop;
+            }
             if self.steps >= self.journey.settings.max_steps {
                 let limit = self.journey.settings.max_steps;
                 self.stopped = Some(Stopped::Failed(format!(
@@ -423,9 +457,17 @@ impl<'a, H: Host> Walk<'a, H> {
         };
         self.active_loops.push(node.id.clone());
         let mut escaped = None;
+        let mut previous: Vec<&String> = Vec::new();
         for set in &iterations {
+            // A column the row lacks must not keep the value of the row before.
+            for name in previous.drain(..) {
+                if !set.iter().any(|(n, _)| n == name) {
+                    self.vars.remove(name);
+                }
+            }
             for (name, value) in set {
                 self.vars.insert(name.clone(), value.clone());
+                previous.push(name);
             }
             match self.follow(self.edges_of(&node.id, &[WHEN_EACH])).await {
                 Flow::Stop => {
@@ -463,6 +505,7 @@ pub async fn run<H: Host>(host: &H, journey: &Journey, run_id: &str) -> RunSumma
         failures: 0,
         active_loops: Vec::new(),
         stopped: None,
+        started: Instant::now(),
     };
     let start = journey
         .nodes

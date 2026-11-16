@@ -247,6 +247,57 @@ async fn a_script_node_sets_a_variable_for_the_next_request() {
     assert_eq!(done.status, RunStatus::Passed, "{}", done.message);
 }
 
+#[tokio::test]
+async fn a_secret_the_host_was_not_told_about_is_masked_in_events() {
+    let server = support::server::spawn().await;
+    let world = world(&server.url(""));
+    world
+        .vars
+        .write_variables(
+            &mut world.store.lock_store(),
+            &VarScope::Global,
+            &[
+                VariableInput {
+                    name: "base".into(),
+                    previous_name: None,
+                    value: server.url(""),
+                    current: None,
+                    enabled: true,
+                    secret: false,
+                    secret_edit: SecretEdit::Keep,
+                },
+                VariableInput {
+                    name: "tok".into(),
+                    previous_name: None,
+                    value: "s3cretvalue".into(),
+                    current: None,
+                    enabled: true,
+                    secret: true,
+                    secret_edit: SecretEdit::Set {
+                        value: "s3cretvalue".into(),
+                    },
+                },
+            ],
+        )
+        .unwrap();
+    let path = world.add_request("Echo", "{{base}}/echo?k={{tok}}");
+    let journey = Journey {
+        name: "Secret".into(),
+        nodes: vec![node("s", NodeType::Start), request_node("a", &path)],
+        edges: vec![edge("e1", "s", "a")],
+        settings: JourneySettings::default(),
+    };
+    let events = Arc::new(Mutex::new(Vec::new()));
+    // The host starts with no secrets, as if they lived in a folder it did not read.
+    let host = world.host(Arc::clone(&events));
+    let done = run(&host, &journey, "run-s").await;
+    assert_eq!(done.status, RunStatus::Passed, "{}", done.message);
+    let events = events.lock().unwrap();
+    let text = serde_json::to_string(&*events).unwrap();
+    assert!(!text.contains("s3cretvalue"), "{text}");
+    assert!(text.contains("k="), "the echo reached the event: {text}");
+}
+
 struct Quiet;
 impl MockSink for Quiet {
     fn logged(&self, _collection_id: &str, _file: &str, _entry: &MockLogEntry) {}

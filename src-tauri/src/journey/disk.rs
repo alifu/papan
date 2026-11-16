@@ -113,6 +113,7 @@ fn new_file_name(root: &Path, journey_name: &str) -> Result<String, AppError> {
 }
 
 pub fn delete(root: &Path, file: &str) -> Result<(), AppError> {
+    check_dir(root)?;
     fsio::remove_file(&path_of(root, file)?)
 }
 
@@ -130,6 +131,17 @@ mod tests {
         assert!(write(dir.path(), None, &sample()).is_err());
         assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
         assert!(read(dir.path(), "signup.journey.yaml").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_journeys_folder_is_not_deleted_from() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("x.journey.yaml"), "name: x").unwrap();
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("journeys")).unwrap();
+        assert!(delete(dir.path(), "x.journey.yaml").is_err());
+        assert!(outside.path().join("x.journey.yaml").exists());
     }
 
     #[test]

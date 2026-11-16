@@ -11,8 +11,14 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useMemo, type DragEvent } from "react";
-import { dropRequestPath, toFlow, type StepNode } from "./flowMap";
+import { useMemo, useRef, type DragEvent } from "react";
+import {
+  dropRequestPath,
+  toFlow,
+  type NodeSizes,
+  type PickedItem,
+  type StepNode,
+} from "./flowMap";
 import {
   addNode,
   connect,
@@ -30,6 +36,7 @@ const SNAP: [number, number] = [20, 20];
 export interface JourneyCanvasProps {
   readonly journey: Journey;
   readonly run: RunState;
+  readonly picked: PickedItem | null;
   readonly onChange: (journey: Journey) => void;
   readonly onSelect: (nodeId: string | null) => void;
   readonly onSelectEdge: (edgeId: string) => void;
@@ -38,29 +45,46 @@ export interface JourneyCanvasProps {
 function Canvas({
   journey,
   run,
+  picked,
   onChange,
   onSelect,
   onSelectEdge,
 }: JourneyCanvasProps) {
   const flow = useReactFlow();
-  const { nodes, edges } = useMemo(() => toFlow(journey, run), [journey, run]);
+  // React Flow measures the cards itself; hand the sizes back so a rebuild keeps them.
+  const sizes = useRef<NodeSizes>({});
+  const { nodes, edges } = useMemo(
+    () => toFlow(journey, run, picked, sizes.current),
+    [journey, run, picked],
+  );
 
   const onNodesChange = (changes: NodeChange<StepNode>[]) => {
     let next = journey;
     for (const change of changes) {
+      if (change.type === "dimensions" && change.dimensions)
+        sizes.current = { ...sizes.current, [change.id]: change.dimensions };
       if (change.type === "position" && change.position)
         next = moveNode(next, change.id, change.position.x, change.position.y);
     }
     if (next !== journey) onChange(next);
   };
 
-  const onNodesDelete = (gone: StepNode[]) => {
-    onChange(gone.reduce((j, n) => removeNode(j, n.id), journey));
+  // One handler for both: deleting a node also deletes its edges, and two handlers
+  // would each start from the same stale journey and bring the node back.
+  const onDelete = ({
+    nodes: goneNodes,
+    edges: goneEdges,
+  }: {
+    nodes: StepNode[];
+    edges: Edge[];
+  }) => {
+    const withoutNodes = goneNodes.reduce(
+      (j, n) => removeNode(j, n.id),
+      journey,
+    );
+    onChange(goneEdges.reduce((j, e) => removeEdge(j, e.id), withoutNodes));
     onSelect(null);
   };
-
-  const onEdgesDelete = (gone: Edge[]) =>
-    onChange(gone.reduce((j, e) => removeEdge(j, e.id), journey));
 
   const onConnect = (c: Connection) =>
     onChange(connect(journey, c.source, c.target));
@@ -82,8 +106,7 @@ function Canvas({
       edges={edges}
       nodeTypes={NODE_TYPES}
       onNodesChange={onNodesChange}
-      onNodesDelete={onNodesDelete}
-      onEdgesDelete={onEdgesDelete}
+      onDelete={onDelete}
       onConnect={onConnect}
       onNodeClick={(_, node) => onSelect(node.id)}
       onEdgeClick={(_, edge) => onSelectEdge(edge.id)}

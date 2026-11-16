@@ -3,6 +3,7 @@
 //! counts are capped.
 
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::path::Path;
 
 use serde_json::Value;
@@ -175,11 +176,23 @@ pub fn read_rows(root: &Path, file: &str) -> Result<Vec<Row>, String> {
     if !path.starts_with(&base) {
         return Err("The data file is not a path inside the collection.".into());
     }
-    let meta = std::fs::metadata(&path).map_err(|_| format!("Could not open {file}."))?;
+    // One handle for the check and the read, and a bounded read: the file may change
+    // between the two otherwise.
+    let handle = std::fs::File::open(&path).map_err(|_| format!("Could not open {file}."))?;
+    let meta = handle
+        .metadata()
+        .map_err(|_| format!("Could not open {file}."))?;
     if !meta.is_file() || meta.len() > MAX_DATA_BYTES {
         return Err(format!("{file} is not a file, or is over 1 MiB."));
     }
-    let bytes = std::fs::read(&path).map_err(|_| format!("Could not read {file}."))?;
+    let mut bytes = Vec::new();
+    handle
+        .take(MAX_DATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| format!("Could not read {file}."))?;
+    if bytes.len() as u64 > MAX_DATA_BYTES {
+        return Err(format!("{file} is not a file, or is over 1 MiB."));
+    }
     let text = String::from_utf8(bytes).map_err(|_| format!("{file} is not UTF-8 text."))?;
     parse(file, &text)
 }

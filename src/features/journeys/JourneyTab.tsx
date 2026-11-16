@@ -15,6 +15,8 @@ import {
   PALETTE,
   patchEdge,
   patchNode,
+  removeEdge,
+  removeNode,
   type Journey,
   type NodeType,
 } from "./journeyModel";
@@ -81,13 +83,23 @@ export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
     try {
       await api.saveJourney(collectionId, file, draft);
       setSaved(draft);
-      useTabsStore.getState().retitleMock(tabId, draft.name);
+      useTabsStore.getState().retitleTab(tabId, draft.name);
       await useJourneyStore.getState().load(collectionId);
       return true;
     } catch (err) {
       reportError(err);
       return false;
     }
+  };
+
+  const removeSelected = () => {
+    if (!selection) return;
+    setDraft(
+      selection.kind === "node"
+        ? removeNode(draft, selection.id)
+        : removeEdge(draft, selection.id),
+    );
+    setSelection(null);
   };
 
   const toggleRun = async () => {
@@ -167,6 +179,7 @@ export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
         <JourneyCanvas
           journey={draft}
           run={run}
+          picked={selection}
           onChange={setDraft}
           onSelect={(id) => setSelection(id ? { kind: "node", id } : null)}
           onSelectEdge={(id) => setSelection({ kind: "edge", id })}
@@ -188,6 +201,13 @@ export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
           ) : (
             <p className="empty-text">Select a node to edit it.</p>
           )}
+          {edge || (node && node.type !== "start") ? (
+            <Button
+              icon="close"
+              label={edge ? "Delete edge" : "Delete node"}
+              onClick={removeSelected}
+            />
+          ) : null}
           <RunPanel run={run} node={node} />
         </aside>
       </div>

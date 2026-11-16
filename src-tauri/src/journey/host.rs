@@ -13,7 +13,7 @@ use super::runner::{Host, ScriptDone};
 use super::types::RunEvent;
 use crate::engine::http::mask::mask_secrets;
 use crate::engine::http::script_bridge::{read_capped, ChainRunner};
-use crate::engine::http::scripted::{run_send_with, SendDeps};
+use crate::engine::http::scripted::{run_send_tracked, SendDeps};
 use crate::script::{
     Layers, Limits, Redactor, Script, ScriptContext, ScriptPhase, ScriptRequest, ScriptResponse,
 };
@@ -43,6 +43,9 @@ pub struct EngineHost<'a> {
     pub emit: Emit,
     /// The request or script in flight, shared with `cancel_journey`.
     current: Arc<Mutex<Option<String>>>,
+    /// Secret values the sends found beyond `secrets` (folder and request variables, secrets
+    /// a script wrote); masked from then on.
+    learned: Mutex<Vec<String>>,
 }
 
 impl<'a> EngineHost<'a> {
@@ -64,6 +67,7 @@ impl<'a> EngineHost<'a> {
             scripts_trusted,
             emit,
             current,
+            learned: Mutex::new(Vec::new()),
         }
     }
 
@@ -79,7 +83,14 @@ impl<'a> EngineHost<'a> {
     }
 
     fn redactor(&self) -> Redactor {
-        let secrets = self.secrets.clone();
+        let mut secrets = self.secrets.clone();
+        secrets.extend(
+            self.learned
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .iter()
+                .cloned(),
+        );
         Arc::new(move |text: &str| {
             let refs: Vec<&str> = secrets.iter().map(String::as_str).collect();
             mask_secrets(text, &refs)
@@ -125,8 +136,13 @@ impl Host for EngineHost<'_> {
         let content = self.read_content(&location)?;
         let id = uuid::Uuid::new_v4().to_string();
         self.set_current(Some(id.clone()));
-        let outcome = run_send_with(&self.deps, &id, &location, &content, vars).await;
+        let mut seen = Vec::new();
+        let outcome = run_send_tracked(&self.deps, &id, &location, &content, vars, &mut seen).await;
         self.set_current(None);
+        self.learned
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend(seen);
         let outcome = outcome.map_err(|error| (self.redactor())(&error.message))?;
         if let Some(error) = outcome.error {
             return Err((self.redactor())(&error.message));

@@ -47,7 +47,7 @@ export interface TabsState {
   /** Closes the tab of a journey (it was deleted). */
   closeJourney: (collectionId: string, file: string) => void;
   /** Renames a mock tab. */
-  retitleMock: (tabId: string, title: string) => void;
+  retitleTab: (tabId: string, title: string) => void;
   /** Closes the tabs of a mock (it was deleted). */
   closeMock: (collectionId: string, file: string) => void;
   /** Renames the tab of a webhook listener. */
@@ -186,7 +186,7 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     );
     if (tab) get().discardTab(tab.id);
   },
-  retitleMock: (tabId, title) => {
+  retitleTab: (tabId, title) => {
     set({
       tabs: get().tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
     });

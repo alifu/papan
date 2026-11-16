@@ -117,6 +117,28 @@ describe("JourneyTab", () => {
     expect(api.runJourney).toHaveBeenCalledWith("c1", "signup.journey.yaml");
   });
 
+  it("deletes the selected node and its edges, but never the Start node", async () => {
+    show();
+    await screen.findByText("2 nodes");
+    await userEvent.click(screen.getByRole("button", { name: "pick n2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete node" }));
+    expect(screen.getByText("1 nodes")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete node" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("deletes the selected edge", async () => {
+    show();
+    await screen.findByText("2 nodes");
+    await userEvent.click(screen.getByRole("button", { name: "pick e1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete edge" }));
+    expect(
+      screen.queryByRole("button", { name: "Delete edge" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
   it("stops a running journey", async () => {
     vi.mocked(api.cancelJourney).mockResolvedValue(null);
     useJourneyStore.setState({
