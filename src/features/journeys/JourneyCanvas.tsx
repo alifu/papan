@@ -11,7 +11,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useMemo, useRef, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, type DragEvent } from "react";
 import {
   dropRequestPath,
   toFlow,
@@ -32,6 +32,9 @@ import { StepCard } from "./StepCard";
 
 const NODE_TYPES: NodeTypes = { step: StepCard };
 const SNAP: [number, number] = [20, 20];
+const MINIMAP_SIZE = { width: 140, height: 90 };
+const FIT = { padding: 0.3, duration: 200 };
+const DELETE_KEYS = ["Backspace", "Delete"];
 
 export interface JourneyCanvasProps {
   readonly journey: Journey;
@@ -57,6 +60,14 @@ function Canvas({
     () => toFlow(journey, run, picked, sizes.current),
     [journey, run, picked],
   );
+
+  // A node added from the palette lands where the view may not reach: show everything again.
+  const count = journey.nodes?.length ?? 0;
+  const shown = useRef(count);
+  useEffect(() => {
+    if (count > shown.current) void flow.fitView(FIT);
+    shown.current = count;
+  }, [count, flow]);
 
   const onNodesChange = (changes: NodeChange<StepNode>[]) => {
     let next = journey;
@@ -107,6 +118,7 @@ function Canvas({
       nodeTypes={NODE_TYPES}
       onNodesChange={onNodesChange}
       onDelete={onDelete}
+      deleteKeyCode={DELETE_KEYS}
       onConnect={onConnect}
       onNodeClick={(_, node) => onSelect(node.id)}
       onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
@@ -116,11 +128,12 @@ function Canvas({
       snapToGrid
       snapGrid={SNAP}
       fitView
+      fitViewOptions={FIT}
       proOptions={{ hideAttribution: true }}
     >
       <Background />
       <Controls showInteractive={false} />
-      <MiniMap pannable zoomable />
+      <MiniMap pannable zoomable position="top-right" style={MINIMAP_SIZE} />
     </ReactFlow>
   );
 }

@@ -8,6 +8,7 @@ import { installNetFake } from "./netMock";
 import { installGraphqlFake } from "./graphqlMock";
 import { installSoapFake } from "./soapMock";
 import { installWebhookFake } from "./webhookMock";
+import { installJourneyFake } from "./journeyMock";
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name: string, encoding: "utf8" | "base64"): string => readFileSync(join(FIXTURE_DIR, name), encoding);
@@ -327,7 +328,12 @@ export async function mockTauri(page: Page): Promise<void> {
         if (cmd === "plugin:event|listen") {
           const name = String(args.event);
           listeners.set(name, [...(listeners.get(name) ?? []), Number(args.handler)]);
-          return Promise.resolve(++callbackId);
+          return Promise.resolve(Number(args.handler));
+        }
+        if (cmd === "plugin:event|unlisten") {
+          const name = String(args.event);
+          listeners.set(name, (listeners.get(name) ?? []).filter((id) => id !== Number(args.eventId)));
+          return Promise.resolve(null);
         }
         if (cmd.startsWith("plugin:event|")) return Promise.resolve(++callbackId);
         if (failing.delete(cmd)) return Promise.reject(appError("io", "Backend says no."));
@@ -352,4 +358,5 @@ export async function mockTauri(page: Page): Promise<void> {
   await installPostmanFake(page);
   await installGraphqlFake(page);
   await installWebhookFake(page);
+  await installJourneyFake(page);
 }
