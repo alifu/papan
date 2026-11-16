@@ -1,13 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Papan app icon master. Render with: node scripts/render-icon.mjs -->
+  <!-- Papan app icon master. "papan" is Indonesian for board / plank.
+       Three wooden planks (papan) carry a request arrow. Render with: node scripts/render-icon.mjs -->
   <defs>
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3A8BF0"/>
-      <stop offset="1" stop-color="#1458C8"/>
+    <linearGradient id="plankA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E9B26B"/>
+      <stop offset="1" stop-color="#D2954A"/>
     </linearGradient>
-    <linearGradient id="strip" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2A5DB0"/>
-      <stop offset="1" stop-color="#0A246A"/>
+    <linearGradient id="plankB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#DDA05A"/>
+      <stop offset="1" stop-color="#C4843D"/>
+    </linearGradient>
+    <linearGradient id="plankC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E4A961"/>
+      <stop offset="1" stop-color="#CB8D44"/>
     </linearGradient>
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
@@ -17,29 +22,57 @@
       <rect x="100" y="100" width="824" height="824" rx="184" ry="184"/>
     </clipPath>
     <filter id="tileShadow" x="-10%" y="-10%" width="120%" height="125%">
-      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0A246A" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#4A2A0A" flood-opacity="0.38"/>
     </filter>
     <filter id="arrowShadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="12" stdDeviation="6" flood-color="#0A246A" flood-opacity="0.25"/>
+      <feDropShadow dx="0" dy="14" stdDeviation="8" flood-color="#2B1604" flood-opacity="0.45"/>
     </filter>
   </defs>
 
-  <!-- Tile with soft drop shadow inside the margin -->
-  <rect x="100" y="100" width="824" height="824" rx="184" ry="184" fill="url(#body)" filter="url(#tileShadow)"/>
+  <!-- Base tile (also fills the seams between planks) -->
+  <rect x="100" y="100" width="824" height="824" rx="184" ry="184" fill="#5A3411" filter="url(#tileShadow)"/>
 
   <g clip-path="url(#tile)">
-    <!-- Title strip: top 22% of the tile -->
-    <rect x="100" y="100" width="824" height="182" fill="url(#strip)"/>
-    <!-- Light edge under the strip so it separates from the body -->
-    <rect x="100" y="282" width="824" height="10" fill="#FFFFFF" fill-opacity="0.35"/>
+    <!-- Three planks with dark seams -->
+    <rect x="100" y="100" width="824" height="266" fill="url(#plankA)"/>
+    <rect x="100" y="378" width="824" height="268" fill="url(#plankB)"/>
+    <rect x="100" y="658" width="824" height="266" fill="url(#plankC)"/>
+
+    <!-- Light top edge on each plank -->
+    <g fill="#FFFFFF" fill-opacity="0.28">
+      <rect x="100" y="100" width="824" height="8"/>
+      <rect x="100" y="378" width="824" height="8"/>
+      <rect x="100" y="658" width="824" height="8"/>
+    </g>
+
+    <!-- Wood grain -->
+    <g fill="none" stroke="#7A4A18" stroke-opacity="0.28" stroke-width="6" stroke-linecap="round">
+      <path d="M 150 190 C 330 170, 480 215, 650 190 S 860 180, 900 196"/>
+      <path d="M 170 290 C 300 308, 460 270, 600 292 S 820 306, 880 284"/>
+      <path d="M 150 470 C 320 452, 440 496, 620 470 S 840 458, 900 478"/>
+      <path d="M 180 570 C 330 590, 470 552, 640 574 S 830 586, 890 566"/>
+      <path d="M 150 745 C 310 728, 470 770, 640 746 S 840 734, 900 752"/>
+      <path d="M 170 845 C 320 862, 450 828, 610 848 S 820 860, 880 842"/>
+    </g>
+
     <!-- Gloss over the upper half -->
     <rect x="100" y="100" width="824" height="412" fill="url(#gloss)"/>
+  </g>
+
+  <!-- Nails: one at each end of the top and bottom plank -->
+  <g fill="#4A2A0A" fill-opacity="0.85">
+    <circle cx="190" cy="233" r="20"/><circle cx="834" cy="233" r="20"/>
+    <circle cx="190" cy="791" r="20"/><circle cx="834" cy="791" r="20"/>
+  </g>
+  <g fill="#F4D9A8" fill-opacity="0.8">
+    <circle cx="186" cy="229" r="7"/><circle cx="830" cy="229" r="7"/>
+    <circle cx="186" cy="787" r="7"/><circle cx="830" cy="787" r="7"/>
   </g>
 
   <!-- Inner highlight stroke -->
   <rect x="104" y="104" width="816" height="816" rx="180" ry="180" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="8"/>
 
-  <!-- Request arrow pointing right, centred in the body -->
+  <!-- Request arrow, centred on the middle plank -->
   <path filter="url(#arrowShadow)" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="28" stroke-linejoin="round"
-        d="M 286 547 L 536 547 L 536 458 L 738 607 L 536 756 L 536 667 L 286 667 Z"/>
+        d="M 286 477 L 536 477 L 536 388 L 738 537 L 536 686 L 536 597 L 286 597 Z"/>
 </svg>
