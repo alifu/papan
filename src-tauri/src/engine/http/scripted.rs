@@ -13,6 +13,7 @@
 //! changes made before it. Cancel stops a running chain.
 //! The store lock is released before any JavaScript runs.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -63,6 +64,18 @@ pub async fn run_send(
     location: &RequestLocation,
     content: &RequestContent,
 ) -> Result<SendOutcome, AppError> {
+    run_send_with(deps, request_id, location, content, &BTreeMap::new()).await
+}
+
+/// [`run_send`] with `overlay` variables on the runtime layer: what a journey passes from
+/// one node to the next (plan 13 §3). They win over the environment and scripts may change them.
+pub async fn run_send_with(
+    deps: &SendDeps<'_>,
+    request_id: &str,
+    location: &RequestLocation,
+    content: &RequestContent,
+    overlay: &BTreeMap<String, String>,
+) -> Result<SendOutcome, AppError> {
     let sent_at_ms = now_ms();
     let started = Instant::now();
     let id = validate_id(request_id)?;
@@ -79,7 +92,9 @@ pub async fn run_send(
         limits: Limits::default(),
     };
     let mut reports = Vec::new();
-    let mut context = ScriptContext::new(layers_of(&prepared.scopes), script_request(content));
+    let mut layers = layers_of(&prepared.scopes);
+    layers.runtime.values.extend(overlay.clone());
+    let mut context = ScriptContext::new(layers, script_request(content));
 
     if prepared.chains.has_pre() {
         let scripts = prepared.chains.pre_request.clone();

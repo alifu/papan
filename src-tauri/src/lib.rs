@@ -56,6 +56,7 @@ pub fn run() {
             app.manage(mock::MockService::new(mock::commands::TauriSink::arc(
                 app.handle().clone(),
             )));
+            app.manage(journey::commands::JourneyRuns::default());
             #[cfg(debug_assertions)]
             export_bindings(&ipc_builder);
             tracing::info!(version = %app.package_info().version, "Papan started");

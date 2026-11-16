@@ -25,6 +25,8 @@ use crate::engine::ws::types::WsEvent;
 use crate::error::AppError;
 use crate::git::commands as git;
 use crate::interop::postman::commands as postman;
+use crate::journey::commands as journey;
+use crate::journey::types::JourneyRunEvent;
 use crate::mock::commands as mock;
 use crate::mock::types::{MockLogged, MockStopped};
 use crate::store::commands as store;
@@ -113,6 +115,12 @@ pub fn builder() -> Builder<tauri::Wry> {
             mock::mock_from_collection,
             mock::import_mock,
             mock::export_mock,
+            journey::list_journeys,
+            journey::read_journey,
+            journey::save_journey,
+            journey::delete_journey,
+            journey::run_journey,
+            journey::cancel_journey,
             git::git_status,
             git::git_init,
             git::git_clone,
@@ -168,7 +176,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             WebhookCaptured,
             WebhookStopped,
             MockLogged,
-            MockStopped
+            MockStopped,
+            JourneyRunEvent
         ])
         .typ::<AppError>()
         .disable_serde_phases()

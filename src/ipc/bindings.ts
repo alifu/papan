@@ -123,6 +123,18 @@ export const commands = {
 	 *  the save dialog is cancelled.
 	 */
 	exportMock: (collectionId: string, file: string) => __TAURI_INVOKE<ExportedMock | null>("export_mock", { collectionId, file }),
+	listJourneys: (collectionId: string) => __TAURI_INVOKE<JourneySummary[]>("list_journeys", { collectionId }),
+	readJourney: (collectionId: string, file: string) => __TAURI_INVOKE<Journey>("read_journey", { collectionId, file }),
+	/**  Saves a journey; `file` is `None` for a new one. Returns its summary. */
+	saveJourney: (collectionId: string, file: string | null, journey: Journey) => __TAURI_INVOKE<JourneySummary>("save_journey", { collectionId, file, journey }),
+	deleteJourney: (collectionId: string, file: string) => __TAURI_INVOKE<null>("delete_journey", { collectionId, file }),
+	/**  Runs a saved journey with the selected environment; steps arrive as `journeyRunEvent`. */
+	runJourney: (collectionId: string, file: string) => __TAURI_INVOKE<RunSummary>("run_journey", { collectionId, file }),
+	/**
+	 *  Stops a running journey and the request or script it is in. A journey that is not running
+	 *  is a no-op.
+	 */
+	cancelJourney: (collectionId: string, file: string) => __TAURI_INVOKE<null>("cancel_journey", { collectionId, file }),
 	gitStatus: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_status", { collectionId }),
 	gitInit: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_init", { collectionId }),
 	/**
@@ -232,6 +244,7 @@ export const commands = {
 export const events = {
 	collectionChanged: makeEvent<CollectionChanged, CollectionChanged>("collection-changed"),
 	grpcEvent: makeEvent<GrpcEvent, GrpcEvent>("grpc-event"),
+	journeyRunEvent: makeEvent<JourneyRunEvent, JourneyRunEvent>("journey-run-event"),
 	mockLogged: makeEvent<MockLogged, MockLogged>("mock-logged"),
 	mockStopped: makeEvent<MockStopped, MockStopped>("mock-stopped"),
 	webhookCaptured: makeEvent<WebhookCaptured, WebhookCaptured>("webhook-captured"),
@@ -296,6 +309,26 @@ export type CaptureSummary = {
 	size: number,
 	content_type: string,
 };
+
+/**  What a Condition or Assert node tests. `value` may use `{{variables}}`. */
+export type Check = {
+	source?: CheckSource,
+	name?: string,
+	op?: CheckOp,
+	value?: string,
+};
+
+export type CheckOp = "eq" | "ne" | "gt" | "ge" | "lt" | "le" | "contains" | "exists" | "not_exists";
+
+export type CheckSource = 
+/**  The status code of the last response. */
+"status" | 
+/**  A header of the last response; `name` is the header. */
+"header" | 
+/**  A JSON path into the last response body; `name` is the path. */
+"body" | 
+/**  A journey variable; `name` is the variable. */
+"variable";
 
 /**  How the OAuth 2 client authenticates to the token endpoint. */
 export type ClientAuth = "basic" | "body";
@@ -437,6 +470,12 @@ export type ExportedMock = {
 	notes: string[],
 };
 
+export type FailurePolicy = 
+/**  A failed node ends the run. */
+"stop" | 
+/**  The failure is recorded and the run goes on. */
+"continue";
+
 export type GitBranch = {
 	name: string,
 	current: boolean,
@@ -560,6 +599,11 @@ export type Header = {
 	value: string,
 };
 
+export type HeaderLine = {
+	name: string,
+	value: string,
+};
+
 /**  One sent request as listed in the History panel. */
 export type HistoryEntry = {
 	id: string,
@@ -592,6 +636,69 @@ export type ImportTarget = { type: "new_collection" } | { type: "collection"; co
 export type ImportedMock = {
 	summary: MockSummary,
 	notes: string[],
+};
+
+export type Journey = {
+	name: string,
+	nodes?: JourneyNode[],
+	edges?: JourneyEdge[],
+	settings?: JourneySettings,
+};
+
+export type JourneyEdge = {
+	id: string,
+	from: string,
+	to: string,
+	/**  `true`/`false` from a Condition, `each`/`done` from a Loop, empty otherwise. */
+	when?: string,
+};
+
+/**  A node with the fields of every type; each type reads the ones it needs. */
+export type JourneyNode = {
+	id: string,
+	type: NodeType,
+	label?: string,
+	x?: number | null,
+	y?: number | null,
+	/**  Request nodes: the saved request, relative to `requests/`. */
+	request?: string,
+	/**  Request nodes: variables to keep from the response. */
+	outputs?: Output[],
+	/**  Script nodes: JavaScript with the `pm` API; `pm.variables` become journey variables. */
+	script?: string,
+	/**  Condition and Assert nodes. */
+	check?: Check,
+	/**  Delay nodes. */
+	delay_ms?: number,
+	/**  Loop nodes: runs once per item; with no items, `count` times. */
+	items?: string[],
+	count?: number,
+	/**  Loop nodes: the variable that holds the item (the index is `<var>_index`). */
+	loop_var?: string,
+	/**  Overrides the journey's policy for this node. */
+	on_failure?: FailurePolicy | null,
+};
+
+/**  Emitted for each step of a running journey. TS: `events.journeyRunEvent`. */
+export type JourneyRunEvent = {
+	run_id: string,
+	collection_id: string,
+	file: string,
+	event: RunEvent,
+};
+
+export type JourneySettings = {
+	on_failure?: FailurePolicy,
+	max_steps?: number,
+};
+
+/**  A journey file as listed in the sidebar. */
+export type JourneySummary = {
+	file: string,
+	name: string,
+	nodes: number,
+	/**  Why the file cannot be used, when it cannot. */
+	error: string | null,
 };
 
 /**  A header, form field or other name/value row that can be switched off. */
@@ -714,6 +821,10 @@ export type NetworkSettings = {
 
 export type NodeKind = "folder" | "request" | "invalid";
 
+export type NodeStatus = "passed" | "failed";
+
+export type NodeType = "start" | "end" | "request" | "script" | "condition" | "delay" | "assert" | "loop";
+
 export type OAuthGrant = "client_credentials" | "authorization_code";
 
 /**
@@ -732,6 +843,14 @@ export type OAuthStatus = {
 	redirect_uri: string | null,
 	/**  Whether "Get new token" will verify the provider's TLS certificate. */
 	verify_tls: boolean,
+};
+
+/**  A variable a Request node reads from its response and keeps for the nodes after it. */
+export type Output = {
+	name: string,
+	source?: CheckSource,
+	/**  Header name or JSON path, by `source`. */
+	path?: string,
 };
 
 /**  A query parameter switched off in the params table (plan 03 §3.1). */
@@ -899,6 +1018,14 @@ export type ResponseMeta = {
 
 export type ResponseMode = "rules" | "sequential" | "random" | "disable_rules";
 
+/**  What a Request node got back: a preview only; the body is cut. */
+export type ResponseSummary = {
+	status: number,
+	headers: HeaderLine[],
+	body_preview: string,
+	body_truncated: boolean,
+};
+
 /**  What a route does: answer from its responses, or serve a data bucket as a REST resource. */
 export type RouteKind = "http" | "crud" | 
 /**  A WebSocket endpoint: `greeting` is sent on connect and `responses` answer each message. */
@@ -918,6 +1045,36 @@ export type RuleOperator = "equals" | "regex" | "regex_i" | "null" | "empty_arra
 export type RuleTarget = "body" | "query" | "header" | "params" | "cookie" | "request_number" | "path";
 
 export type RulesOperator = "and" | "or";
+
+/**  One step of a run. Fields that do not belong to the `kind` are empty. */
+export type RunEvent = {
+	kind: RunEventKind,
+	node_id: string,
+	status: NodeStatus | null,
+	message: string,
+	response: ResponseSummary | null,
+	/**  Variables the node set. */
+	vars: VarSet[],
+	/**  Console lines of a Script node. */
+	console: string[],
+	/**  Steps taken so far. */
+	steps: number,
+	/**  Set on `run_finished`. */
+	run_status: RunStatus | null,
+};
+
+export type RunEventKind = "node_started" | "node_finished" | "run_finished";
+
+export type RunStatus = "passed" | "failed" | "cancelled";
+
+/**  How a run ended. */
+export type RunSummary = {
+	run_id: string,
+	status: RunStatus,
+	steps: number,
+	failures: number,
+	message: string,
+};
 
 /**  Where a cached schema came from: an introspection result or an SDL file. */
 export type SchemaSource = { type: "introspection"; json: string } | { type: "sdl"; text: string };
@@ -1109,6 +1266,11 @@ export type TreeNode = {
 
 /**  Which set of variables a read or write addresses. */
 export type VarScope = { scope: "global" } | { scope: "collection"; collection_id: string } | { scope: "environment"; collection_id: string; env: string };
+
+export type VarSet = {
+	name: string,
+	value: string,
+};
 
 /**  Where an effective variable's value comes from. */
 export type VarSource = "global" | "collection" | "environment" | "dynamic" | 
