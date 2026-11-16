@@ -261,12 +261,17 @@ pub fn import(source: &str) -> Result<Converted, AppError> {
         .iter()
         .map(|r| route_of(r, &buckets, &mut notes))
         .collect();
-    let hostname = text(env, "hostname");
-    let proxy = if flag(env, "proxyMode", false) {
-        text(env, "proxyHost")
-    } else {
-        String::new()
-    };
+    // An imported file never opens the mock to the network or forwards to another host by
+    // itself; the settings are left for the user to set on purpose.
+    if text(env, "hostname") == "0.0.0.0" {
+        notes.push(
+            "The mock listens on this computer only; set it to all interfaces to share it.".into(),
+        );
+    }
+    let proxy = text(env, "proxyHost");
+    if flag(env, "proxyMode", false) && !proxy.is_empty() {
+        notes.push(format!("Forwarding to {proxy} was left off."));
+    }
     let name = text(env, "name");
     let mock = MockEnvironment {
         name: if name.trim().is_empty() {
@@ -279,11 +284,7 @@ pub fn import(source: &str) -> Result<Converted, AppError> {
             .and_then(Value::as_u64)
             .and_then(|n| u16::try_from(n).ok())
             .unwrap_or(0),
-        bind: if hostname == "0.0.0.0" {
-            MockBind::AllInterfaces
-        } else {
-            MockBind::Loopback
-        },
+        bind: MockBind::Loopback,
         prefix: text(env, "endpointPrefix").trim_matches('/').to_string(),
         latency_ms: number(env, "latency"),
         cors: flag(env, "cors", true),
@@ -292,7 +293,7 @@ pub fn import(source: &str) -> Result<Converted, AppError> {
         tls: env
             .get("tlsOptions")
             .is_some_and(|t| flag(t, "enabled", false)),
-        proxy,
+        proxy: String::new(),
         data,
         fallback: None,
     };
@@ -497,10 +498,10 @@ mod tests {
         validate("test", mock).unwrap();
         assert_eq!(mock.name, "Shop");
         assert_eq!(mock.port, 3001);
-        assert_eq!(mock.bind, MockBind::AllInterfaces);
+        assert_eq!(mock.bind, MockBind::Loopback);
         assert_eq!(mock.prefix, "api");
         assert!(mock.tls && !mock.cors);
-        assert_eq!(mock.proxy, "https://real.example.com");
+        assert!(mock.proxy.is_empty());
         assert_eq!(mock.latency_ms, 20);
         let post = &mock.routes[0];
         assert_eq!(
@@ -518,7 +519,7 @@ mod tests {
         assert_eq!(crud.id_key, "pk");
         assert_eq!(crud.bucket, mock.data[0].id);
         assert_eq!(mock.data[1].value, "[]");
-        assert_eq!(done.notes.len(), 3, "{:?}", done.notes);
+        assert_eq!(done.notes.len(), 5, "{:?}", done.notes);
     }
 
     #[test]

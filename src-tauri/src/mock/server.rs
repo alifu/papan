@@ -639,14 +639,25 @@ fn wants_websocket(parts: &http::request::Parts) -> bool {
         && header_has(parts, "connection", "upgrade")
 }
 
-/// Without CORS a mock answers only pages of its own origin; WebSockets have no CORS, so the
-/// `Origin` header is checked here.
-fn origin_refused(mock: &MockEnvironment, ctx: &RequestCtx) -> bool {
-    let Some(origin) = ctx.header("origin") else {
+/// WebSockets have no CORS, so a mock decides by the `Origin` header. Pages of the mock's own
+/// origin are let in, and so are pages on this machine when CORS is on; any other site is not, and
+/// neither is a request whose `Origin` is repeated or unreadable.
+fn origin_refused(mock: &MockEnvironment, parts: &http::request::Parts, ctx: &RequestCtx) -> bool {
+    let mut values = parts.headers.get_all("origin").iter();
+    let Some(first) = values.next() else {
         return false;
     };
+    let Ok(origin) = first.to_str() else {
+        return true;
+    };
+    if values.next().is_some() {
+        return true;
+    }
     let authority = origin.split_once("://").map_or(origin, |(_, rest)| rest);
-    !mock.cors && !authority.eq_ignore_ascii_case(&ctx.host)
+    if authority.eq_ignore_ascii_case(&ctx.host) {
+        return false;
+    }
+    !(mock.cors && is_loopback_host(authority))
 }
 
 /// Completes the WebSocket handshake for a matched route and hands the connection to a session.
@@ -742,7 +753,7 @@ async fn handle(
     }
     if wants_websocket(&parts) {
         if let Some(plan) = ws::find(&shared.compiled, &ctx) {
-            if origin_refused(&shared.compiled.mock, &ctx) {
+            if origin_refused(&shared.compiled.mock, &parts, &ctx) {
                 return Ok(plain(403, "Cross-origin WebSocket refused."));
             }
             return Ok(accept_websocket(

@@ -61,7 +61,7 @@ pub fn find(compiled: &Compiled, ctx: &RequestCtx) -> Option<WsPlan> {
 }
 
 fn render(compiled: &Compiled, source: &str, ctx: &mut RequestCtx) -> String {
-    if source.contains("data") {
+    if template::uses_data(source) {
         ctx.data = compiled.buckets.snapshot();
     }
     template::render(source, ctx).unwrap_or_else(|problem| {

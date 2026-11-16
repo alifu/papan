@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use rand::Rng;
+use serde_json::Value;
 
 use super::crud::Buckets;
 use super::matcher::{find_route, strip_prefix, CompiledRoute};
@@ -235,11 +236,11 @@ fn build_reply(
 }
 
 fn reads_data(response: &MockResponse) -> bool {
-    response.body.contains("data")
+    super::template::uses_data(&response.body)
         || response
             .callbacks
             .iter()
-            .any(|callback| callback.body.contains("data"))
+            .any(|callback| super::template::uses_data(&callback.body))
 }
 
 /// Callback bodies are rendered now, with the request in hand; one that fails to render is
@@ -269,6 +270,15 @@ fn prepare_callbacks(response: &MockResponse, ctx: &RequestCtx) -> Vec<PreparedC
         .collect()
 }
 
+/// CRUD writes take JSON only when it is declared as such; a cross-site form cannot send that
+/// without a CORS preflight.
+fn json_body(ctx: &RequestCtx) -> Option<&Value> {
+    let declared = ctx
+        .header("content-type")
+        .is_some_and(|value| value.to_ascii_lowercase().contains("json"));
+    declared.then_some(ctx.body_json.as_ref()).flatten()
+}
+
 fn crud_reply(compiled: &Compiled, route: &MockRoute, ctx: &mut RequestCtx) -> Reply {
     let mock = &compiled.mock;
     let id = ctx
@@ -281,7 +291,7 @@ fn crud_reply(compiled: &Compiled, route: &MockRoute, ctx: &mut RequestCtx) -> R
         &route.id_key,
         &ctx.method,
         id.as_deref(),
-        ctx.body_json.as_ref(),
+        json_body(ctx),
     );
     let mut headers: Vec<(String, String)> = Vec::new();
     for header in mock.headers.iter().filter(|h| h.enabled) {

@@ -70,6 +70,17 @@ fn request_of(ctx: &Context) -> &Value {
     ctx.data().get("request").unwrap_or(&Value::Null)
 }
 
+/// Whether a template mentions `data` inside a `{{ }}` tag, as a word (`metadata` does not count).
+pub fn uses_data(source: &str) -> bool {
+    source.split("{{").skip(1).any(|tag| {
+        let tag = tag.split("}}").next().unwrap_or(tag);
+        tag.match_indices("data").any(|(at, _)| {
+            let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+            !word(tag[..at].chars().next_back()) && !word(tag[at + 4..].chars().next())
+        })
+    })
+}
+
 fn write_value(out: Out<'_>, value: &Value) -> HelperResult {
     match value {
         Value::Null => Ok(()),
@@ -693,5 +704,14 @@ mod tests {
         assert!(render("{{float 'NaN' 1}}", &ctx()).is_err());
         assert!(render("{{float '-1e308' '1e308'}}", &ctx()).is_err());
         assert!(render("{{float 1 2}}", &ctx()).is_ok());
+    }
+
+    #[test]
+    fn uses_data_only_for_the_word_inside_a_tag() {
+        assert!(uses_data("{{#each data.users}}x{{/each}}"));
+        assert!(uses_data("a {{ lookup data 'u' }}"));
+        assert!(!uses_data(r#"{"data": 1, "metadata": "{{now}}"}"#));
+        assert!(!uses_data("{{metadata}} {{data_x}}"));
+        assert!(!uses_data("plain data"));
     }
 }

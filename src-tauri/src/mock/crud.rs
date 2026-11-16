@@ -9,12 +9,15 @@ use super::model::DataBucket;
 
 /// Items one bucket may hold, and the serialized size it may reach.
 pub const MAX_ITEMS: usize = 10_000;
-pub const MAX_BUCKET_BYTES: usize = 10 * 1024 * 1024;
+pub const MAX_BUCKET_BYTES: usize = 2 * 1024 * 1024;
+/// What all buckets of one mock may hold together.
+pub const MAX_TOTAL_BYTES: usize = 4 * 1024 * 1024;
 
 struct Bucket {
     id: String,
     name: String,
     value: Value,
+    bytes: usize,
 }
 
 /// What a CRUD call answers.
@@ -65,6 +68,7 @@ impl Buckets {
                 id: bucket.id.clone(),
                 name: bucket.name.clone(),
                 value: serde_json::from_str(&bucket.value).unwrap_or(Value::Null),
+                bytes: bucket.value.len(),
             })
             .collect();
         Self {
@@ -96,6 +100,11 @@ impl Buckets {
         body: Option<&Value>,
     ) -> Outcome {
         let mut buckets = self.lock();
+        let others: usize = buckets
+            .iter()
+            .filter(|b| b.id != bucket_id)
+            .map(|b| b.bytes)
+            .sum();
         let Some(bucket) = buckets.iter_mut().find(|b| b.id == bucket_id) else {
             return failure(500, "The data bucket of this route does not exist.");
         };
@@ -103,20 +112,32 @@ impl Buckets {
             return failure(500, "The data bucket does not hold an array.");
         };
         let method = method.to_ascii_uppercase();
-        match (id, method.as_str()) {
+        let room = Room {
+            limit: MAX_BUCKET_BYTES.min(MAX_TOTAL_BYTES.saturating_sub(others)),
+            used: bucket.bytes,
+        };
+        let outcome = match (id, method.as_str()) {
             (None, "GET") => answer(200, bucket.value.clone()),
             (Some(id), "GET") => match position(items, id_key, id) {
                 Some(at) => answer(200, items[at].clone()),
                 None => not_found(id),
             },
-            (None, "POST") => create(&mut bucket.value, id_key, body),
-            (Some(id), "PUT" | "PATCH") => {
-                update(&mut bucket.value, id_key, id, method == "PATCH", body)
-            }
-            (Some(id), "DELETE") => remove(&mut bucket.value, id_key, id),
+            (None, "POST") => create(&mut bucket.value, id_key, body, &room),
+            (Some(id), "PUT" | "PATCH") => update(
+                &mut bucket.value,
+                id_key,
+                id,
+                (method == "PATCH", body),
+                &room,
+            ),
+            (Some(id), "DELETE") => remove(&mut bucket.value, id_key, id, &room),
             (None, _) => refused("GET, POST"),
             (Some(_), _) => refused("GET, PUT, PATCH, DELETE"),
+        };
+        if matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE") && outcome.status < 300 {
+            bucket.bytes = serde_json::to_vec(&bucket.value).map_or(bucket.bytes, |v| v.len());
         }
+        outcome
     }
 }
 
@@ -138,14 +159,20 @@ fn object_of(body: Option<&Value>) -> Result<&Map<String, Value>, Outcome> {
     }
 }
 
+/// How much one bucket may grow to: a bucket already over `limit` (a big file) may still shrink.
+struct Room {
+    limit: usize,
+    used: usize,
+}
+
 /// Stores `next` unless it is over the limits; the bucket keeps its old value otherwise.
-fn commit(slot: &mut Value, next: Vec<Value>, done: Outcome) -> Outcome {
+fn commit(slot: &mut Value, next: Vec<Value>, done: Outcome, room: &Room) -> Outcome {
     if next.len() > MAX_ITEMS {
         return failure(413, "The data bucket is full.");
     }
     let candidate = Value::Array(next);
     let size = serde_json::to_vec(&candidate).map_or(usize::MAX, |bytes| bytes.len());
-    if size > MAX_BUCKET_BYTES {
+    if size > room.limit.max(room.used) {
         return failure(413, "The data bucket is full.");
     }
     *slot = candidate;
@@ -159,7 +186,7 @@ fn items_of(slot: &Value) -> Vec<Value> {
     }
 }
 
-fn create(slot: &mut Value, key: &str, body: Option<&Value>) -> Outcome {
+fn create(slot: &mut Value, key: &str, body: Option<&Value>, room: &Room) -> Outcome {
     let mut item = match object_of(body) {
         Ok(map) => map.clone(),
         Err(outcome) => return outcome,
@@ -179,10 +206,16 @@ fn create(slot: &mut Value, key: &str, body: Option<&Value>) -> Outcome {
     }
     let created = Value::Object(item);
     items.push(created.clone());
-    commit(slot, items, answer(201, created))
+    commit(slot, items, answer(201, created), room)
 }
 
-fn update(slot: &mut Value, key: &str, id: &str, merge: bool, body: Option<&Value>) -> Outcome {
+fn update(
+    slot: &mut Value,
+    key: &str,
+    id: &str,
+    (merge, body): (bool, Option<&Value>),
+    room: &Room,
+) -> Outcome {
     let changes = match object_of(body) {
         Ok(map) => map,
         Err(outcome) => return outcome,
@@ -205,16 +238,16 @@ fn update(slot: &mut Value, key: &str, id: &str, merge: bool, body: Option<&Valu
     }
     let updated = Value::Object(next);
     items[at] = updated.clone();
-    commit(slot, items, answer(200, updated))
+    commit(slot, items, answer(200, updated), room)
 }
 
-fn remove(slot: &mut Value, key: &str, id: &str) -> Outcome {
+fn remove(slot: &mut Value, key: &str, id: &str, room: &Room) -> Outcome {
     let mut items = items_of(slot);
     let Some(at) = position(&items, key, id) else {
         return not_found(id);
     };
     let removed = items.remove(at);
-    commit(slot, items, answer(200, removed))
+    commit(slot, items, answer(200, removed), room)
 }
 
 #[cfg(test)]
@@ -301,7 +334,7 @@ mod tests {
         for _ in 0..13 {
             statuses.push(call(&b, "POST", None, Some(big.clone())).status);
         }
-        assert_eq!(statuses.iter().filter(|s| **s == 201).count(), 11);
+        assert_eq!(statuses.iter().filter(|s| **s == 201).count(), 2);
         assert_eq!(*statuses.last().unwrap(), 413);
         let full = buckets(&serde_json::to_string(&vec![json!({"id": 1}); MAX_ITEMS]).unwrap());
         assert_eq!(
@@ -315,5 +348,29 @@ mod tests {
         let b = buckets(r#"{"not": "an array"}"#);
         assert_eq!(call(&b, "GET", None, None).status, 500);
         assert_eq!(b.call("nope", "id", "GET", None, None).status, 500);
+    }
+
+    #[test]
+    fn buckets_share_a_total_limit_but_may_still_shrink() {
+        let pad = "x".repeat(1024 * 1024 + 512 * 1024);
+        let one = |id: &str| DataBucket {
+            id: id.into(),
+            name: id.into(),
+            value: format!(r#"[{{"id": 0, "pad": "{pad}"}}]"#),
+        };
+        let b = Buckets::new(&[one("a"), one("b"), one("c")]);
+        let room = |at: &str| {
+            b.call(
+                at,
+                "id",
+                "POST",
+                None,
+                Some(&json!({"pad": "x".repeat(3000)})),
+            )
+        };
+        assert_eq!(room("a").status, 413);
+        let removed = b.call("a", "id", "DELETE", Some("0"), None);
+        assert_eq!(removed.status, 200);
+        assert_eq!(room("a").status, 201);
     }
 }

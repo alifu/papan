@@ -6,7 +6,7 @@ use serde_json::{json, Map, Value};
 use super::mockers::Converted;
 use super::model::{
     default_id_key, MockEnvironment, MockResponse, MockRoute, ResponseMode, RouteKind,
-    RulesOperator, MAX_RESPONSES, MAX_ROUTES,
+    RulesOperator, MAX_BODY_BYTES, MAX_RESPONSES, MAX_ROUTES,
 };
 use crate::error::AppError;
 use crate::store::types::KeyValue;
@@ -15,6 +15,8 @@ const METHODS: [&str; 7] = ["get", "post", "put", "patch", "delete", "head", "op
 const MAX_SCHEMA_DEPTH: usize = 8;
 const MAX_NODES: usize = 2_000;
 const FALLBACK_STATUS: u16 = 200;
+/// All bodies of one import together stay under this many bytes.
+const MAX_IMPORT_BYTES: usize = 8 * 1024 * 1024;
 
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -47,6 +49,19 @@ fn resolve<'a>(root: &'a Value, node: &'a Value) -> &'a Value {
     current
 }
 
+/// Whether `value` has few enough nodes to copy; each node counted is taken from `budget`.
+fn affordable(value: &Value, budget: &mut usize) -> bool {
+    if *budget == 0 {
+        return false;
+    }
+    *budget -= 1;
+    match value {
+        Value::Array(items) => items.iter().all(|item| affordable(item, budget)),
+        Value::Object(fields) => fields.values().all(|item| affordable(item, budget)),
+        _ => true,
+    }
+}
+
 /// A sample value for a schema: its example or default, else a value of its type.
 fn sample(root: &Value, schema: &Value, depth: usize, budget: &mut usize) -> Value {
     *budget = budget.saturating_sub(1);
@@ -56,7 +71,11 @@ fn sample(root: &Value, schema: &Value, depth: usize, budget: &mut usize) -> Val
     let schema = resolve(root, schema);
     for key in ["example", "default"] {
         if let Some(value) = schema.get(key) {
-            return value.clone();
+            return if affordable(value, budget) {
+                value.clone()
+            } else {
+                Value::Null
+            };
         }
     }
     if let Some(first) = schema
@@ -64,7 +83,11 @@ fn sample(root: &Value, schema: &Value, depth: usize, budget: &mut usize) -> Val
         .and_then(Value::as_array)
         .and_then(|a| a.first())
     {
-        return first.clone();
+        return if affordable(first, budget) {
+            first.clone()
+        } else {
+            Value::Null
+        };
     }
     if let Some(parts) = schema.get("allOf").and_then(Value::as_array) {
         let mut merged = Map::new();
@@ -127,17 +150,16 @@ fn sample(root: &Value, schema: &Value, depth: usize, budget: &mut usize) -> Val
 }
 
 /// An example attached to a media type: `example`, then the first of `examples`.
-fn declared_example(root: &Value, media: &Value) -> Option<Value> {
+fn declared_example<'a>(root: &'a Value, media: &'a Value) -> Option<&'a Value> {
     if let Some(value) = media.get("example") {
-        return Some(value.clone());
+        return Some(value);
     }
     let first = media.get("examples")?.as_object()?.values().next()?;
-    let first = resolve(root, first);
-    first.get("value").cloned()
+    resolve(root, first).get("value")
 }
 
 /// The body for one response: (content type, body text).
-fn body_of(root: &Value, response: &Value, budget: &mut usize) -> (String, String) {
+fn body_of(root: &Value, response: &Value, budget: &mut Budget) -> (String, String) {
     // OpenAPI 3: content by media type, JSON preferred.
     if let Some(content) = response.get("content").and_then(Value::as_object) {
         let pick = content
@@ -145,12 +167,17 @@ fn body_of(root: &Value, response: &Value, budget: &mut usize) -> (String, Strin
             .find(|(mime, _)| mime.contains("json"))
             .or_else(|| content.iter().next());
         if let Some((mime, media)) = pick {
-            let value = declared_example(root, media).or_else(|| {
-                media
-                    .get("schema")
-                    .map(|schema| sample(root, schema, 0, budget))
-            });
-            return (mime.clone(), render(value));
+            let sampled;
+            let value = match declared_example(root, media) {
+                Some(example) => Some(example),
+                None => {
+                    sampled = media
+                        .get("schema")
+                        .map(|schema| sample(root, schema, 0, &mut budget.nodes));
+                    sampled.as_ref()
+                }
+            };
+            return (mime.clone(), render(value, &mut budget.bytes));
         }
     }
     // Swagger 2: `examples` by media type and a bare `schema`.
@@ -159,23 +186,67 @@ fn body_of(root: &Value, response: &Value, budget: &mut usize) -> (String, Strin
         .and_then(Value::as_object)
         .and_then(|e| e.iter().next())
     {
-        return (mime.clone(), render(Some(value.clone())));
+        return (mime.clone(), render(Some(value), &mut budget.bytes));
     }
     match response.get("schema") {
         Some(schema) => (
             "application/json".into(),
-            render(Some(sample(root, schema, 0, budget))),
+            render(
+                Some(&sample(root, schema, 0, &mut budget.nodes)),
+                &mut budget.bytes,
+            ),
         ),
         None => (String::new(), String::new()),
     }
 }
 
-fn render(value: Option<Value>) -> String {
-    match value {
-        None | Some(Value::Null) => String::new(),
-        Some(Value::String(text)) => text,
-        Some(other) => serde_json::to_string_pretty(&other).unwrap_or_default(),
+/// What one import may spend: schema nodes to sample and bytes of body text to keep.
+struct Budget {
+    nodes: usize,
+    bytes: usize,
+}
+
+/// Stops a serialization that outgrows its limit.
+struct Capped {
+    out: Vec<u8>,
+    left: usize,
+}
+
+impl std::io::Write for Capped {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if buf.len() > self.left {
+            return Err(std::io::Error::other("body too large"));
+        }
+        self.left -= buf.len();
+        self.out.extend_from_slice(buf);
+        Ok(buf.len())
     }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The body text of a value; empty when it is over the size of one body or what the import has
+/// left. What was spent is taken from `bytes` either way, so repeated references to a huge
+/// example run out of budget quickly.
+fn render(value: Option<&Value>, bytes: &mut usize) -> String {
+    let limit = (*bytes).min(MAX_BODY_BYTES);
+    let text = match value {
+        None | Some(Value::Null) => return String::new(),
+        Some(Value::String(text)) => (text.len() <= limit).then(|| text.clone()),
+        Some(other) => {
+            let mut sink = Capped {
+                out: Vec::new(),
+                left: limit,
+            };
+            serde_json::to_writer_pretty(&mut sink, other)
+                .ok()
+                .and_then(|()| String::from_utf8(sink.out).ok())
+        }
+    };
+    *bytes -= text.as_ref().map_or(limit, String::len);
+    text.unwrap_or_default()
 }
 
 /// Status codes in ascending order; `default` and ranges such as `2XX` become a plain status.
@@ -189,16 +260,19 @@ fn status_of(code: &str) -> u16 {
     }
 }
 
-fn responses_of(root: &Value, operation: &Value, budget: &mut usize) -> Vec<MockResponse> {
-    let mut found: Vec<(u16, String, MockResponse)> = Vec::new();
-    for (code, raw) in operation
+fn responses_of(root: &Value, operation: &Value, budget: &mut Budget) -> Vec<MockResponse> {
+    let mut codes: Vec<(u16, &String, &Value)> = operation
         .get("responses")
         .and_then(Value::as_object)
         .into_iter()
         .flatten()
-    {
+        .map(|(code, raw)| (status_of(code), code, raw))
+        .collect();
+    codes.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    codes.truncate(MAX_RESPONSES);
+    let mut found: Vec<(u16, String, MockResponse)> = Vec::new();
+    for (status, code, raw) in codes {
         let response = resolve(root, raw);
-        let status = status_of(code);
         let (mime, body) = body_of(root, response, budget);
         let description = response
             .get("description")
@@ -234,8 +308,6 @@ fn responses_of(root: &Value, operation: &Value, budget: &mut usize) -> Vec<Mock
             },
         ));
     }
-    found.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
-    found.truncate(MAX_RESPONSES);
     let mut responses: Vec<MockResponse> = found.into_iter().map(|(_, _, r)| r).collect();
     // Answer with the first success; with none documented, a bare 200.
     let first_ok = responses
@@ -305,7 +377,10 @@ pub fn import(source: &str) -> Result<Converted, AppError> {
         ));
     };
     let mut notes = Vec::new();
-    let mut budget = MAX_NODES * 20;
+    let mut budget = Budget {
+        nodes: MAX_NODES * 20,
+        bytes: MAX_IMPORT_BYTES,
+    };
     let mut routes = Vec::new();
     'paths: for (path, item) in paths {
         for method in METHODS {
@@ -458,5 +533,35 @@ components:
           "components":{"schemas":{"N":{"type":"object","properties":{"next":{"$ref":"#/components/schemas/N"}}}}}}"##;
         let done = import(spec).unwrap();
         assert!(done.mock.routes[0].responses[0].body.len() < 5_000);
+    }
+
+    #[test]
+    fn a_huge_shared_example_cannot_exhaust_memory() {
+        let big = "x".repeat(600 * 1024);
+        let refs: String = (200..260)
+            .map(|code| {
+                format!(
+                    r##""{code}":{{"description":"","content":{{"application/json":{{"example":{{"$ref":"#/big"}}}}}}}},"##
+                )
+            })
+            .collect();
+        let spec = format!(
+            r##"{{"openapi":"3.0.0","big":"{big}","paths":{{"/a":{{"get":{{"responses":{{{refs}"default":{{"description":""}}}}}}}}}}}}"##
+        );
+        let done = import(&spec).unwrap();
+        let responses = &done.mock.routes[0].responses;
+        assert!(responses.len() <= MAX_RESPONSES);
+        let kept: usize = responses.iter().map(|r| r.body.len()).sum();
+        assert!(kept <= MAX_IMPORT_BYTES, "{kept}");
+        validate("test", &done.mock).unwrap();
+    }
+
+    #[test]
+    fn render_stops_at_the_budget() {
+        let mut bytes = 10;
+        assert_eq!(render(Some(&json!("short")), &mut bytes), "short");
+        assert_eq!(bytes, 5);
+        assert_eq!(render(Some(&json!("far too long")), &mut bytes), "");
+        assert_eq!(bytes, 0);
     }
 }

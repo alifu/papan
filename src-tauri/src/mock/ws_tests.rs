@@ -145,6 +145,46 @@ async fn a_mock_without_cors_refuses_foreign_origins() {
 }
 
 #[tokio::test]
+async fn foreign_sites_are_refused_even_with_cors_but_local_pages_pass() {
+    let (service, base, _) = start(with_chat()).await;
+    assert!(connect(&base, "/chat/a", Some("https://evil.example"))
+        .await
+        .is_err());
+    assert!(connect(&base, "/chat/a", Some("null")).await.is_err());
+    assert!(connect(&base, "/chat/a", Some("http://localhost:5173"))
+        .await
+        .is_ok());
+    service.stop_all().await;
+}
+
+#[tokio::test]
+async fn a_repeated_or_unreadable_origin_is_refused() {
+    let (service, base, _) = start(with_chat()).await;
+    let host = base.trim_start_matches("http://");
+    for headers in [
+        "Origin: http://localhost\r\nOrigin: http://localhost\r\n".to_string(),
+        "Origin: caf\u{e9}\r\n".to_string(),
+    ] {
+        let mut stream = TcpStream::connect(host).await.unwrap();
+        let request = format!(
+            "GET /chat/a HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n{headers}Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+        );
+        tokio::io::AsyncWriteExt::write_all(&mut stream, request.as_bytes())
+            .await
+            .unwrap();
+        let mut buf = vec![0_u8; 64];
+        let n = tokio::io::AsyncReadExt::read(&mut stream, &mut buf)
+            .await
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&buf[..n]).contains("403"),
+            "{headers}"
+        );
+    }
+    service.stop_all().await;
+}
+
+#[tokio::test]
 async fn sequential_replies_count_per_connection_and_stop_closes_sessions() {
     let mut mock = with_chat();
     let route = &mut mock.routes[1];
