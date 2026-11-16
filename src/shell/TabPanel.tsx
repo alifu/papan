@@ -1,3 +1,4 @@
+import { JourneyTab } from "../features/journeys/JourneyTab";
 import { MockTab } from "../features/mocks/MockTab";
 import { RequestEditor } from "../features/request/RequestEditor";
 import { WebhookTab } from "../features/webhooks/WebhookTab";
@@ -24,6 +25,16 @@ function Welcome() {
 }
 
 function renderTab(tab: Tab) {
+  if (tab.kind === "journey" && tab.journey) {
+    return (
+      <JourneyTab
+        key={tab.id}
+        tabId={tab.id}
+        collectionId={tab.journey.collectionId}
+        file={tab.journey.file}
+      />
+    );
+  }
   if (tab.kind === "mock" && tab.mock) {
     return (
       <MockTab

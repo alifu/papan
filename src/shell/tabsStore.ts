@@ -10,7 +10,7 @@ import { useGrpcStore } from "../features/grpc/grpcStore";
 import { useWsStore } from "../features/ws/wsStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
 
-export type TabKind = "welcome" | "request" | "webhook" | "mock";
+export type TabKind = "welcome" | "request" | "webhook" | "mock" | "journey";
 export interface Tab {
   readonly id: string;
   readonly kind: TabKind;
@@ -20,6 +20,8 @@ export interface Tab {
   readonly webhookId?: string;
   /** Set on `mock` tabs: the mock file the tab designs. */
   readonly mock?: { readonly collectionId: string; readonly file: string };
+  /** Set on `journey` tabs: the journey file the tab edits. */
+  readonly journey?: { readonly collectionId: string; readonly file: string };
 }
 
 export const WELCOME_TAB: Tab = {
@@ -40,6 +42,10 @@ export interface TabsState {
   openWebhook: (webhookId: string, title: string) => string;
   /** Focuses the tab for the mock file or adds one. Returns its id. */
   openMock: (collectionId: string, file: string, title: string) => string;
+  /** Focuses the tab for the journey file or adds one. Returns its id. */
+  openJourney: (collectionId: string, file: string, title: string) => string;
+  /** Closes the tab of a journey (it was deleted). */
+  closeJourney: (collectionId: string, file: string) => void;
   /** Renames a mock tab. */
   retitleMock: (tabId: string, title: string) => void;
   /** Closes the tabs of a mock (it was deleted). */
@@ -149,6 +155,36 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
       nextTabNumber: nextTabNumber + 1,
     });
     return tab.id;
+  },
+  openJourney: (collectionId, file, title) => {
+    const { tabs, nextTabNumber } = get();
+    const existing = tabs.find(
+      (t) =>
+        t.journey?.collectionId === collectionId && t.journey.file === file,
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const tab: Tab = {
+      id: `tab-${nextTabNumber}`,
+      kind: "journey",
+      title,
+      journey: { collectionId, file },
+    };
+    set({
+      tabs: [...tabs, tab],
+      activeTabId: tab.id,
+      nextTabNumber: nextTabNumber + 1,
+    });
+    return tab.id;
+  },
+  closeJourney: (collectionId, file) => {
+    const tab = get().tabs.find(
+      (t) =>
+        t.journey?.collectionId === collectionId && t.journey.file === file,
+    );
+    if (tab) get().discardTab(tab.id);
   },
   retitleMock: (tabId, title) => {
     set({

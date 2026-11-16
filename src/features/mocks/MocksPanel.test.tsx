@@ -81,6 +81,19 @@ describe("MocksPanel", () => {
     expect(api.deleteMock).toHaveBeenCalledWith("c1", "users.mock.yaml");
   });
 
+  it("closes the tab of a mock it deleted", async () => {
+    vi.mocked(api.deleteMock).mockResolvedValue(null);
+    useTabsStore.getState().openMock("c1", "users.mock.yaml", "Users");
+    render(<MocksPanel />);
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Actions for Users" }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await vi.waitFor(() =>
+      expect(useTabsStore.getState().tabs).toHaveLength(0),
+    );
+  });
+
   it("creates a mock from the collection's requests and opens it", async () => {
     vi.mocked(api.mockFromCollection).mockResolvedValue({
       ...listed()[0]!,

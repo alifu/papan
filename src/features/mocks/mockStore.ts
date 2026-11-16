@@ -71,9 +71,13 @@ export const useMockStore = create<MockState>()((set, get) => {
       await get().load(collectionId);
     },
     remove: async (collectionId, file) => {
-      const done = await attempt(() => api.deleteMock(collectionId, file));
+      // The command resolves `null` on success, so success is its own marker.
+      const done = await attempt(async () => {
+        await api.deleteMock(collectionId, file);
+        return true;
+      });
       await get().load(collectionId);
-      return done !== null;
+      return done === true;
     },
     handleLogged: ({ collection_id, file, entry }) => {
       const key = mockKey(collection_id, file);

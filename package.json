@@ -28,6 +28,7 @@
     "@lezer/highlight": "1.2.5",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-opener": "^2.7.3",
+    "@xyflow/react": "^12.12.1",
     "axios": "^1.9.0",
     "cm6-graphql": "1.0.0",
     "graphql": "16.14.2",

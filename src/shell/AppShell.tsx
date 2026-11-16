@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useCollectionsStore } from "../features/collections/collectionsStore";
 import { useEnvStore } from "../features/environments/envStore";
 import { useScratchStore } from "../features/scratch/scratchStore";
+import { useJourneyStore } from "../features/journeys/journeyStore";
 import { useMockStore } from "../features/mocks/mockStore";
 import { useWebhookStore } from "../features/webhooks/webhookStore";
 import { useNetworkStore } from "../features/network/networkStore";
@@ -33,11 +34,13 @@ export function AppShell() {
     const unlistenEnv = useEnvStore.getState().subscribe();
     const unlistenWebhooks = useWebhookStore.getState().subscribe();
     const unlistenMocks = useMockStore.getState().subscribe();
+    const unlistenJourneys = useJourneyStore.getState().subscribe();
     return () => {
       void unlisten.then((fn) => fn());
       void unlistenEnv.then((fn) => fn());
       void unlistenWebhooks.then((fn) => fn());
       void unlistenMocks.then((fn) => fn());
+      void unlistenJourneys.then((fn) => fn());
     };
   }, []);
   const width = useLayoutStore((s) => s.sidebarWidth);

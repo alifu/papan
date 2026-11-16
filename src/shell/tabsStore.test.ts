@@ -236,3 +236,22 @@ describe("tabsStore grpc release", () => {
     release.mockRestore();
   });
 });
+
+describe("tabsStore journeys", () => {
+  it("opens a journey once, then focuses it; closeJourney removes it", () => {
+    useTabsStore.setState(useTabsStore.getInitialState(), true);
+    const first = useTabsStore
+      .getState()
+      .openJourney("c1", "a.journey.yaml", "A");
+    expect(
+      useTabsStore.getState().openJourney("c1", "a.journey.yaml", "A"),
+    ).toBe(first);
+    expect(
+      useTabsStore.getState().tabs.filter((t) => t.kind === "journey"),
+    ).toHaveLength(1);
+    useTabsStore.getState().closeJourney("c1", "a.journey.yaml");
+    expect(useTabsStore.getState().tabs.some((t) => t.id === first)).toBe(
+      false,
+    );
+  });
+});

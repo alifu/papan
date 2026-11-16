@@ -1,5 +1,6 @@
 import { CollectionsPanel } from "../features/collections/CollectionsPanel";
 import { HistoryPanel } from "../features/history/HistoryPanel";
+import { JourneysPanel } from "../features/journeys/JourneysPanel";
 import { MocksPanel } from "../features/mocks/MocksPanel";
 import { ScratchPanel } from "../features/scratch/ScratchPanel";
 import { WebhooksPanel } from "../features/webhooks/WebhooksPanel";
@@ -13,6 +14,7 @@ function renderSection(section: NavSection, emptyText: string) {
   if (section === "scratch") return <ScratchPanel />;
   if (section === "webhooks") return <WebhooksPanel />;
   if (section === "mocks") return <MocksPanel />;
+  if (section === "journeys") return <JourneysPanel />;
   if (section === "history") return <HistoryPanel />;
   return <p className="empty-text">{emptyText}</p>;
 }

@@ -16,6 +16,7 @@ vi.mock("./ipc/bindings", () => ({
     webhookCaptured: { listen: vi.fn().mockResolvedValue(() => {}) },
     webhookStopped: { listen: vi.fn().mockResolvedValue(() => {}) },
     mockLogged: { listen: vi.fn().mockResolvedValue(() => {}) },
+    journeyRunEvent: { listen: vi.fn().mockResolvedValue(() => {}) },
   },
 }));
 
