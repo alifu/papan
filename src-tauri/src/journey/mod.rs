@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod commands;
+pub mod data;
 pub mod disk;
 pub mod host;
 pub mod model;

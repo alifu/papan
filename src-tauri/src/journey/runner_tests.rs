@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use super::check::Sent;
+use super::data::Row;
 use super::model::tests_support::{edge, request};
 use super::model::{
     Check, CheckOp, CheckSource, FailurePolicy, Journey, JourneyNode, JourneySettings, NodeType,
@@ -20,6 +21,7 @@ struct Fake {
     sends: AtomicUsize,
     cancel_after: Option<usize>,
     script_sets: Vec<(String, String)>,
+    files: HashMap<String, Result<Vec<Row>, String>>,
 }
 
 impl Fake {
@@ -90,6 +92,13 @@ impl Host for Fake {
             vars: next,
             console: vec!["hello".into()],
         })
+    }
+
+    fn rows(&self, file: &str) -> Result<Vec<Row>, String> {
+        self.files
+            .get(file)
+            .cloned()
+            .unwrap_or_else(|| Err("no such data file".into()))
     }
 
     fn emit(&self, event: RunEvent) {
@@ -403,4 +412,139 @@ async fn a_journey_needs_a_start_node() {
     run(&first, &j, "r").await;
     assert_eq!(first.events.lock().unwrap().len(), 1);
     let _ = NodeStatus::Passed;
+}
+
+fn token_output() -> Output {
+    Output {
+        name: "t".into(),
+        source: CheckSource::Body,
+        path: "data.token".into(),
+    }
+}
+
+fn row(pairs: &[(&str, &str)]) -> Row {
+    pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect()
+}
+
+#[tokio::test]
+async fn an_edge_mapping_copies_a_response_value_into_a_variable_for_the_next_node() {
+    let mut j = journey(
+        vec![
+            node("s", NodeType::Start),
+            request("login", "login"),
+            request("use", "use"),
+        ],
+        vec![("s", "login", ""), ("login", "use", "")],
+    );
+    j.edges[1].map = vec![Output {
+        name: "auth".into(),
+        ..token_output()
+    }];
+    let host = Fake::default()
+        .answer("login", 200, r#"{"data":{"token":"abc"}}"#)
+        .answer("use", 200, "{}");
+    let done = run(&host, &j, "r").await;
+    assert_eq!(done.status, RunStatus::Passed);
+    let asked = host.asked.lock().unwrap();
+    assert_eq!(asked[1].1.get("auth").map(String::as_str), Some("abc"));
+    assert!(!asked[0].1.contains_key("auth"));
+    let events = host.events.lock().unwrap();
+    let finished = events
+        .iter()
+        .find(|e| e.kind == RunEventKind::NodeFinished && e.node_id == "use")
+        .unwrap();
+    assert_eq!(finished.vars[0].name, "auth");
+}
+
+#[tokio::test]
+async fn a_mapping_that_finds_nothing_fails_the_target_before_it_runs() {
+    let mut j = journey(
+        vec![
+            node("s", NodeType::Start),
+            request("login", "login"),
+            request("use", "use"),
+        ],
+        vec![("s", "login", ""), ("login", "use", "")],
+    );
+    j.edges[1].map = vec![token_output()];
+    let host = Fake::default()
+        .answer("login", 200, r#"{"other":1}"#)
+        .answer("use", 200, "{}");
+    let done = run(&host, &j, "r").await;
+    assert_eq!(done.status, RunStatus::Failed);
+    assert_eq!(host.asked(), ["login"]);
+    let events = host.events.lock().unwrap();
+    let finished = events
+        .iter()
+        .find(|e| e.kind == RunEventKind::NodeFinished && e.node_id == "use")
+        .unwrap();
+    assert_eq!(finished.status, Some(NodeStatus::Failed));
+    assert!(finished.message.contains('t'));
+}
+
+fn data_loop(file: &str) -> Journey {
+    let looped = JourneyNode {
+        data_file: file.into(),
+        loop_var: "row".into(),
+        ..node("loop", NodeType::Loop)
+    };
+    journey(
+        vec![
+            node("s", NodeType::Start),
+            looped,
+            request("body", "body"),
+            request("after", "after"),
+        ],
+        vec![
+            ("s", "loop", ""),
+            ("loop", "body", "each"),
+            ("body", "loop", ""),
+            ("loop", "after", "done"),
+        ],
+    )
+}
+
+#[tokio::test]
+async fn a_loop_runs_once_per_data_row_with_the_columns_as_variables() {
+    let mut host = Fake::default()
+        .answer("body", 200, "{}")
+        .answer("after", 200, "{}");
+    host.files.insert(
+        "users.csv".into(),
+        Ok(vec![
+            row(&[("name", "ann"), ("age", "3")]),
+            row(&[("name", "bob"), ("age", "4")]),
+        ]),
+    );
+    let done = run(&host, &data_loop("users.csv"), "r").await;
+    assert_eq!(done.status, RunStatus::Passed);
+    assert_eq!(host.asked(), ["body", "body", "after"]);
+    let asked = host.asked.lock().unwrap();
+    assert_eq!(asked[0].1.get("name").map(String::as_str), Some("ann"));
+    assert_eq!(asked[1].1.get("name").map(String::as_str), Some("bob"));
+    assert_eq!(asked[1].1.get("row_index").map(String::as_str), Some("1"));
+}
+
+#[tokio::test]
+async fn a_data_file_that_cannot_be_read_fails_the_loop() {
+    let host = Fake::default().answer("body", 200, "{}");
+    let done = run(&host, &data_loop("missing.csv"), "r").await;
+    assert_eq!(done.status, RunStatus::Failed);
+    assert!(host.asked().is_empty());
+    assert!(done.message.contains("data file"));
+}
+
+#[tokio::test]
+async fn a_failed_data_loop_goes_on_to_done_when_the_policy_is_continue() {
+    let mut j = data_loop("missing.csv");
+    j.settings.on_failure = FailurePolicy::Continue;
+    let host = Fake::default()
+        .answer("body", 200, "{}")
+        .answer("after", 200, "{}");
+    let done = run(&host, &j, "r").await;
+    assert_eq!(done.status, RunStatus::Failed);
+    assert_eq!(host.asked(), ["after"]);
 }

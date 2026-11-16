@@ -176,3 +176,57 @@ export function draftProblems(j: Journey): string[] {
     problems.push(`${bare.length} Request node(s) have no request chosen.`);
   return problems;
 }
+
+export const patchEdge = (
+  j: Journey,
+  id: string,
+  patch: Partial<JourneyEdge>,
+): Journey => ({
+  ...j,
+  edges: edgesOf(j).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+});
+
+const COLUMN_WIDTH = 260;
+const ROW_HEIGHT = 120;
+
+/** Column of each node: its longest way from Start, not counting edges that go back. */
+function depths(j: Journey): Map<string, number> {
+  const start = nodesOf(j).find((n) => n.type === "start");
+  const next = (id: string) =>
+    edgesOf(j)
+      .filter((e) => e.from === id)
+      .map((e) => e.to);
+  const back = new Set<string>();
+  const state = new Map<string, "open" | "done">();
+  const find = (id: string) => {
+    state.set(id, "open");
+    for (const to of next(id)) {
+      if (state.get(to) === "open") back.add(`${id}>${to}`);
+      else if (!state.has(to)) find(to);
+    }
+    state.set(id, "done");
+  };
+  if (start) find(start.id);
+  const depth = new Map<string, number>();
+  const place = (id: string, at: number) => {
+    if ((depth.get(id) ?? -1) >= at) return;
+    depth.set(id, at);
+    for (const to of next(id)) if (!back.has(`${id}>${to}`)) place(to, at + 1);
+  };
+  if (start) place(start.id, 0);
+  return depth;
+}
+
+/** Arranges the nodes in columns by depth; what Start cannot reach goes in the last column. */
+export function autoLayout(j: Journey): Journey {
+  const depth = depths(j);
+  const last = Math.max(-1, ...depth.values());
+  const rows = new Map<number, number>();
+  const nodes = nodesOf(j).map((n) => {
+    const column = depth.get(n.id) ?? last + 1;
+    const row = rows.get(column) ?? 0;
+    rows.set(column, row + 1);
+    return { ...n, x: column * COLUMN_WIDTH, y: row * ROW_HEIGHT };
+  });
+  return { ...j, nodes };
+}

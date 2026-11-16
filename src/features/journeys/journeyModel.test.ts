@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addNode,
+  autoLayout,
+  patchEdge,
   branchLabels,
   connect,
   draftProblems,
@@ -119,5 +121,54 @@ describe("journeyModel", () => {
     expect(draftProblems(ready).join(" ")).not.toMatch(/no request/i);
     const noStart = removeNode(j, start);
     expect(draftProblems(noStart).join(" ")).toMatch(/start/i);
+  });
+
+  it("patches an edge's mappings without touching the others", () => {
+    const { j, start, req, end } = withRequest();
+    const wired = connect(connect(j, start, req), req, end);
+    const mapped = patchEdge(wired, wired.edges![1]!.id, {
+      map: [{ name: "auth", source: "body", path: "data.token" }],
+    });
+    expect(mapped.edges![1]!.map).toHaveLength(1);
+    expect(mapped.edges![0]!.map).toBeUndefined();
+    expect(wired.edges![1]!.map).toBeUndefined();
+  });
+
+  it("lays nodes out in columns by depth, branches stacked", () => {
+    let j = newJourney("L");
+    j = addNode(j, "condition", { x: 9, y: 9 });
+    j = addNode(j, "end", { x: 9, y: 9 });
+    j = addNode(j, "end", { x: 9, y: 9 });
+    j = connect(connect(connect(j, "n1", "n2"), "n2", "n3"), "n2", "n4");
+    const laid = autoLayout(j);
+    const at = (id: string) => laid.nodes!.find((n) => n.id === id)!;
+    expect([at("n1").x, at("n2").x, at("n3").x, at("n4").x]).toEqual([
+      0, 260, 520, 520,
+    ]);
+    expect(at("n4").y).toBeGreaterThan(at("n3").y!);
+    expect(j.nodes![1]!.x).toBe(9); // the old journey is untouched
+  });
+
+  it("lays out a loop and its body without chasing the way back", () => {
+    let j = newJourney("L");
+    j = addNode(j, "loop", { x: 0, y: 0 });
+    j = addNode(j, "request", { x: 0, y: 0 });
+    j = addNode(j, "end", { x: 0, y: 0 });
+    j = connect(j, "n1", "n2");
+    j = connect(j, "n2", "n3"); // each
+    j = connect(j, "n3", "n2"); // back to the loop
+    j = connect(j, "n2", "n4"); // done
+    const laid = autoLayout(j);
+    const x = (id: string) => laid.nodes!.find((n) => n.id === id)!.x;
+    expect([x("n1"), x("n2"), x("n3"), x("n4")]).toEqual([0, 260, 520, 520]);
+  });
+
+  it("puts nodes Start cannot reach after the last column", () => {
+    let j = newJourney("L");
+    j = addNode(j, "request", { x: 0, y: 0 });
+    j = addNode(j, "request", { x: 0, y: 0 });
+    j = connect(j, "n1", "n2");
+    const laid = autoLayout(j);
+    expect(laid.nodes!.find((n) => n.id === "n3")!.x).toBe(520);
   });
 });

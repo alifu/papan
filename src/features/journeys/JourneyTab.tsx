@@ -4,13 +4,16 @@ import { Button } from "../../ui/Button";
 import { reportError, showToast } from "../../ui/toastStore";
 import { useCollectionsStore } from "../collections/collectionsStore";
 import * as api from "./api";
+import { EdgeInspector } from "./EdgeInspector";
 import { flattenRequests } from "./flowMap";
 import { JourneyCanvas } from "./JourneyCanvas";
 import {
   addNode,
+  autoLayout,
   draftProblems,
   NODE_LABELS,
   PALETTE,
+  patchEdge,
   patchNode,
   type Journey,
   type NodeType,
@@ -20,6 +23,8 @@ import { NodeInspector } from "./NodeInspector";
 import { EMPTY_RUN } from "./runState";
 import { RunPanel } from "./RunPanel";
 import "./journeys.css";
+
+type Selection = { kind: "node" | "edge"; id: string };
 
 const NEW_NODE_STEP = 40;
 const NEW_NODE_ORIGIN = { x: 220, y: 120 };
@@ -33,7 +38,7 @@ export interface JourneyTabProps {
 export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
   const [draft, setDraft] = useState<Journey | null>(null);
   const [saved, setSaved] = useState<Journey | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null);
   const run =
     useJourneyStore((s) => s.runs[journeyKey(collectionId, file)]) ?? EMPTY_RUN;
   const tree = useCollectionsStore((s) =>
@@ -58,7 +63,18 @@ export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
   if (!draft) return <p className="empty-text">Loading…</p>;
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const problems = draftProblems(draft);
-  const node = draft.nodes?.find((n) => n.id === selected) ?? null;
+  const node =
+    selection?.kind === "node"
+      ? (draft.nodes?.find((n) => n.id === selection.id) ?? null)
+      : null;
+  const edge =
+    selection?.kind === "edge"
+      ? (draft.edges?.find((e) => e.id === selection.id) ?? null)
+      : null;
+  const titleOf = (id: string): string => {
+    const n = draft.nodes?.find((m) => m.id === id);
+    return n ? n.label || NODE_LABELS[n.type] : id;
+  };
   const requests = flattenRequests(tree?.children ?? []);
 
   const save = async (): Promise<boolean> => {
@@ -122,6 +138,7 @@ export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
             <option value="continue">Continue</option>
           </select>
         </label>
+        <Button label="Tidy up" onClick={() => setDraft(autoLayout(draft))} />
         <Button label="Save" disabled={!dirty} onClick={() => void save()} />
         <Button
           icon={run.running ? "stop" : "play"}
@@ -151,10 +168,18 @@ export function JourneyTab({ collectionId, file, tabId }: JourneyTabProps) {
           journey={draft}
           run={run}
           onChange={setDraft}
-          onSelect={setSelected}
+          onSelect={(id) => setSelection(id ? { kind: "node", id } : null)}
+          onSelectEdge={(id) => setSelection({ kind: "edge", id })}
         />
         <aside className="journey-side">
-          {node ? (
+          {edge ? (
+            <EdgeInspector
+              edge={edge}
+              fromLabel={titleOf(edge.from)}
+              toLabel={titleOf(edge.to)}
+              onChange={(patch) => setDraft(patchEdge(draft, edge.id, patch))}
+            />
+          ) : node ? (
             <NodeInspector
               node={node}
               requests={requests}

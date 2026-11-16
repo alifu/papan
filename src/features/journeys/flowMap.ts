@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import type { JourneyNode, TreeNode } from "../../ipc/bindings";
+import type { JourneyEdge, JourneyNode, TreeNode } from "../../ipc/bindings";
 import type { Journey } from "./journeyModel";
 import type { NodeRunStatus, RunState } from "./runState";
 
@@ -30,6 +30,7 @@ export function nodeSummary(node: JourneyNode): string {
     case "loop": {
       const as = node.loop_var || "item";
       const items = node.items ?? [];
+      if (node.data_file) return `rows of ${node.data_file}`;
       return items.length > 0
         ? `${items.length} items as ${as}`
         : `${node.count ?? 0} times as ${as}`;
@@ -39,6 +40,13 @@ export function nodeSummary(node: JourneyNode): string {
     default:
       return "";
   }
+}
+
+/** Branch name, then the variables the edge sets (`each ⇢ auth`). */
+export function edgeLabel(e: JourneyEdge): string | undefined {
+  const names = (e.map ?? []).map((m) => m.name).filter(Boolean);
+  const mapped = names.length > 0 ? `⇢ ${names.join(", ")}` : "";
+  return [e.when, mapped].filter(Boolean).join(" ") || undefined;
 }
 
 export function toFlow(

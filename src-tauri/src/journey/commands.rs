@@ -9,7 +9,7 @@ use tauri::{AppHandle, State};
 use tauri_specta::Event;
 
 use super::disk;
-use super::host::EngineHost;
+use super::host::{CollectionRef, EngineHost};
 use super::model::Journey;
 use super::runner::run;
 use super::types::{JourneyRunEvent, JourneySummary, RunSummary};
@@ -151,7 +151,7 @@ pub async fn run_journey(
 ) -> JourneyResult<RunSummary> {
     let root = root_of(&state, &collection_id)?;
     let journey = {
-        let file = file.clone();
+        let (file, root) = (file.clone(), root.clone());
         logged(blocking(move || disk::read(&root, &file)).await)?
     };
     let id = key(&collection_id, &file);
@@ -188,7 +188,10 @@ pub async fn run_journey(
             vars: &vars.service,
             dynamics: vars.dynamics.clone(),
         },
-        collection_id,
+        CollectionRef {
+            id: collection_id,
+            root,
+        },
         handle.cancel,
         handle.current,
         secrets,

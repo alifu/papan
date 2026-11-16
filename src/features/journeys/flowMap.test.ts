@@ -3,6 +3,7 @@ import type { TreeNode } from "../../ipc/bindings";
 import { addNode, connect, newJourney, patchNode } from "./journeyModel";
 import {
   dropRequestPath,
+  edgeLabel,
   flattenRequests,
   nodeSummary,
   toFlow,
@@ -96,5 +97,27 @@ describe("flowMap", () => {
     expect(dropRequestPath("a/b.http.yaml")).toBe("a/b.http.yaml");
     expect(dropRequestPath("folder")).toBeNull();
     expect(dropRequestPath("")).toBeNull();
+  });
+
+  it("labels an edge with its branch and the variables it sets", () => {
+    expect(edgeLabel({ id: "e", from: "a", to: "b" })).toBeUndefined();
+    expect(edgeLabel({ id: "e", from: "a", to: "b", when: "each" })).toBe(
+      "each",
+    );
+    expect(
+      edgeLabel({
+        id: "e",
+        from: "a",
+        to: "b",
+        when: "true",
+        map: [{ name: "auth" }, { name: "id" }],
+      }),
+    ).toBe("true ⇢ auth, id");
+  });
+
+  it("summarises a loop over a data file", () => {
+    let j = newJourney("F");
+    j = addNode(j, "loop", { x: 0, y: 0 }, { data_file: "data/u.csv" });
+    expect(nodeSummary(j.nodes![1]!)).toBe("rows of data/u.csv");
   });
 });

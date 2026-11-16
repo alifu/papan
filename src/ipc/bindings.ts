@@ -651,6 +651,11 @@ export type JourneyEdge = {
 	to: string,
 	/**  `true`/`false` from a Condition, `each`/`done` from a Loop, empty otherwise. */
 	when?: string,
+	/**
+	 *  Values copied into variables as the target node starts (plan 13c): each reads the
+	 *  last response or a variable and keeps it under `name`.
+	 */
+	map?: Output[],
 };
 
 /**  A node with the fields of every type; each type reads the ones it needs. */
@@ -675,6 +680,11 @@ export type JourneyNode = {
 	count?: number,
 	/**  Loop nodes: the variable that holds the item (the index is `<var>_index`). */
 	loop_var?: string,
+	/**
+	 *  Loop nodes: a `.csv` (first row names the columns) or `.json` (array of objects) file
+	 *  of the collection; runs once per row, each column a variable.
+	 */
+	data_file?: string,
 	/**  Overrides the journey's policy for this node. */
 	on_failure?: FailurePolicy | null,
 };

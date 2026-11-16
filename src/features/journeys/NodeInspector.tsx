@@ -244,9 +244,18 @@ export function NodeInspector({
             />
           </label>
           <label>
+            Data file (.csv or .json in the collection)
+            <input
+              value={node.data_file ?? ""}
+              placeholder="data/users.csv"
+              onChange={(e) => onChange({ data_file: e.target.value })}
+            />
+          </label>
+          <label>
             Items (one per line)
             <textarea
               rows={4}
+              disabled={Boolean(node.data_file)}
               value={(node.items ?? []).join("\n")}
               onChange={(e) =>
                 onChange({

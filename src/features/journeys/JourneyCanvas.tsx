@@ -32,9 +32,16 @@ export interface JourneyCanvasProps {
   readonly run: RunState;
   readonly onChange: (journey: Journey) => void;
   readonly onSelect: (nodeId: string | null) => void;
+  readonly onSelectEdge: (edgeId: string) => void;
 }
 
-function Canvas({ journey, run, onChange, onSelect }: JourneyCanvasProps) {
+function Canvas({
+  journey,
+  run,
+  onChange,
+  onSelect,
+  onSelectEdge,
+}: JourneyCanvasProps) {
   const flow = useReactFlow();
   const { nodes, edges } = useMemo(() => toFlow(journey, run), [journey, run]);
 
@@ -79,6 +86,7 @@ function Canvas({ journey, run, onChange, onSelect }: JourneyCanvasProps) {
       onEdgesDelete={onEdgesDelete}
       onConnect={onConnect}
       onNodeClick={(_, node) => onSelect(node.id)}
+      onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
       onPaneClick={() => onSelect(null)}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}

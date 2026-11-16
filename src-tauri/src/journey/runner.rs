@@ -8,9 +8,10 @@ use std::future::Future;
 use futures_util::future::BoxFuture;
 
 use super::check::{evaluate, extract, fill, Scope, Sent};
+use super::data::Row;
 use super::model::{
-    FailurePolicy, Journey, JourneyEdge, JourneyNode, NodeType, MAX_DELAY_MS, WHEN_DONE, WHEN_EACH,
-    WHEN_FALSE, WHEN_TRUE,
+    FailurePolicy, Journey, JourneyEdge, JourneyNode, NodeType, Output, MAX_DELAY_MS, WHEN_DONE,
+    WHEN_EACH, WHEN_FALSE, WHEN_TRUE,
 };
 use super::types::{
     HeaderLine, NodeStatus, ResponseSummary, RunEvent, RunEventKind, RunStatus, RunSummary, VarSet,
@@ -44,6 +45,8 @@ pub trait Host: Sync {
         vars: &BTreeMap<String, String>,
         last: Option<&Sent>,
     ) -> impl Future<Output = Result<ScriptDone, String>> + Send;
+    /// The rows of a Loop node's data file.
+    fn rows(&self, file: &str) -> Result<Vec<Row>, String>;
     fn emit(&self, event: RunEvent);
     /// Hides secret values in text that leaves the run (events, messages).
     fn mask(&self, text: &str) -> String {
@@ -270,8 +273,43 @@ impl<'a, H: Host> Walk<'a, H> {
         node.on_failure.unwrap_or(self.journey.settings.on_failure)
     }
 
-    /// Runs `node`, then everything after it.
-    fn walk<'b>(&'b mut self, id: &'b str) -> BoxFuture<'b, Flow> {
+    /// Copies the values an edge maps into variables, before the target node runs.
+    fn apply_map(&mut self, via: &[Output]) -> Done {
+        let mut done = Done::passed();
+        let mut missing = Vec::new();
+        for mapping in via {
+            let found = {
+                let scope = Scope {
+                    vars: &self.vars,
+                    last: self.last.as_ref(),
+                };
+                extract(mapping, &scope)
+            };
+            match found {
+                Some(value) => self.set(&mapping.name, value, &mut done),
+                None => missing.push(mapping.name.as_str()),
+            }
+        }
+        if !missing.is_empty() {
+            done.status = NodeStatus::Failed;
+            done.message = format!("Could not map {} onto this node.", missing.join(", "));
+        }
+        done
+    }
+
+    /// The node's own work, after its incoming mappings; their variables come first.
+    async fn work(&mut self, node: &JourneyNode, mapped: Done) -> Done {
+        if mapped.status == NodeStatus::Failed {
+            let branch = (node.node_type == NodeType::Condition).then_some(false);
+            return Done { branch, ..mapped };
+        }
+        let mut done = self.execute(node).await;
+        done.vars.splice(0..0, mapped.vars);
+        done
+    }
+
+    /// Runs `node` (entered through an edge that maps `via`), then everything after it.
+    fn walk<'b>(&'b mut self, id: &'b str, via: &'b [Output]) -> BoxFuture<'b, Flow> {
         Box::pin(async move {
             if self.host.cancelled() {
                 self.stopped = Some(Stopped::Cancelled);
@@ -289,29 +327,37 @@ impl<'a, H: Host> Walk<'a, H> {
             }
             self.steps += 1;
             self.host.emit(self.event(RunEventKind::NodeStarted, id));
-            if node.node_type == NodeType::Loop {
-                return self.run_loop(node).await;
+            let mapped = self.apply_map(via);
+            if node.node_type == NodeType::Loop && mapped.status == NodeStatus::Passed {
+                return self.run_loop(node, mapped).await;
             }
-            let done = self.execute(node).await;
-            self.host.emit(self.finish_event(id, &done));
-            if self.host.cancelled() {
-                self.stopped = Some(Stopped::Cancelled);
+            let done = self.work(node, mapped).await;
+            self.settle(node, done).await
+        })
+    }
+
+    /// Reports how `node` went, applies the failure policy and follows its edges.
+    async fn settle(&mut self, node: &'a JourneyNode, done: Done) -> Flow {
+        let id = node.id.as_str();
+        self.host.emit(self.finish_event(id, &done));
+        if self.host.cancelled() {
+            self.stopped = Some(Stopped::Cancelled);
+            return Flow::Stop;
+        }
+        if done.status == NodeStatus::Failed {
+            self.failures += 1;
+            if self.policy_of(node) == FailurePolicy::Stop {
+                self.stopped = Some(Stopped::Failed(self.host.mask(&done.message)));
                 return Flow::Stop;
             }
-            if done.status == NodeStatus::Failed {
-                self.failures += 1;
-                if self.policy_of(node) == FailurePolicy::Stop {
-                    self.stopped = Some(Stopped::Failed(self.host.mask(&done.message)));
-                    return Flow::Stop;
-                }
-            }
-            let when: &'static [&'static str] = match done.branch {
-                Some(true) => &[WHEN_TRUE],
-                Some(false) => &[WHEN_FALSE],
-                None => &[""],
-            };
-            self.follow(self.edges_of(id, when)).await
-        })
+        }
+        let when: &'static [&'static str] = match (done.branch, node.node_type) {
+            (Some(true), _) => &[WHEN_TRUE],
+            (Some(false), _) => &[WHEN_FALSE],
+            (None, NodeType::Loop) => &[WHEN_DONE],
+            (None, _) => &[""],
+        };
+        self.follow(self.edges_of(id, when)).await
     }
 
     /// Walks the targets of `edges` one after the other.
@@ -322,7 +368,7 @@ impl<'a, H: Host> Walk<'a, H> {
                 back = back.or(Some(edge.to.clone()));
                 continue;
             }
-            match self.walk(&edge.to).await {
+            match self.walk(&edge.to, &edge.map).await {
                 Flow::Stop => return Flow::Stop,
                 Flow::Back(target) => back = back.or(Some(target)),
                 Flow::Done => {}
@@ -331,25 +377,56 @@ impl<'a, H: Host> Walk<'a, H> {
         back.map_or(Flow::Done, Flow::Back)
     }
 
-    async fn run_loop(&mut self, node: &'a JourneyNode) -> Flow {
-        let items: Vec<String> = if node.items.is_empty() {
-            (0..node.count).map(|n| n.to_string()).collect()
-        } else {
-            node.items
-                .iter()
-                .map(|item| fill(item, &self.vars))
-                .collect()
-        };
+    /// What each iteration of a Loop sets: a data row's columns, an item, or the count.
+    fn iterations(&self, node: &JourneyNode) -> Result<Vec<Vec<(String, String)>>, String> {
         let var = if node.loop_var.is_empty() {
             DEFAULT_LOOP_VAR
         } else {
             node.loop_var.as_str()
         };
+        let sets: Vec<Vec<(String, String)>> = if !node.data_file.is_empty() {
+            self.host
+                .rows(&node.data_file)?
+                .into_iter()
+                .map(|row| row.into_iter().collect())
+                .collect()
+        } else if node.items.is_empty() {
+            (0..node.count)
+                .map(|n| vec![(var.to_string(), n.to_string())])
+                .collect()
+        } else {
+            node.items
+                .iter()
+                .map(|item| vec![(var.to_string(), fill(item, &self.vars))])
+                .collect()
+        };
+        Ok(sets
+            .into_iter()
+            .enumerate()
+            .map(|(index, mut set)| {
+                set.push((format!("{var}_index"), index.to_string()));
+                set
+            })
+            .collect())
+    }
+
+    async fn run_loop(&mut self, node: &'a JourneyNode, mapped: Done) -> Flow {
+        let iterations = match self.iterations(node) {
+            Ok(iterations) => iterations,
+            Err(problem) => {
+                let done = Done {
+                    vars: mapped.vars,
+                    ..Done::failed(problem)
+                };
+                return self.settle(node, done).await;
+            }
+        };
         self.active_loops.push(node.id.clone());
         let mut escaped = None;
-        for (index, item) in items.iter().enumerate() {
-            self.vars.insert(var.to_string(), item.clone());
-            self.vars.insert(format!("{var}_index"), index.to_string());
+        for set in &iterations {
+            for (name, value) in set {
+                self.vars.insert(name.clone(), value.clone());
+            }
             match self.follow(self.edges_of(&node.id, &[WHEN_EACH])).await {
                 Flow::Stop => {
                     self.active_loops.pop();
@@ -365,7 +442,8 @@ impl<'a, H: Host> Walk<'a, H> {
         }
         self.active_loops.pop();
         let mut done = Done::passed();
-        done.message = format!("{} iteration(s).", items.len());
+        done.vars = mapped.vars;
+        done.message = format!("{} iteration(s).", iterations.len());
         self.host.emit(self.finish_event(&node.id, &done));
         if let Some(target) = escaped {
             return Flow::Back(target);
@@ -396,7 +474,7 @@ pub async fn run<H: Host>(host: &H, journey: &Journey, run_id: &str) -> RunSumma
             "The journey has no Start node.".to_string(),
         ),
         Some(start) => {
-            walk.walk(&start.id).await;
+            walk.walk(&start.id, &[]).await;
             match walk.stopped.take() {
                 Some(Stopped::Cancelled) => (RunStatus::Cancelled, "The run was stopped.".into()),
                 Some(Stopped::Failed(problem)) => (RunStatus::Failed, problem),

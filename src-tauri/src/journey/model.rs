@@ -135,6 +135,10 @@ pub struct JourneyNode {
     /// Loop nodes: the variable that holds the item (the index is `<var>_index`).
     #[serde(default)]
     pub loop_var: String,
+    /// Loop nodes: a `.csv` (first row names the columns) or `.json` (array of objects) file
+    /// of the collection; runs once per row, each column a variable.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub data_file: String,
     /// Overrides the journey's policy for this node.
     #[serde(default)]
     pub on_failure: Option<FailurePolicy>,
@@ -156,6 +160,7 @@ impl JourneyNode {
             items: Vec::new(),
             count: 0,
             loop_var: String::new(),
+            data_file: String::new(),
             on_failure: None,
         }
     }
@@ -169,6 +174,10 @@ pub struct JourneyEdge {
     /// `true`/`false` from a Condition, `each`/`done` from a Loop, empty otherwise.
     #[serde(default)]
     pub when: String,
+    /// Values copied into variables as the target node starts (plan 13c): each reads the
+    /// last response or a variable and keeps it under `name`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub map: Vec<Output>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -260,11 +269,7 @@ fn check_node(
     }
     match node.node_type {
         NodeType::Request => {
-            let path = &node.request;
-            let escapes = path.starts_with('/')
-                || path.contains('\\')
-                || path.split('/').any(|part| part == ".." || part == ".");
-            if path.trim().is_empty() || escapes || path.len() > 512 {
+            if !is_safe_relative(&node.request) {
                 return Err(invalid(
                     file,
                     &format!("{at}.request"),
@@ -279,33 +284,7 @@ fn check_node(
                 ));
             }
             for (k, output) in node.outputs.iter().enumerate() {
-                let field = format!("{at}.outputs[{k}]");
-                let name_ok = !output.name.is_empty()
-                    && output.name.len() <= MAX_NAME_CHARS
-                    && output
-                        .name
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.');
-                if !name_ok {
-                    return Err(invalid(
-                        file,
-                        &format!("{field}.name"),
-                        "is not a variable name",
-                    ));
-                }
-                if matches!(output.source, CheckSource::Variable) {
-                    return Err(invalid(
-                        file,
-                        &format!("{field}.source"),
-                        "must read the response",
-                    ));
-                }
-                check_text(
-                    file,
-                    &format!("{field}.path"),
-                    &output.path,
-                    MAX_NAME_CHARS * 4,
-                )?;
+                check_output(file, &format!("{at}.outputs[{k}]"), output)?;
             }
         }
         NodeType::Condition | NodeType::Assert => check_check(file, &at, &node.check)?,
@@ -313,6 +292,7 @@ fn check_node(
             return Err(invalid(file, &format!("{at}.delay_ms"), "is over 60000"));
         }
         NodeType::Loop => {
+            check_data_file(file, &at, node)?;
             if node.items.len() > MAX_LOOP_ITEMS || node.count as usize > MAX_LOOP_ITEMS {
                 return Err(invalid(file, &format!("{at}.count"), "is over 1000"));
             }
@@ -337,6 +317,68 @@ fn check_node(
             }
         }
         _ => {}
+    }
+    Ok(())
+}
+
+/// A variable name an output may set.
+fn check_output(file: &str, field: &str, output: &Output) -> Result<(), AppError> {
+    let name_ok = !output.name.is_empty()
+        && output.name.len() <= MAX_NAME_CHARS
+        && output
+            .name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.');
+    if !name_ok {
+        return Err(invalid(
+            file,
+            &format!("{field}.name"),
+            "is not a variable name",
+        ));
+    }
+    if matches!(output.source, CheckSource::Variable) {
+        return Err(invalid(
+            file,
+            &format!("{field}.source"),
+            "must read the response",
+        ));
+    }
+    check_text(
+        file,
+        &format!("{field}.path"),
+        &output.path,
+        MAX_NAME_CHARS * 4,
+    )
+}
+
+/// A path inside the collection: relative, forward slashes, no `.` or `..`.
+pub fn is_safe_relative(path: &str) -> bool {
+    let escapes = path.starts_with('/')
+        || path.contains('\\')
+        || path.contains('\0')
+        || path.split('/').any(|part| part == ".." || part == ".");
+    !path.trim().is_empty() && !escapes && path.len() <= 512
+}
+
+fn check_data_file(file: &str, at: &str, node: &JourneyNode) -> Result<(), AppError> {
+    if node.data_file.is_empty() {
+        return Ok(());
+    }
+    let lower = node.data_file.to_ascii_lowercase();
+    let kind_ok = lower.ends_with(".csv") || lower.ends_with(".json");
+    if !is_safe_relative(&node.data_file) || !kind_ok {
+        return Err(invalid(
+            file,
+            &format!("{at}.data_file"),
+            "must be a .csv or .json file inside the collection",
+        ));
+    }
+    if !node.items.is_empty() {
+        return Err(invalid(
+            file,
+            &format!("{at}.data_file"),
+            "cannot be used together with items",
+        ));
     }
     Ok(())
 }
@@ -371,6 +413,12 @@ fn check_edges(
                 &format!("{at}.when"),
                 "is not a branch of that node",
             ));
+        }
+        if edge.map.len() > MAX_OUTPUTS {
+            return Err(invalid(file, &format!("{at}.map"), "has too many mappings"));
+        }
+        for (k, mapping) in edge.map.iter().enumerate() {
+            check_output(file, &format!("{at}.map[{k}]"), mapping)?;
         }
         if *from == NodeType::End || edge.from == edge.to {
             return Err(invalid(
@@ -487,6 +535,7 @@ pub mod tests_support {
             from: from.into(),
             to: to.into(),
             when: when.into(),
+            map: Vec::new(),
         }
     }
 
@@ -571,6 +620,48 @@ mod tests {
             name: "bad name".into(),
             ..Output::default()
         }];
+        assert!(validate("t", &journey).is_err());
+    }
+
+    #[test]
+    fn edge_mappings_are_checked_like_outputs() {
+        let mut journey = sample();
+        journey.edges[1].map = vec![Output {
+            name: "token".into(),
+            source: CheckSource::Body,
+            path: "data.token".into(),
+        }];
+        validate("t", &journey).unwrap();
+        journey.edges[1].map[0].name = "bad name".into();
+        assert!(validate("t", &journey).is_err());
+        journey.edges[1].map[0].name = "token".into();
+        journey.edges[1].map[0].source = CheckSource::Variable;
+        assert!(validate("t", &journey).is_err());
+        journey.edges[1].map = vec![Output::default(); MAX_OUTPUTS + 1];
+        assert!(validate("t", &journey).is_err());
+    }
+
+    #[test]
+    fn a_loop_data_file_stays_inside_the_collection() {
+        let mut journey = sample();
+        journey.nodes[1] = JourneyNode::new("r", NodeType::Loop);
+        journey.edges[1].when = WHEN_DONE.into();
+        for good in ["data/users.csv", "users.JSON"] {
+            journey.nodes[1].data_file = good.into();
+            validate("t", &journey).unwrap();
+        }
+        for bad in [
+            "../users.csv",
+            "/etc/users.csv",
+            "a\\b.csv",
+            "users.txt",
+            "./u.csv",
+        ] {
+            journey.nodes[1].data_file = bad.into();
+            assert!(validate("t", &journey).is_err(), "{bad}");
+        }
+        journey.nodes[1].data_file = "users.csv".into();
+        journey.nodes[1].items = vec!["a".into()];
         assert!(validate("t", &journey).is_err());
     }
 }

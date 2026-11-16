@@ -17,10 +17,12 @@ vi.mock("./JourneyCanvas", () => ({
   JourneyCanvas: (p: {
     journey: Journey;
     onSelect: (id: string | null) => void;
+    onSelectEdge: (id: string) => void;
   }) => (
     <div>
       <span>{`${p.journey.nodes?.length} nodes`}</span>
       <button onClick={() => p.onSelect("n2")}>pick n2</button>
+      <button onClick={() => p.onSelectEdge("e1")}>pick e1</button>
     </div>
   ),
 }));
@@ -128,5 +130,33 @@ describe("JourneyTab", () => {
     show();
     await userEvent.click(await screen.findByRole("button", { name: "Stop" }));
     expect(api.cancelJourney).toHaveBeenCalledWith("c1", "signup.journey.yaml");
+  });
+
+  it("edits what an edge carries and saves the mapping", async () => {
+    vi.mocked(api.saveJourney).mockResolvedValue({
+      file: "signup.journey.yaml",
+      name: "Signup",
+      nodes: 2,
+      error: null,
+    });
+    show();
+    await screen.findByText("2 nodes");
+    await userEvent.click(screen.getByRole("button", { name: "pick e1" }));
+    expect(
+      screen.getByRole("heading", { name: "Start → Request" }),
+    ).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Add mapping" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const sent = vi.mocked(api.saveJourney).mock.calls[0]![2];
+    expect(sent.edges![0]!.map).toEqual([
+      { name: "", source: "body", path: "" },
+    ]);
+  });
+
+  it("tidies the layout", async () => {
+    show();
+    await screen.findByText("2 nodes");
+    await userEvent.click(screen.getByRole("button", { name: "Tidy up" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 });

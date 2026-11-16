@@ -102,4 +102,13 @@ describe("NodeInspector", () => {
     show({ id: "n1", type: "start" });
     expect(screen.queryByLabelText("When this node fails")).toBeNull();
   });
+
+  it("sets a data file and then leaves the items alone", async () => {
+    const onChange = show({ id: "n4", type: "loop", data_file: "data/u.csv" });
+    expect(screen.getByLabelText("Items (one per line)")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Data file/), {
+      target: { value: "data/v.csv" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ data_file: "data/v.csv" });
+  });
 });

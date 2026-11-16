@@ -7,13 +7,16 @@ use std::sync::{Arc, Mutex};
 
 use papan_lib::engine::http::scripted::SendDeps;
 use papan_lib::engine::http::HttpEngine;
-use papan_lib::journey::host::EngineHost;
+use papan_lib::journey::host::{CollectionRef, EngineHost};
 use papan_lib::journey::model::{
     Check, CheckOp, CheckSource, Journey, JourneyEdge, JourneyNode, JourneySettings, NodeType,
     Output,
 };
 use papan_lib::journey::runner::run;
 use papan_lib::journey::types::{RunEvent, RunEventKind, RunStatus};
+use papan_lib::mock::model::MockEnvironment;
+use papan_lib::mock::types::MockLogEntry;
+use papan_lib::mock::{MockService, MockSink};
 use papan_lib::store::types::{RequestContent, RequestKind, RequestLocation};
 use papan_lib::store::{Store, StoreState};
 use papan_lib::vars::dynamic::SystemDynamics;
@@ -31,6 +34,7 @@ fn edge(id: &str, from: &str, to: &str) -> JourneyEdge {
         from: from.into(),
         to: to.into(),
         when: String::new(),
+        map: Vec::new(),
     }
 }
 
@@ -43,6 +47,7 @@ fn request_node(id: &str, path: &str) -> JourneyNode {
 
 struct World {
     _dir: tempfile::TempDir,
+    root: std::path::PathBuf,
     engine: HttpEngine,
     store: StoreState,
     vars: VarsService,
@@ -74,6 +79,7 @@ fn world(base: &str) -> World {
     )
     .unwrap();
     World {
+        root: store.collection_root(&id).unwrap(),
         _dir: dir,
         engine,
         store: StoreState::new(store),
@@ -110,7 +116,10 @@ impl World {
                 vars: &self.vars,
                 dynamics: Arc::new(SystemDynamics),
             },
-            self.collection_id.clone(),
+            CollectionRef {
+                id: self.collection_id.clone(),
+                root: self.root.clone(),
+            },
             Arc::new(AtomicBool::new(false)),
             Arc::new(Mutex::new(None)),
             Vec::new(),
@@ -236,4 +245,98 @@ async fn a_script_node_sets_a_variable_for_the_next_request() {
     let host = world.host(Arc::new(Mutex::new(Vec::new())));
     let done = run(&host, &journey, "run-3").await;
     assert_eq!(done.status, RunStatus::Passed, "{}", done.message);
+}
+
+struct Quiet;
+impl MockSink for Quiet {
+    fn logged(&self, _collection_id: &str, _file: &str, _entry: &MockLogEntry) {}
+}
+
+fn mock_with_routes() -> MockEnvironment {
+    let route = |id: &str, endpoint: &str, body: &str| {
+        serde_json::json!({
+            "id": id, "method": "get", "endpoint": endpoint,
+            "responses": [{ "id": "r", "status": 200, "body": body, "default": true }],
+        })
+    };
+    serde_json::from_value(serde_json::json!({
+        "name": "Api",
+        "routes": [
+            route("login", "login", r#"{"data":{"token":"abc123"}}"#),
+            route("whoami", "whoami", r#"{"seen":"{{queryParam 'token'}}"}"#),
+            route("user", "users/:id", r#"{"id":"{{urlParam 'id'}}"}"#),
+        ],
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_journey_runs_against_a_mock_with_a_mapped_token_and_a_data_file_loop() {
+    let mocks = MockService::new(Arc::new(Quiet));
+    let dir = tempfile::tempdir().unwrap();
+    mocks
+        .start("m", "api.mock.yaml", dir.path().into(), mock_with_routes())
+        .await
+        .unwrap();
+    let base = mocks.url_of("m", "api.mock.yaml").await.unwrap();
+    let world = world(&base);
+    std::fs::create_dir_all(world.root.join("data")).unwrap();
+    std::fs::write(world.root.join("data/ids.csv"), "id\n1\n2\n").unwrap();
+    let login = world.add_request("Login", "{{base}}/login");
+    let whoami = world.add_request("Whoami", "{{base}}/whoami?token={{auth}}");
+    let user = world.add_request("User", "{{base}}/users/{{id}}");
+    let check = JourneyNode {
+        check: Check {
+            source: CheckSource::Body,
+            name: "seen".into(),
+            op: CheckOp::Eq,
+            value: "abc123".into(),
+        },
+        ..node("check", NodeType::Assert)
+    };
+    let each_id = JourneyNode {
+        data_file: "data/ids.csv".into(),
+        ..node("each", NodeType::Loop)
+    };
+    let mut to_whoami = edge("e2", "login", "whoami");
+    to_whoami.map = vec![Output {
+        name: "auth".into(),
+        source: CheckSource::Body,
+        path: "data.token".into(),
+    }];
+    let journey = Journey {
+        name: "Mocked".into(),
+        nodes: vec![
+            node("s", NodeType::Start),
+            request_node("login", &login),
+            request_node("whoami", &whoami),
+            check,
+            each_id,
+            request_node("user", &user),
+        ],
+        edges: vec![
+            edge("e1", "s", "login"),
+            to_whoami,
+            edge("e3", "whoami", "check"),
+            edge("e4", "check", "each"),
+            JourneyEdge {
+                when: "each".into(),
+                ..edge("e5", "each", "user")
+            },
+            edge("e6", "user", "each"),
+        ],
+        settings: JourneySettings::default(),
+    };
+    papan_lib::journey::model::validate("t", &journey).unwrap();
+    let host = world.host(Arc::new(Mutex::new(Vec::new())));
+    let done = run(&host, &journey, "run-3").await;
+    assert_eq!(done.status, RunStatus::Passed, "{}", done.message);
+    let paths: Vec<String> = mocks
+        .log("m", "api.mock.yaml")
+        .await
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect();
+    assert_eq!(paths, ["/login", "/whoami", "/users/1", "/users/2"]);
+    mocks.stop_all().await;
 }

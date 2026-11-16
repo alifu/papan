@@ -2,11 +2,13 @@
 //! history) and scripts through the QuickJS sandbox (plan 13 §4).
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use super::check::Sent;
+use super::data::{read_rows, Row};
 use super::runner::{Host, ScriptDone};
 use super::types::RunEvent;
 use crate::engine::http::mask::mask_secrets;
@@ -20,9 +22,18 @@ use crate::store::types::{RequestContent, RequestKind, RequestLocation};
 /// Sends the events of a run somewhere (the webview).
 pub type Emit = Box<dyn Fn(RunEvent) + Send + Sync>;
 
+/// The collection a run belongs to.
+pub struct CollectionRef {
+    pub id: String,
+    /// The collection's folder: data files are read from inside it.
+    pub root: PathBuf,
+}
+
 pub struct EngineHost<'a> {
     pub deps: SendDeps<'a>,
     pub collection_id: String,
+    /// The collection's folder: data files are read from inside it.
+    pub root: PathBuf,
     /// Raised by `cancel_journey`.
     pub cancel: Arc<AtomicBool>,
     /// Secret values of the collection's variables: hidden in everything an event carries.
@@ -37,7 +48,7 @@ pub struct EngineHost<'a> {
 impl<'a> EngineHost<'a> {
     pub fn new(
         deps: SendDeps<'a>,
-        collection_id: String,
+        collection: CollectionRef,
         cancel: Arc<AtomicBool>,
         current: Arc<Mutex<Option<String>>>,
         secrets: Vec<String>,
@@ -46,7 +57,8 @@ impl<'a> EngineHost<'a> {
     ) -> Self {
         Self {
             deps,
-            collection_id,
+            collection_id: collection.id,
+            root: collection.root,
             cancel,
             secrets,
             scripts_trusted,
@@ -191,6 +203,10 @@ impl Host for EngineHost<'_> {
             vars: after.layers.runtime.values,
             console: report.console.into_iter().map(|line| line.text).collect(),
         })
+    }
+
+    fn rows(&self, file: &str) -> Result<Vec<Row>, String> {
+        read_rows(&self.root, file)
     }
 
     fn emit(&self, event: RunEvent) {
