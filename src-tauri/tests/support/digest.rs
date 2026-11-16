@@ -102,7 +102,13 @@ pub async fn digest(
     request: Request,
 ) -> Response {
     let method = request.method().to_string();
-    if !verified(&algorithm, &method, request.headers()) {
+    let verified = verified(&algorithm, &method, request.headers());
+    // Read the body before any reply: answering a challenge with an unread body makes the
+    // connection reset on Windows, which fails the client's replay.
+    let body = axum::body::to_bytes(request.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    if !verified {
         let mut response = StatusCode::UNAUTHORIZED.into_response();
         let headers = response.headers_mut();
         headers.append(
@@ -115,9 +121,6 @@ pub async fn digest(
         );
         return response;
     }
-    let body = axum::body::to_bytes(request.into_body(), usize::MAX)
-        .await
-        .unwrap();
     axum::Json(json!({
         "user": USER,
         "body": base64::engine::general_purpose::STANDARD.encode(body),
