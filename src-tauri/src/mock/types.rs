@@ -61,6 +61,13 @@ pub struct ImportedMock {
     pub notes: Vec<String>,
 }
 
+/// A saved export: the file's name and what the format could not hold.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ExportedMock {
+    pub file: String,
+    pub notes: Vec<String>,
+}
+
 /// One request the mock served.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct MockLogEntry {

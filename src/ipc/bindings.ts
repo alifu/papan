@@ -119,10 +119,10 @@ export const commands = {
 	 */
 	importMock: (collectionId: string, format: MockImportFormat) => __TAURI_INVOKE<ImportedMock | null>("import_mock", { collectionId, format }),
 	/**
-	 *  Saves the mock as a Mockers environment file; returns the saved file's name, or `None` when
+	 *  Saves the mock as a Mockers environment file; returns the saved file's name and notes, or `None` when
 	 *  the save dialog is cancelled.
 	 */
-	exportMock: (collectionId: string, file: string) => __TAURI_INVOKE<string | null>("export_mock", { collectionId, file }),
+	exportMock: (collectionId: string, file: string) => __TAURI_INVOKE<ExportedMock | null>("export_mock", { collectionId, file }),
 	gitStatus: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_status", { collectionId }),
 	gitInit: (collectionId: string) => __TAURI_INVOKE<GitStatus>("git_init", { collectionId }),
 	/**
@@ -429,6 +429,12 @@ export type ExportOptions = {
 	environments: string[],
 	include_globals: boolean,
 	include_secret_values: boolean,
+};
+
+/**  A saved export: the file's name and what the format could not hold. */
+export type ExportedMock = {
+	file: string,
+	notes: string[],
 };
 
 export type GitBranch = {

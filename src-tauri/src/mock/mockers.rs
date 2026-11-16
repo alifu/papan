@@ -398,13 +398,27 @@ fn route_json(route: &MockRoute) -> Value {
 }
 
 /// The mock as the environment object Mockers opens.
-pub fn export(mock: &MockEnvironment) -> Result<String, AppError> {
+/// The file text, with what it could not hold.
+pub fn export(mock: &MockEnvironment) -> Result<(String, Vec<String>), AppError> {
+    let mut notes = Vec::new();
     // Mockers files have no WebSocket routes.
     let http_routes: Vec<&MockRoute> = mock
         .routes
         .iter()
         .filter(|r| r.kind != RouteKind::Ws)
         .collect();
+    let skipped = mock.routes.len() - http_routes.len();
+    if skipped > 0 {
+        notes.push(format!("{skipped} WebSocket route(s) were left out."));
+    }
+    if mock
+        .routes
+        .iter()
+        .flat_map(|r| &r.responses)
+        .any(|r| !r.callbacks.is_empty())
+    {
+        notes.push("Callbacks were left out.".into());
+    }
     let routes: Vec<Value> = http_routes.iter().map(|r| route_json(r)).collect();
     let children: Vec<Value> = http_routes
         .iter()
@@ -455,9 +469,10 @@ pub fn export(mock: &MockEnvironment) -> Result<String, AppError> {
     );
     env.insert("data".into(), Value::Array(data));
     env.insert("callbacks".into(), json!([]));
-    serde_json::to_string_pretty(&Value::Object(env)).map_err(|source| {
+    let text = serde_json::to_string_pretty(&Value::Object(env)).map_err(|source| {
         AppError::internal("Could not write the Mockers file.").with_detail(source.to_string())
-    })
+    })?;
+    Ok((text, notes))
 }
 
 #[cfg(test)]
@@ -533,7 +548,8 @@ mod tests {
     #[test]
     fn export_then_import_keeps_the_mock() {
         let first = import(SAMPLE).unwrap().mock;
-        let text = export(&first).unwrap();
+        let (text, notes) = export(&first).unwrap();
+        assert!(notes.is_empty());
         let back = import(&text).unwrap();
         let (a, b) = (&first, &back.mock);
         assert_eq!(back.notes, Vec::<String>::new());
@@ -564,7 +580,7 @@ mod tests {
     fn export_leaves_out_websocket_routes() {
         let mut mock = import(SAMPLE).unwrap().mock;
         mock.routes[0].kind = RouteKind::Ws;
-        let back = import(&export(&mock).unwrap()).unwrap().mock;
+        let back = import(&export(&mock).unwrap().0).unwrap().mock;
         assert_eq!(back.routes.len(), 1);
         assert_eq!(back.routes[0].kind, RouteKind::Crud);
     }

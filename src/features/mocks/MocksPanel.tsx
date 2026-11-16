@@ -69,7 +69,9 @@ export function MocksPanel() {
   const exportFile = async (collectionId: string, file: string) => {
     try {
       const saved = await api.exportMock(collectionId, file);
-      if (saved) showToast({ kind: "info", message: `Saved ${saved}.` });
+      if (!saved) return;
+      const left = saved.notes.length > 0 ? ` ${saved.notes.join(" ")}` : "";
+      showToast({ kind: "info", message: `Saved ${saved.file}.${left}` });
     } catch (err) {
       reportError(err);
     }

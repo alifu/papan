@@ -8,7 +8,9 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::model::MockEnvironment;
-use super::types::{ImportedMock, MockImportFormat, MockLogEntry, MockLogged, MockSummary};
+use super::types::{
+    ExportedMock, ImportedMock, MockImportFormat, MockLogEntry, MockLogged, MockSummary,
+};
 use super::{disk, MockService, MockSink};
 use crate::error::AppError;
 use crate::store::StoreState;
@@ -331,7 +333,7 @@ pub async fn import_mock(
     logged(made).map(Some)
 }
 
-/// Saves the mock as a Mockers environment file; returns the saved file's name, or `None` when
+/// Saves the mock as a Mockers environment file; returns the saved file's name and notes, or `None` when
 /// the save dialog is cancelled.
 #[tauri::command]
 #[specta::specta]
@@ -340,10 +342,10 @@ pub async fn export_mock(
     state: State<'_, StoreState>,
     collection_id: String,
     file: String,
-) -> MockResult<Option<String>> {
+) -> MockResult<Option<ExportedMock>> {
     let root = root_of(&state, &collection_id)?;
     let mock = logged(disk::read(&root, &file))?;
-    let text = logged(super::mockers::export(&mock))?;
+    let (text, notes) = logged(super::mockers::export(&mock))?;
     let name = format!("{}.mockers.json", file.trim_end_matches(disk::SUFFIX));
     let picked =
         dialog(move || app.dialog().file().set_file_name(name).blocking_save_file()).await?;
@@ -351,13 +353,15 @@ pub async fn export_mock(
         return Ok(None);
     };
     let target = logged(picked_path(picked))?;
-    let saved = target.file_name().map(|n| n.to_string_lossy().into_owned());
+    let saved = target
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     logged(
         tokio::fs::write(&target, text)
             .await
             .map_err(AppError::from),
     )?;
-    Ok(saved)
+    Ok(Some(ExportedMock { file: saved, notes }))
 }
 
 #[cfg(test)]

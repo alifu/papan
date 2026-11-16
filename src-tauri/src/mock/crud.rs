@@ -62,13 +62,20 @@ fn position(items: &[Value], key: &str, id: &str) -> Option<usize> {
 
 impl Buckets {
     pub fn new(data: &[DataBucket]) -> Self {
-        let items = data
+        let items: Vec<Bucket> = data
             .iter()
             .map(|bucket| Bucket {
                 id: bucket.id.clone(),
                 name: bucket.name.clone(),
                 value: serde_json::from_str(&bucket.value).unwrap_or(Value::Null),
-                bytes: bucket.value.len(),
+                bytes: 0,
+            })
+            .collect();
+        let items = items
+            .into_iter()
+            .map(|mut bucket: Bucket| {
+                bucket.bytes = serde_json::to_vec(&bucket.value).map_or(0, |bytes| bytes.len());
+                bucket
             })
             .collect();
         Self {

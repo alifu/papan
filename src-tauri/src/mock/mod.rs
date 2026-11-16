@@ -22,6 +22,7 @@ pub mod types;
 pub mod ws;
 #[cfg(test)]
 mod ws_tests;
+mod ws_upgrade;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

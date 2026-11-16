@@ -152,7 +152,10 @@ describe("MocksPanel", () => {
   });
 
   it("exports a mock as a Mockers file", async () => {
-    vi.mocked(api.exportMock).mockResolvedValue("users.mockers.json");
+    vi.mocked(api.exportMock).mockResolvedValue({
+      file: "users.mockers.json",
+      notes: ["1 WebSocket route(s) were left out."],
+    });
     render(<MocksPanel />);
     await userEvent.click(
       await screen.findByRole("menuitem", { name: "Actions for Users" }),
@@ -164,5 +167,8 @@ describe("MocksPanel", () => {
       expect(useToastStore.getState().toasts).toHaveLength(1),
     );
     expect(api.exportMock).toHaveBeenCalledWith("c1", "users.mock.yaml");
+    expect(useToastStore.getState().toasts[0]?.message).toMatch(
+      /users\.mockers\.json.*WebSocket route/,
+    );
   });
 });
