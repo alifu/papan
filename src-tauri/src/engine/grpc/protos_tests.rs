@@ -180,8 +180,14 @@ fn imports_that_leave_the_root_are_refused() {
     let outer = disk(&[("secret.proto", TYPES), ("root/ok.proto", TYPES)]);
     let root = outer.path().join("root");
     let cache = ProtoCache::default();
-    let absolute = outer.path().join("secret.proto");
-    for import in ["../secret.proto", absolute.to_str().unwrap()] {
+    // Forward slashes: a Windows backslash would be read as a string escape in the .proto.
+    let absolute = outer
+        .path()
+        .join("secret.proto")
+        .to_str()
+        .unwrap()
+        .replace('\\', "/");
+    for import in ["../secret.proto", absolute.as_str()] {
         let text = format!("syntax = \"proto3\";\nimport \"{import}\";\n");
         std::fs::write(root.join("main.proto"), text).unwrap();
 

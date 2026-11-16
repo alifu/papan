@@ -1,0 +1,5 @@
+# Keep LF on every OS: golden-file tests compare bytes, and Windows CI checks out CRLF by default.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

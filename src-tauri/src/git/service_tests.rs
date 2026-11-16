@@ -16,6 +16,8 @@ fn identify(dir: &Path) {
     git(dir, &["config", "user.name", "Tester"]);
     git(dir, &["config", "user.email", "t@example.com"]);
     git(dir, &["config", "commit.gpgsign", "false"]);
+    // Windows runners default to autocrlf=true, which turns "\n" into "\r\n" in the checkout.
+    git(dir, &["config", "core.autocrlf", "false"]);
 }
 
 /// A bare remote seeded with one commit, plus two clones of it.

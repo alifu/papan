@@ -377,18 +377,19 @@ mod tests {
         let mut store = Store::new(app.path()).unwrap();
         let tree = store.create_collection(work.path(), "Shop").unwrap();
         let id = tree.collection.id.clone();
-        store.create_folder(&id, "", "Items").unwrap();
+        // The folder name is slugified ("items"), so use the returned path, not "Items".
+        let items = store.create_folder(&id, "", "Items").unwrap().path.unwrap();
         for (parent, name, kind, method, url) in [
             ("", "Health", RequestKind::Http, "GET", "{{base}}/health"),
             (
-                "Items",
+                items.as_str(),
                 "Get item",
                 RequestKind::Http,
                 "GET",
                 "{{base}}/items/{{id}}",
             ),
             (
-                "Items",
+                items.as_str(),
                 "Socket",
                 RequestKind::Ws,
                 "GET",

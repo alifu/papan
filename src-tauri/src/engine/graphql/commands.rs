@@ -78,10 +78,15 @@ pub async fn read_cached_schema(
 /// the read unbounded.
 pub(super) async fn read_schema_file(path: std::path::PathBuf) -> GraphqlResult<Vec<u8>> {
     use tokio::io::AsyncReadExt as _;
-    let file = tokio::fs::File::open(&path).await.map_err(AppError::from)?;
-    if !file.metadata().await.map_err(AppError::from)?.is_file() {
+    // Check first: opening a folder fails with "access denied" on Windows.
+    if !tokio::fs::metadata(&path)
+        .await
+        .map_err(AppError::from)?
+        .is_file()
+    {
         return Err(AppError::invalid_input("Choose a regular schema file."));
     }
+    let file = tokio::fs::File::open(&path).await.map_err(AppError::from)?;
     let limit = u64::try_from(MAX_SCHEMA_BYTES).unwrap_or(u64::MAX);
     let mut bytes = Vec::new();
     file.take(limit.saturating_add(1))

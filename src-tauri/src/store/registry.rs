@@ -157,27 +157,32 @@ mod tests {
     use super::*;
     use crate::error::ErrorCode;
 
+    /// An absolute path on every OS (`/a` is not absolute on Windows).
+    fn abs(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(name)
+    }
+
     #[test]
     fn survives_a_restart() {
         let dir = tempfile::tempdir().unwrap();
         let mut registry = Registry::load(dir.path());
 
-        let entry = registry.add(Path::new("/a")).unwrap();
-        let again = registry.add(Path::new("/a")).unwrap();
-        registry.add(Path::new("/b")).unwrap();
+        let entry = registry.add(abs("a").as_path()).unwrap();
+        let again = registry.add(abs("a").as_path()).unwrap();
+        registry.add(abs("b").as_path()).unwrap();
         let reloaded = Registry::load(dir.path());
 
         assert_eq!(entry, again);
         assert_eq!(reloaded, registry);
         assert_eq!(reloaded.entries().len(), 2);
-        assert_eq!(reloaded.find(&entry.id).unwrap().path, Path::new("/a"));
+        assert_eq!(reloaded.find(&entry.id).unwrap().path, abs("a"));
     }
 
     #[test]
     fn remove_forgets_and_rejects_unknown_ids() {
         let dir = tempfile::tempdir().unwrap();
         let mut registry = Registry::load(dir.path());
-        let entry = registry.add(Path::new("/a")).unwrap();
+        let entry = registry.add(abs("a").as_path()).unwrap();
 
         registry.remove(&entry.id).unwrap();
 
@@ -192,12 +197,12 @@ mod tests {
     fn reopening_a_closed_path_reuses_its_id() {
         let dir = tempfile::tempdir().unwrap();
         let mut registry = Registry::load(dir.path());
-        let entry = registry.add(Path::new("/a")).unwrap();
+        let entry = registry.add(abs("a").as_path()).unwrap();
 
         registry.remove(&entry.id).unwrap();
         let mut reloaded = Registry::load(dir.path());
-        let again = reloaded.add(Path::new("/a")).unwrap();
-        let other = reloaded.add(Path::new("/b")).unwrap();
+        let again = reloaded.add(abs("a").as_path()).unwrap();
+        let other = reloaded.add(abs("b").as_path()).unwrap();
 
         assert_eq!(again, entry);
         assert_ne!(other.id, entry.id);
@@ -224,14 +229,12 @@ mod tests {
     fn invalid_entries_are_dropped_on_load() {
         let dir = tempfile::tempdir().unwrap();
         let good = uuid::Uuid::new_v4();
-        let text = format!(
-            r#"{{"version":1,"collections":[
-                {{"id":"{good}","path":"/ok"}},
-                {{"id":"not-a-uuid","path":"/x"}},
-                {{"id":"{}","path":"relative/path"}}
-            ]}}"#,
-            uuid::Uuid::new_v4()
-        );
+        let text = serde_json::json!({"version": 1, "collections": [
+            {"id": good.to_string(), "path": abs("ok")},
+            {"id": "not-a-uuid", "path": abs("x")},
+            {"id": uuid::Uuid::new_v4().to_string(), "path": "relative/path"},
+        ]})
+        .to_string();
         fsio::write_atomic(&dir.path().join(REGISTRY_FILE), text.as_bytes()).unwrap();
 
         let registry = Registry::load(dir.path());
