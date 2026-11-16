@@ -16,6 +16,8 @@ fn identify(dir: &Path) {
     git(dir, &["config", "user.name", "Tester"]);
     git(dir, &["config", "user.email", "t@example.com"]);
     git(dir, &["config", "commit.gpgsign", "false"]);
+    // Windows runners default to autocrlf=true, which turns "\n" into "\r\n" in the checkout.
+    git(dir, &["config", "core.autocrlf", "false"]);
 }
 
 /// A bare remote seeded with one commit, plus two clones of it.
@@ -57,6 +59,13 @@ fn world() -> World {
     fs::create_dir(&parent_b).unwrap();
     let a = clone(url, &parent_a).unwrap();
     let b = clone(url, &parent_b).unwrap();
+    // The clones were checked out under the machine's autocrlf (CRLF on Windows runners).
+    // Turn it off and rebuild the index and files so they match the committed bytes.
+    for dir in [&a, &b] {
+        git(dir, &["config", "core.autocrlf", "false"]);
+        git(dir, &["rm", "--cached", "-r", "-q", "."]);
+        git(dir, &["reset", "-q", "--hard"]);
+    }
     World {
         _tmp: tmp,
         remote,
