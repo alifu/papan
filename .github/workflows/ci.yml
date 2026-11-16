@@ -37,6 +37,10 @@ jobs:
   rust:
     name: rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      # Debug info makes test binaries huge: the Linux linker ran out of disk (ld Bus error)
+      # and Windows took 22 min to build. Tests don't need it.
+      CARGO_PROFILE_DEV_DEBUG: "0"
     strategy:
       fail-fast: false
       matrix:
