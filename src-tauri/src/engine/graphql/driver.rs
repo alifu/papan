@@ -169,7 +169,14 @@ impl Inner {
         error: Option<&AppError>,
     ) -> AppError {
         if let Some(error) = error {
-            return error.clone();
+            // A reset can beat the server's close frame (it does on Windows), so say when it
+            // happened; the original message and detail are kept.
+            let mut failure = error.clone();
+            failure.message = format!(
+                "{} This happened before the subscription started.",
+                error.message
+            );
+            return failure;
         }
         let known = code
             .and_then(|code| u16::try_from(code).ok())
