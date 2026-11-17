@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Health
+url: https://api.example.com/health

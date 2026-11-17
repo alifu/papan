@@ -1,0 +1,4 @@
+kind: http
+method: POST
+name: Refresh
+url: https://api.example.com/refresh

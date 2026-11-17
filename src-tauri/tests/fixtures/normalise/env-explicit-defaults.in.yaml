@@ -1,0 +1,9 @@
+name: Explicit defaults
+variables:
+  debug:
+    enabled: true
+    secret: false
+    value: "1"
+  token:
+    secret: false
+    value: abc

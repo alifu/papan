@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: CRLF request
+url: https://example.com/crlf

@@ -1,0 +1,180 @@
+.kv-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.kv-table th {
+  text-align: left;
+  font-weight: normal;
+  color: var(--color-text-muted);
+}
+
+.kv-table td input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.request-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow: auto;
+}
+
+.request-line {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.url-field {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-control-border);
+}
+
+.tls-badge {
+  color: var(--color-danger, #b00020);
+  font-size: 0.85em;
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-form .body-text {
+  height: 200px;
+  border: 1px solid var(--color-control-border);
+  overflow: hidden;
+}
+
+.multipart-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.field-error {
+  color: var(--color-danger, #b00020);
+}
+
+.request-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  flex: none;
+}
+
+.proxy-badge {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.oauth-panel { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
+.oauth-actions { display: flex; gap: 6px; }
+
+.scripts-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.scripts-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scripts-body {
+  flex: 1;
+  min-height: 140px;
+  overflow: auto;
+}
+
+.graphql-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.graphql-schema-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.graphql-schema-status {
+  color: var(--color-text-muted);
+  margin-right: auto;
+}
+
+.graphql-warning {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.graphql-main {
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+
+.graphql-main > .body-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.schema-explorer {
+  width: 280px;
+  overflow: auto;
+  border-left: 1px solid var(--color-border, currentColor);
+  padding-left: 8px;
+}
+
+.schema-explorer ul {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+}
+
+.schema-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-accent, inherit);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.schema-deprecated {
+  margin-left: 6px;
+  text-decoration: line-through;
+}
+
+.schema-description {
+  margin: 2px 0;
+  color: var(--color-text-muted);
+}

@@ -1,0 +1,15 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://example.test/headers">
+  <soapenv:Header>
+    <ns1:AuthHeader>
+      <ns1:token>?</ns1:token>
+      <!-- Optional: -->
+      <ns1:tenant>?</ns1:tenant>
+    </ns1:AuthHeader>
+  </soapenv:Header>
+  <soapenv:Body>
+    <ns1:PlaceOrder>
+      <ns1:sku>?</ns1:sku>
+      <ns1:quantity>?</ns1:quantity>
+    </ns1:PlaceOrder>
+  </soapenv:Body>
+</soapenv:Envelope>

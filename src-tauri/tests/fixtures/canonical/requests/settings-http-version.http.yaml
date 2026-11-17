@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: HTTP version
+settings:
+  http_version: http2
+url: https://example.com/h2

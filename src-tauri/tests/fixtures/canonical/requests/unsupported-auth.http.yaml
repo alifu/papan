@@ -1,0 +1,9 @@
+auth:
+  flows:
+    implicit:
+      scope: read
+  type: hawk
+kind: http
+method: GET
+name: Unsupported auth
+url: https://api.example.com/me

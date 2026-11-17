@@ -1,0 +1,8 @@
+disabled_params:
+  - name: debug
+    value: "1"
+  - name: flag
+kind: http
+method: GET
+name: Disabled params
+url: https://api.example.com/items?page=1&q={{term}}

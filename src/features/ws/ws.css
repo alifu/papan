@@ -1,0 +1,97 @@
+.ws-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+}
+
+.ws-closed {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.ws-status {
+  padding: 0 6px;
+  border: 1px solid var(--color-control-border);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.ws-protocol {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.ws-composer,
+.ws-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ws-composer-bar,
+.ws-log-bar,
+.ws-template-row,
+.ws-subprotocol-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ws-composer-editor {
+  min-height: 80px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.ws-warning {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.ws-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  max-height: 320px;
+  font-family: var(--font-mono, monospace);
+}
+
+.ws-row-head {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ws-preview {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-frame,
+.ws-size,
+.ws-time,
+.ws-truncated {
+  color: var(--color-text-muted);
+}
+
+.ws-body {
+  margin: 0 0 4px 24px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ws-template-name {
+  flex: 1;
+}

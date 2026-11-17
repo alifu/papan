@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Minimal
+url: https://example.com

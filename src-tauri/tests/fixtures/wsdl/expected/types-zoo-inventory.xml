@@ -1,0 +1,34 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://example.test/zoo">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ns1:Inventory>
+      <!-- Zero or more repetitions: -->
+      <animal id="?" legs="?">
+        <name>?</name>
+        <!-- Optional: -->
+        <!-- one of: herbivore, carnivore, omnivore -->
+        <diet>?</diet>
+        <!-- Optional: -->
+        <furColor>?</furColor>
+      </animal>
+      <enclosure>
+        <!-- choice: cage | pond | aviary -->
+        <cage>?</cage>
+        <!-- Zero or more repetitions: -->
+        <tag>?</tag>
+        <!-- 1 or more repetitions: -->
+        <keeper>?</keeper>
+      </enclosure>
+      <!-- Optional: -->
+      <tree>
+        <label>?</label>
+        <!-- Zero or more repetitions: -->
+        <child><!-- recursive: TreeNode --></child>
+      </tree>
+      <!-- Optional: -->
+      <short>
+        <code>?</code>
+      </short>
+    </ns1:Inventory>
+  </soapenv:Body>
+</soapenv:Envelope>

@@ -1,0 +1,4 @@
+kind: http
+method: PURGE
+name: Purge cache
+url: https://api.example.com/cache

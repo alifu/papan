@@ -1,0 +1,8 @@
+auth:
+  password: "{{digest_password}}"
+  type: digest
+  username: alice
+kind: http
+method: GET
+name: Digest auth
+url: https://api.example.com/me

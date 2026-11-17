@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: "123"
+url: https://api.example.com/123

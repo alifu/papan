@@ -1,0 +1,26 @@
+auth:
+  token: "{{token}}"
+  type: bearer
+grpc:
+  deadline_ms: 30000
+  import_paths:
+    - '.'
+    - third_party
+  message: |
+    { "name": "{{user}}" }
+  method: SayHello
+  protos:
+    - greeter/v1/greeter.proto
+  service: greeter.v1.Greeter
+headers:
+  - name: x-tenant
+    value: "{{tenant}}"
+  - name: trace-bin
+    value: AAEC
+kind: grpc
+method: POST
+name: Say hello
+settings:
+  timeout_ms: 10000
+  verify_tls: false
+url: https://{{host}}:443

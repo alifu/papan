@@ -1,0 +1,12 @@
+grpc:
+  method: SayHello
+  protos:
+    - greeter/v1/greeter.proto
+  service: greeter.v1.Greeter
+headers:
+  - name: trace-bin
+    value: "not base64!"
+kind: grpc
+method: POST
+name: Bad gRPC binary metadata
+url: https://greeter.example.com:443

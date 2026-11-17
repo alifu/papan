@@ -1,0 +1,53 @@
+"""A user of the test service."""
+interface Node {
+  id: ID!
+}
+
+type User implements Node {
+  id: ID!
+  name: String!
+  role: Role!
+  email: String
+  posts(first: Int = 10): [Post!]!
+}
+
+type Post implements Node {
+  id: ID!
+  title: String!
+  author: User! @deprecated(reason: "Use `writer` instead.")
+  writer: User!
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+input CreateUserInput {
+  name: String!
+  role: Role = MEMBER
+  email: String
+}
+
+union SearchResult = User | Post
+
+type Query {
+  node(id: ID!): Node
+  user(id: ID!): User
+  search(text: String!): [SearchResult!]!
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User!
+}
+
+type Subscription {
+  userCreated: User!
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}

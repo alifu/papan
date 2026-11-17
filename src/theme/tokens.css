@@ -1,0 +1,98 @@
+:root {
+  --font-family: Tahoma, "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-size: 12px;
+  --font-size-small: 11px;
+  --line-height: 16px;
+  --menubar-height: 22px;
+  --toolbar-height: 30px;
+  --statusbar-height: 22px;
+  --tab-height: 24px;
+  --accordion-header-height: 24px;
+  --splitter-size: 5px;
+  --rail-width: 24px;
+}
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-app-bg: #DFE8F6;
+  --color-panel-bg: #DFE8F6;
+  --color-content-bg: #FFFFFF;
+  --color-text: #000000;
+  --color-text-muted: #4A5568;
+  --color-border: #99BBE8;
+  --color-control-border: #7F9DB9;
+  --header-bg: linear-gradient(to bottom, #DAE7F6, #BFD5F0);
+  --color-header-text: #15428B;
+  --header-strong-bg: linear-gradient(to bottom, #3A6FCB, #0A246A);
+  --color-header-strong-text: #FFFFFF;
+  --toolbar-bg: linear-gradient(to bottom, #E4EDF9, #D0DEF0);
+  --button-bg: linear-gradient(to bottom, #FFFFFF, #D6E3F5);
+  --button-hover-bg: linear-gradient(to bottom, #FFF7DC, #FFE9A8);
+  --button-active-bg: linear-gradient(to bottom, #C7D8EE, #E4EDF9);
+  --color-bevel-light: #FFFFFF;
+  --color-bevel-dark: #7F9DB9;
+  --color-selected-bg: #316AC5;
+  --color-selected-text: #FFFFFF;
+  --color-tab-active-bg: #FFFFFF;
+  --color-status-bg: #D0DEF0;
+  --color-error-text: #A40000;
+  --color-focus: #0A246A;
+  --color-splitter: #C7D8EE;
+  --color-splitter-hover: #99BBE8;
+  --syntax-key: #0B4F9E;
+  --syntax-string: #0F6B2F;
+  --syntax-number: #9A3D00;
+  --syntax-keyword: #7A2E8E;
+  --syntax-tag: #8A1C1C;
+  --syntax-comment: #5A6472;
+  --syntax-var-ok: #0A4F7A;
+  --syntax-var-secret: #7A4B00;
+  --syntax-var-dynamic: #6B2E9E;
+  --timing-dns: #0B4F9E;
+  --timing-connect: #7A2E8E;
+  --timing-wait: #9A3D00;
+  --timing-download: #0F6B2F;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-app-bg: #000000;
+  --color-panel-bg: #141414;
+  --color-content-bg: #000000;
+  --color-text: #FFFFFF;
+  --color-text-muted: #B8B8B8;
+  --color-border: #6B6B6B;
+  --color-control-border: #8A8A8A;
+  --header-bg: linear-gradient(to bottom, #3A3A3A, #1F1F1F);
+  --color-header-text: #FFFFFF;
+  --header-strong-bg: linear-gradient(to bottom, #4A4A4A, #141414);
+  --color-header-strong-text: #FFFFFF;
+  --toolbar-bg: linear-gradient(to bottom, #2A2A2A, #1F1F1F);
+  --button-bg: linear-gradient(to bottom, #444444, #2A2A2A);
+  --button-hover-bg: linear-gradient(to bottom, #555555, #3A3A3A);
+  --button-active-bg: linear-gradient(to bottom, #1F1F1F, #2A2A2A);
+  --color-bevel-light: #8A8A8A;
+  --color-bevel-dark: #000000;
+  --color-selected-bg: #FFFFFF;
+  --color-selected-text: #000000;
+  --color-tab-active-bg: #000000;
+  --color-status-bg: #1F1F1F;
+  --color-error-text: #FF8A8A;
+  --color-focus: #FFFFFF;
+  --color-splitter: #2A2A2A;
+  --color-splitter-hover: #6B6B6B;
+  --syntax-key: #7CB7FF;
+  --syntax-string: #8FD98F;
+  --syntax-number: #FFB070;
+  --syntax-keyword: #D8A0F0;
+  --syntax-tag: #FF9A9A;
+  --syntax-comment: #A0A0A0;
+  --syntax-var-ok: #6FC3FF;
+  --syntax-var-secret: #FFD166;
+  --syntax-var-dynamic: #D8A0F0;
+  --timing-dns: #7CB7FF;
+  --timing-connect: #D8A0F0;
+  --timing-wait: #FFB070;
+  --timing-download: #8FD98F;
+}

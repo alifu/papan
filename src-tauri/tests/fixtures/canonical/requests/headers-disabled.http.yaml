@@ -1,0 +1,10 @@
+headers:
+  - enabled: false
+    name: X-Debug
+    value: "1"
+  - name: Accept
+    value: application/json
+kind: http
+method: GET
+name: Disabled header
+url: https://api.example.com/items

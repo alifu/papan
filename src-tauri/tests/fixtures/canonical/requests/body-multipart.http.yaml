@@ -1,0 +1,14 @@
+body:
+  parts:
+    - name: title
+      value: Cover photo
+    - enabled: false
+      name: notes
+      value: draft
+    - file: /Users/example/Pictures/cover.png
+      name: image
+  type: multipart
+kind: http
+method: POST
+name: Multipart body
+url: https://api.example.com/uploads

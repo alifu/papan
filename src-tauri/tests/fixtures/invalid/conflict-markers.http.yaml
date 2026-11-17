@@ -1,0 +1,8 @@
+kind: http
+method: GET
+<<<<<<< HEAD
+name: Local name
+=======
+name: Remote name
+>>>>>>> origin/main
+url: https://example.com/conflict

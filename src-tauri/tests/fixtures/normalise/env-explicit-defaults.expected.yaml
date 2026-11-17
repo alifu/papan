@@ -1,0 +1,6 @@
+name: Explicit defaults
+variables:
+  debug:
+    value: "1"
+  token:
+    value: abc

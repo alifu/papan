@@ -1,0 +1,7 @@
+kind: ws
+method: GET
+name: Bad WS subprotocol
+url: wss://echo.example.com/socket
+ws:
+  subprotocols:
+    - "chat v2"

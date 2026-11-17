@@ -1,0 +1,251 @@
+[
+  {
+    "case": "environment wins over collection and global",
+    "layers": [
+      { "source": "global", "vars": { "host": { "text": "g.example.com", "secret": false } } },
+      { "source": "collection", "vars": { "host": { "text": "c.example.com", "secret": false } } },
+      { "source": "environment", "vars": { "host": { "text": "e.example.com", "secret": false } } }
+    ],
+    "text": "https://{{host}}/",
+    "expected": "https://e.example.com/",
+    "unresolved": []
+  },
+  {
+    "case": "collection wins over global when no environment value",
+    "layers": [
+      { "source": "global", "vars": { "host": { "text": "g.example.com", "secret": false } } },
+      { "source": "collection", "vars": { "host": { "text": "c.example.com", "secret": false } } }
+    ],
+    "text": "{{host}}",
+    "expected": "c.example.com",
+    "unresolved": []
+  },
+  {
+    "case": "global only",
+    "layers": [
+      { "source": "global", "vars": { "host": { "text": "g.example.com", "secret": false } } }
+    ],
+    "text": "{{host}}",
+    "expected": "g.example.com",
+    "unresolved": []
+  },
+  {
+    "case": "disabled variable is absent from its layer, so the lower layer shows through",
+    "layers": [
+      { "source": "global", "vars": { "host": { "text": "g.example.com", "secret": false } } },
+      { "source": "environment", "vars": {} }
+    ],
+    "text": "{{host}}",
+    "expected": "g.example.com",
+    "unresolved": []
+  },
+  {
+    "case": "disabled in every scope is unresolved",
+    "layers": [
+      { "source": "global", "vars": {} }
+    ],
+    "text": "{{host}}",
+    "expected": "{{host}}",
+    "unresolved": ["host"]
+  },
+  {
+    "case": "undefined name is left as typed",
+    "layers": [],
+    "text": "GET /{{nope}}",
+    "expected": "GET /{{nope}}",
+    "unresolved": ["nope"]
+  },
+  {
+    "case": "names are case-sensitive",
+    "layers": [
+      { "source": "global", "vars": { "Host": { "text": "x", "secret": false } } }
+    ],
+    "text": "{{host}}",
+    "expected": "{{host}}",
+    "unresolved": ["host"]
+  },
+  {
+    "case": "spaces inside the token are ignored",
+    "layers": [
+      { "source": "global", "vars": { "host": { "text": "g", "secret": false } } }
+    ],
+    "text": "{{ host }}",
+    "expected": "g",
+    "unresolved": []
+  },
+  {
+    "case": "a value that references another variable is expanded at lookup",
+    "layers": [
+      { "source": "global", "vars": { "b": { "text": "x", "secret": false } } },
+      { "source": "environment", "vars": { "a": { "text": "{{b}}-y", "secret": false } } }
+    ],
+    "text": "{{a}}",
+    "expected": "x-y",
+    "unresolved": []
+  },
+  {
+    "case": "nested reference inside a value",
+    "layers": [
+      {
+        "source": "environment",
+        "vars": {
+          "a": { "text": "{{b}}", "secret": false },
+          "b": { "text": "x", "secret": false }
+        }
+      }
+    ],
+    "text": "{{a}}",
+    "expected": "x",
+    "unresolved": []
+  },
+  {
+    "case": "unresolved name inside a value is left as typed in the expansion",
+    "layers": [
+      { "source": "global", "vars": { "a": { "text": "{{missing}}", "secret": false } } }
+    ],
+    "text": "[{{a}}]",
+    "expected": "[{{missing}}]",
+    "unresolved": ["missing"]
+  },
+  {
+    "case": "cycle of two names",
+    "layers": [
+      {
+        "source": "global",
+        "vars": {
+          "a": { "text": "{{b}}", "secret": false },
+          "b": { "text": "{{a}}", "secret": false }
+        }
+      }
+    ],
+    "text": "x {{a}}",
+    "expected": "x {{a}}",
+    "unresolved": ["a"]
+  },
+  {
+    "case": "cycle of three names",
+    "layers": [
+      {
+        "source": "global",
+        "vars": {
+          "a": { "text": "{{b}}", "secret": false },
+          "b": { "text": "{{c}}", "secret": false },
+          "c": { "text": "{{a}}", "secret": false }
+        }
+      }
+    ],
+    "text": "{{a}}",
+    "expected": "{{a}}",
+    "unresolved": ["a"]
+  },
+  {
+    "case": "chain of 10 nested lookups resolves (MAX_DEPTH = 10)",
+    "layers": [
+      {
+        "source": "global",
+        "vars": {
+          "v0": { "text": "{{v1}}", "secret": false },
+          "v1": { "text": "{{v2}}", "secret": false },
+          "v2": { "text": "{{v3}}", "secret": false },
+          "v3": { "text": "{{v4}}", "secret": false },
+          "v4": { "text": "{{v5}}", "secret": false },
+          "v5": { "text": "{{v6}}", "secret": false },
+          "v6": { "text": "{{v7}}", "secret": false },
+          "v7": { "text": "{{v8}}", "secret": false },
+          "v8": { "text": "{{v9}}", "secret": false },
+          "v9": { "text": "ok", "secret": false }
+        }
+      }
+    ],
+    "text": "{{v0}}",
+    "expected": "ok",
+    "unresolved": []
+  },
+  {
+    "case": "chain of 11 nested lookups is too deep (MAX_DEPTH = 10)",
+    "layers": [
+      {
+        "source": "global",
+        "vars": {
+          "v0": { "text": "{{v1}}", "secret": false },
+          "v1": { "text": "{{v2}}", "secret": false },
+          "v2": { "text": "{{v3}}", "secret": false },
+          "v3": { "text": "{{v4}}", "secret": false },
+          "v4": { "text": "{{v5}}", "secret": false },
+          "v5": { "text": "{{v6}}", "secret": false },
+          "v6": { "text": "{{v7}}", "secret": false },
+          "v7": { "text": "{{v8}}", "secret": false },
+          "v8": { "text": "{{v9}}", "secret": false },
+          "v9": { "text": "{{v10}}", "secret": false },
+          "v10": { "text": "ok", "secret": false }
+        }
+      }
+    ],
+    "text": "{{v0}}",
+    "expected": "{{v10}}",
+    "unresolved": ["v10"]
+  },
+  {
+    "case": "substituted text is not scanned again",
+    "layers": [
+      {
+        "source": "global",
+        "vars": {
+          "a": { "text": "\\{{b}}", "secret": false },
+          "b": { "text": "x", "secret": false }
+        }
+      }
+    ],
+    "text": "{{a}}",
+    "expected": "{{b}}",
+    "unresolved": []
+  },
+  {
+    "case": "escape emits a literal opener and the token after it still resolves",
+    "layers": [
+      { "source": "global", "vars": { "a": { "text": "x", "secret": false } } }
+    ],
+    "text": "\\{{a}} {{a}}",
+    "expected": "{{a}} x",
+    "unresolved": []
+  },
+  {
+    "case": "repeated unresolved name is reported once",
+    "layers": [],
+    "text": "{{nope}} {{nope}}",
+    "expected": "{{nope}} {{nope}}",
+    "unresolved": ["nope"]
+  },
+  {
+    "case": "secret with a local value resolves",
+    "layers": [
+      { "source": "environment", "vars": { "api_token": { "text": "FIXTURE-VALUE", "secret": true } } }
+    ],
+    "text": "Bearer {{api_token}}",
+    "expected": "Bearer FIXTURE-VALUE",
+    "unresolved": []
+  },
+  {
+    "case": "secret without a local value on this machine is unresolved",
+    "layers": [
+      { "source": "environment", "vars": { "api_token": { "text": null, "secret": true } } }
+    ],
+    "text": "Bearer {{api_token}}",
+    "expected": "Bearer {{api_token}}",
+    "unresolved": ["api_token"]
+  },
+  {
+    "case": "unknown dynamic name is unresolved",
+    "layers": [],
+    "text": "{{$nope}}",
+    "expected": "{{$nope}}",
+    "unresolved": ["$nope"]
+  },
+  {
+    "case": "plain text passes through unchanged",
+    "layers": [],
+    "text": "GET /items?page=1",
+    "expected": "GET /items?page=1",
+    "unresolved": []
+  }
+]

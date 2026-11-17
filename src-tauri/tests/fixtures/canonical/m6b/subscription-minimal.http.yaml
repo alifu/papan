@@ -1,0 +1,7 @@
+body:
+  query: subscription { ticks }
+  type: graphql
+kind: graphql
+method: POST
+name: Ticks
+url: https://api.example.com/graphql

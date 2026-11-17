@@ -1,0 +1,154 @@
+[
+  {
+    "text": "plain text",
+    "tokens": []
+  },
+  {
+    "text": "{{name}}",
+    "tokens": [
+      {
+        "from": 0,
+        "to": 8,
+        "name": "name"
+      }
+    ]
+  },
+  {
+    "text": "{{a}}{{b}}",
+    "tokens": [
+      {
+        "from": 0,
+        "to": 5,
+        "name": "a"
+      },
+      {
+        "from": 5,
+        "to": 10,
+        "name": "b"
+      }
+    ]
+  },
+  {
+    "text": "x {{ spaced }} y",
+    "tokens": [
+      {
+        "from": 2,
+        "to": 14,
+        "name": "spaced"
+      }
+    ]
+  },
+  {
+    "text": "{{}}",
+    "tokens": []
+  },
+  {
+    "text": "{{ }}",
+    "tokens": []
+  },
+  {
+    "text": "{{unterminated",
+    "tokens": []
+  },
+  {
+    "text": "{{a{b}}",
+    "tokens": []
+  },
+  {
+    "text": "{{{a}}}",
+    "tokens": [
+      {
+        "from": 1,
+        "to": 6,
+        "name": "a"
+      }
+    ]
+  },
+  {
+    "text": "{{a}}}",
+    "tokens": [
+      {
+        "from": 0,
+        "to": 5,
+        "name": "a"
+      }
+    ]
+  },
+  {
+    "text": "{{ {{a}}",
+    "tokens": [
+      {
+        "from": 3,
+        "to": 8,
+        "name": "a"
+      }
+    ]
+  },
+  {
+    "text": "{{a\nb}}",
+    "tokens": []
+  },
+  {
+    "text": "\\{{x}}",
+    "tokens": []
+  },
+  {
+    "text": "\\\\{{x}}",
+    "tokens": []
+  },
+  {
+    "text": "\\{{x}} {{y}}",
+    "tokens": [
+      {
+        "from": 7,
+        "to": 12,
+        "name": "y"
+      }
+    ]
+  },
+  {
+    "text": "{{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}}",
+    "tokens": [
+      {
+        "from": 0,
+        "to": 132,
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  {
+    "text": "{{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}}",
+    "tokens": []
+  },
+  {
+    "text": "é {{名前}} 🚀{{x}}",
+    "note": "from and to are UTF-16 code unit offsets (as JavaScript string indexes), end exclusive, covering the whole token including its braces.",
+    "tokens": [
+      {
+        "from": 2,
+        "to": 8,
+        "name": "名前"
+      },
+      {
+        "from": 11,
+        "to": 16,
+        "name": "x"
+      }
+    ]
+  },
+  {
+    "text": "{{$uuid}} {{$randomInt}}",
+    "tokens": [
+      {
+        "from": 0,
+        "to": 9,
+        "name": "$uuid"
+      },
+      {
+        "from": 10,
+        "to": 24,
+        "name": "$randomInt"
+      }
+    ]
+  }
+]

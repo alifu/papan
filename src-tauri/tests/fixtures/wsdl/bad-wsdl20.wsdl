@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Deliberately WSDL 2.0: must be refused with "WSDL 2.0 is not supported". -->
+<description xmlns="http://www.w3.org/ns/wsdl"
+  xmlns:tns="http://example.test/wsdl20"
+  xmlns:wsoap="http://www.w3.org/ns/wsdl/soap"
+  targetNamespace="http://example.test/wsdl20">
+  <interface name="CalculatorInterface">
+    <operation name="add" pattern="http://www.w3.org/ns/wsdl/in-out">
+      <input messageLabel="In" element="#any"/>
+      <output messageLabel="Out" element="#any"/>
+    </operation>
+  </interface>
+  <binding name="CalculatorBinding" interface="tns:CalculatorInterface" type="http://www.w3.org/ns/wsdl/soap" wsoap:protocol="http://www.w3.org/2003/05/soap/bindings/HTTP/">
+    <operation ref="tns:add"/>
+  </binding>
+  <service name="Calculator" interface="tns:CalculatorInterface">
+    <endpoint name="CalculatorEndpoint" binding="tns:CalculatorBinding" address="http://example.test/calculator"/>
+  </service>
+</description>

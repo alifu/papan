@@ -1,0 +1,5 @@
+body: text
+kind: http
+method: POST
+name: Body scalar
+url: https://example.com/body

@@ -1,0 +1,9 @@
+auth:
+  client_id: papan-desktop
+  grant: implicit
+  token_url: "{{idp}}/token"
+  type: oauth2
+kind: http
+method: GET
+name: Implicit grant
+url: https://api.example.com/me

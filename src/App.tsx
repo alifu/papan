@@ -1,12 +1,9 @@
-import "./App.css";
+import { AppShell } from "./shell/AppShell";
+import { useApplyTheme } from "./theme/useApplyTheme";
 
 function App() {
-
-  return (
-    <main className="container">
-      <h1>Hello World</h1>
-    </main>
-  );
+  useApplyTheme();
+  return <AppShell />;
 }
 
 export default App;

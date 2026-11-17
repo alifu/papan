@@ -1,0 +1,19 @@
+{
+  "id": "evt_1Example0000000001",
+  "object": "event",
+  "api_version": "2026-01-01",
+  "created": 1767225600,
+  "type": "payment_intent.succeeded",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "data": {
+    "object": {
+      "id": "pi_1Example0000000002",
+      "object": "payment_intent",
+      "amount": 2000,
+      "currency": "usd",
+      "status": "succeeded",
+      "metadata": { "order_id": "1042" }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+grpc:
+  method: SayHello
+  service: greeter.v1.Greeter
+  source: reflection
+kind: grpc
+method: POST
+name: Reflection
+url: http://localhost:50051

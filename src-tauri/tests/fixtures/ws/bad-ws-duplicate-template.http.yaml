@@ -1,0 +1,12 @@
+kind: ws
+method: GET
+name: Bad WS duplicate template
+url: wss://echo.example.com/socket
+ws:
+  messages:
+    - format: json
+      name: Join
+      text: '{ "type": "join" }'
+    - format: text
+      name: Join
+      text: join

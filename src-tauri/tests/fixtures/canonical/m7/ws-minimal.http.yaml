@@ -1,0 +1,4 @@
+kind: ws
+method: GET
+name: Minimal WebSocket
+url: wss://echo.example.com/socket

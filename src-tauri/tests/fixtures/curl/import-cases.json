@@ -1,0 +1,1355 @@
+[
+  {
+    "name": "get-plain",
+    "command": "curl https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "method-x",
+    "command": "curl -X PUT https://api.example.com/items/1",
+    "content": {
+      "method": "PUT",
+      "url": "https://api.example.com/items/1",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "url-flag",
+    "command": "curl --url https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "headers-quoted",
+    "command": "curl -H 'Accept: application/json' -H \"X-Trace: 1\" https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Accept",
+          "value": "application/json",
+          "enabled": true
+        },
+        {
+          "name": "X-Trace",
+          "value": "1",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "data-twice-joined",
+    "command": "curl -d a=1 -d b=2 https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/x-www-form-urlencoded",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "text",
+        "text": "a=1&b=2"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "data-raw",
+    "command": "curl --data-raw '{\"x\":1}' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/x-www-form-urlencoded",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "text",
+        "text": "{\"x\":1}"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "data-binary",
+    "command": "curl --data-binary 'raw body' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/x-www-form-urlencoded",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "text",
+        "text": "raw body"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "data-urlencode",
+    "command": "curl --data-urlencode 'q=a b' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/x-www-form-urlencoded",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "text",
+        "text": "q=a%20b"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "data-file-path-kept",
+    "command": "curl --data-binary @payload.bin https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/x-www-form-urlencoded",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "binary",
+        "file": "payload.bin"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "json-flag",
+    "command": "curl --json '{\"a\":1}' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "json",
+        "text": "{\"a\":1}"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "form-text-and-file",
+    "command": "curl -F 'name=papan' -F 'avatar=@pic.png' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "multipart",
+        "parts": [
+          {
+            "name": "name",
+            "value": "papan",
+            "file": null,
+            "enabled": true
+          },
+          {
+            "name": "avatar",
+            "value": "",
+            "file": "pic.png",
+            "enabled": true
+          }
+        ]
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "form-string-literal-at",
+    "command": "curl --form-string 'note=@literal' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "multipart",
+        "parts": [
+          {
+            "name": "note",
+            "value": "@literal",
+            "file": null,
+            "enabled": true
+          }
+        ]
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "basic-auth",
+    "command": "curl -u alice:secret https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "basic",
+        "username": "alice",
+        "password": "secret"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "basic-auth-colon-in-password",
+    "command": "curl -u 'alice:pa:ss' https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "basic",
+        "username": "alice",
+        "password": "pa:ss"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "digest-auth",
+    "command": "curl --digest -u alice:secret https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "digest",
+        "username": "alice",
+        "password": "secret"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "user-agent",
+    "command": "curl -A 'papan/1.0' https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "User-Agent",
+          "value": "papan/1.0",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "referer",
+    "command": "curl -e https://example.com/start https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Referer",
+          "value": "https://example.com/start",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "cookie-string-header",
+    "command": "curl -b 'sid=abc; theme=dark' https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Cookie",
+          "value": "sid=abc; theme=dark",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "get-with-data-moves-to-query",
+    "command": "curl -G https://example.com/search -d q=rust -d lang=en",
+    "content": {
+      "method": "GET",
+      "url": "https://example.com/search?q=rust&lang=en",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "head-flag",
+    "command": "curl -I https://example.com/",
+    "content": {
+      "method": "HEAD",
+      "url": "https://example.com/",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "follow-redirects-flag",
+    "command": "curl -L https://example.com/r",
+    "content": {
+      "method": "GET",
+      "url": "https://example.com/r",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": true,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "no-follow-without-flag",
+    "command": "curl https://example.com/r",
+    "content": {
+      "method": "GET",
+      "url": "https://example.com/r",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "insecure-flag",
+    "command": "curl -k https://self-signed.example.com/",
+    "content": {
+      "method": "GET",
+      "url": "https://self-signed.example.com/",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": false,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": [
+      "-k: TLS certificate verification is turned off for this request"
+    ]
+  },
+  {
+    "name": "max-time-seconds",
+    "command": "curl -m 5 https://example.com/slow",
+    "content": {
+      "method": "GET",
+      "url": "https://example.com/slow",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 5000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "http1-flag",
+    "command": "curl --http1.1 https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "http1"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "http2-flag",
+    "command": "curl --http2 https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "http2"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "http2-prior-knowledge",
+    "command": "curl --http2-prior-knowledge http://example.com/",
+    "content": {
+      "method": "GET",
+      "url": "http://example.com/",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "http2"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "single-quoted-url",
+    "command": "curl 'https://api.example.com/q?x=1'",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/q?x=1",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "double-quote-escape",
+    "command": "curl -H \"X-Quote: say \\\"hi\\\"\" https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "X-Quote",
+          "value": "say \"hi\"",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "backslash-escaped-character",
+    "command": "curl https://example.com/path\\?q=1",
+    "content": {
+      "method": "GET",
+      "url": "https://example.com/path?q=1",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "ansi-c-quoting",
+    "command": "curl -d $'line1\\nline2' https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/x-www-form-urlencoded",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "text",
+        "text": "line1\nline2"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "backslash-newline-continuation",
+    "command": "curl -X POST \\\n  -H 'Accept: */*' \\\n  https://api.example.com/items",
+    "content": {
+      "method": "POST",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Accept",
+          "value": "*/*",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "shell-expansion-stays-literal",
+    "command": "curl -H 'Authorization: Bearer $TOKEN' https://api.example.com/items/$(date)",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items/$(date)",
+      "disabled_params": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer $TOKEN",
+          "enabled": true
+        }
+      ],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "silent-flags-ignored",
+    "command": "curl -s -o out.json --compressed https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": []
+  },
+  {
+    "name": "unknown-flag-warns",
+    "command": "curl --frobnicate https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": [
+      "unsupported option: --frobnicate"
+    ]
+  },
+  {
+    "name": "proxy-flag-warns",
+    "command": "curl -x http://proxy.example.com:8080 https://api.example.com/items",
+    "content": {
+      "method": "GET",
+      "url": "https://api.example.com/items",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": [
+      "unsupported option: -x (set the proxy in Network settings)"
+    ]
+  },
+  {
+    "name": "cert-flag-warns",
+    "command": "curl --cert client.pem https://mtls.example.com/",
+    "content": {
+      "method": "GET",
+      "url": "https://mtls.example.com/",
+      "disabled_params": [],
+      "headers": [],
+      "body": {
+        "type": "none"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "settings": {
+        "follow_redirects": false,
+        "timeout_ms": 30000,
+        "verify_tls": true,
+        "http_version": "auto"
+      },
+      "scripts": {
+        "pre_request": "",
+        "post_response": ""
+      },
+      "kind": "http",
+      "soap": {
+        "version": "1.1",
+        "action": "",
+        "wsdl": null
+      }
+    },
+    "warnings": [
+      "unsupported option: --cert (set client certificates in Network settings)"
+    ]
+  },
+  {
+    "name": "not-a-curl-command",
+    "command": "wget https://example.com/",
+    "content": null,
+    "warnings": []
+  }
+]

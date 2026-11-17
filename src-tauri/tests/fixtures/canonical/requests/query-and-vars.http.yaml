@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: Query and vars
+url: https://api.example.com/items/{{id}}?expand=true&page=2

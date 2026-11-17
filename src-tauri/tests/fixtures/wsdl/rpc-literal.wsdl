@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="http://example.test/rpc"
+  targetNamespace="http://example.test/rpc"
+  name="Greeter">
+  <wsdl:message name="SayHelloRequest">
+    <wsdl:part name="name" type="xs:string"/>
+    <wsdl:part name="times" type="xs:int"/>
+  </wsdl:message>
+  <wsdl:message name="SayHelloResponse">
+    <wsdl:part name="greeting" type="xs:string"/>
+  </wsdl:message>
+  <wsdl:portType name="GreeterPortType">
+    <wsdl:operation name="SayHello">
+      <wsdl:input message="tns:SayHelloRequest"/>
+      <wsdl:output message="tns:SayHelloResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="GreeterBinding" type="tns:GreeterPortType">
+    <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="SayHello">
+      <soap:operation soapAction="http://example.test/rpc/SayHello" style="rpc"/>
+      <wsdl:input>
+        <soap:body use="literal" namespace="http://example.test/rpc"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" namespace="http://example.test/rpc"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="Greeter">
+    <wsdl:port name="GreeterPort" binding="tns:GreeterBinding">
+      <soap:address location="http://example.test/greeter"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

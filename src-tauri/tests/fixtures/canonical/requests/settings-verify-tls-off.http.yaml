@@ -1,0 +1,6 @@
+kind: http
+method: GET
+name: TLS not verified
+settings:
+  verify_tls: false
+url: https://self-signed.example.com/

@@ -1,0 +1,118 @@
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.search-status {
+  min-width: 70px;
+  color: var(--color-text-muted);
+}
+
+.search-mark {
+  background: #ffe97a;
+  color: inherit;
+}
+
+.search-mark-current {
+  background: #ffb347;
+}
+
+.json-tree,
+.json-children {
+  margin: 0;
+  padding-left: 16px;
+  list-style: none;
+  font-family: monospace;
+}
+
+.json-toggle {
+  width: 16px;
+  padding: 0;
+  cursor: default;
+}
+
+.json-key {
+  color: var(--color-selected-bg);
+}
+
+.json-summary {
+  color: var(--color-text-muted);
+}
+
+.json-error {
+  color: var(--color-error-text);
+}
+
+.html-preview {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.timing-track {
+  display: flex;
+  height: 12px;
+  border: 1px solid var(--color-control-border);
+  background: var(--color-content-bg);
+}
+
+.timing-segment {
+  min-width: 2px;
+}
+
+.timing-legend {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timing-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timing-swatch {
+  width: 10px;
+  height: 10px;
+}
+
+.timing-label {
+  flex: 1;
+}
+
+.timing-reused,
+.timing-note {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.timing-anchor {
+  position: relative;
+}
+
+.timing-trigger {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.timing-popover {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  min-width: 260px;
+  padding: 8px;
+  background: var(--color-surface, Window);
+  color: var(--color-text, WindowText);
+  border: 1px solid var(--color-border, ThreeDShadow);
+}

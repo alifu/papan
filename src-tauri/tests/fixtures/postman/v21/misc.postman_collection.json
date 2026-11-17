@@ -1,0 +1,51 @@
+{
+  "info": {
+    "_postman_id": "6f1c2a10-0000-4000-8000-000000000007",
+    "name": "Misc v2.1",
+    "description": "Disabled headers, query params and form rows. Postman v2.1 has no disabled flag on items; disabled rows are on headers, query, urlencoded and formdata.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Disabled rows",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "text/plain" },
+          { "key": "X-Off", "value": "1", "disabled": true }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/misc?on=1&off=2",
+          "host": ["{{baseUrl}}"],
+          "path": ["misc"],
+          "query": [
+            { "key": "on", "value": "1" },
+            { "key": "off", "value": "2", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Body pruning and response example",
+      "protocolProfileBehavior": { "disableBodyPruning": true },
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/example",
+        "body": { "mode": "raw", "raw": "" }
+      },
+      "response": [
+        {
+          "name": "200 example",
+          "originalRequest": { "method": "GET", "url": "{{baseUrl}}/example" },
+          "status": "OK",
+          "code": 200,
+          "body": "{\"ok\": true}"
+        }
+      ]
+    },
+    {
+      "name": "Description only",
+      "request": { "method": "OPTIONS", "description": "Plain text description.", "url": "{{baseUrl}}/options" }
+    }
+  ]
+}

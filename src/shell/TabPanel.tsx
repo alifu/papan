@@ -1,0 +1,85 @@
+import { JourneyTab } from "../features/journeys/JourneyTab";
+import { MockTab } from "../features/mocks/MockTab";
+import { RequestEditor } from "../features/request/RequestEditor";
+import { WebhookTab } from "../features/webhooks/WebhookTab";
+import { Button } from "../ui/Button";
+import { shortcutLabel } from "../ui/platform";
+import { DiscardDialog } from "./DiscardDialog";
+import { TAB_PANEL_ID, tabButtonId } from "./TabStrip";
+import { useTabsStore, type Tab } from "./tabsStore";
+
+function Welcome() {
+  return (
+    <div className="welcome">
+      <h1>Welcome to Papan</h1>
+      <p>Build, send and inspect API requests. Open a tab to get started.</p>
+      <ul>
+        <li>{shortcutLabel("N")} New tab</li>
+        <li>{shortcutLabel("W")} Close tab</li>
+        <li>{shortcutLabel("B")} Toggle sidebar</li>
+        <li>{shortcutLabel("S")} Save request</li>
+        <li>{shortcutLabel("Enter")} Send request</li>
+      </ul>
+    </div>
+  );
+}
+
+function renderTab(tab: Tab) {
+  if (tab.kind === "journey" && tab.journey) {
+    return (
+      <JourneyTab
+        key={tab.id}
+        tabId={tab.id}
+        collectionId={tab.journey.collectionId}
+        file={tab.journey.file}
+      />
+    );
+  }
+  if (tab.kind === "mock" && tab.mock) {
+    return (
+      <MockTab
+        key={tab.id}
+        tabId={tab.id}
+        collectionId={tab.mock.collectionId}
+        file={tab.mock.file}
+      />
+    );
+  }
+  if (tab.kind === "webhook" && tab.webhookId)
+    return <WebhookTab key={tab.id} webhookId={tab.webhookId} />;
+  if (tab.kind === "welcome" || !tab.location) return <Welcome />;
+  return <RequestEditor key={tab.id} tabId={tab.id} location={tab.location} />;
+}
+
+export function TabPanel() {
+  const tabs = useTabsStore((s) => s.tabs);
+  const activeTabId = useTabsStore((s) => s.activeTabId);
+  const newTab = useTabsStore((s) => s.newTab);
+  const active = tabs.find((t) => t.id === activeTabId);
+
+  if (!active) {
+    return (
+      <div
+        role="tabpanel"
+        id={TAB_PANEL_ID}
+        aria-label="No open tabs"
+        className="tabpanel"
+      >
+        <p className="empty-text">No open tabs.</p>
+        <Button icon="plus" label="New Tab" onClick={() => void newTab()} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="tabpanel"
+      id={TAB_PANEL_ID}
+      aria-labelledby={tabButtonId(active.id)}
+      className="tabpanel"
+    >
+      {renderTab(active)}
+      <DiscardDialog />
+    </div>
+  );
+}

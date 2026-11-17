@@ -1,0 +1,221 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  background: var(--button-bg);
+  border: 1px solid var(--color-control-border);
+  border-radius: 3px;
+  box-shadow:
+    inset 1px 1px 0 var(--color-bevel-light),
+    inset -1px -1px 0 var(--color-bevel-dark);
+  cursor: default;
+}
+
+.btn:hover {
+  background: var(--button-hover-bg);
+}
+
+.btn:active,
+.btn[aria-pressed="true"],
+.btn-checked {
+  background: var(--button-active-bg);
+  box-shadow:
+    inset 1px 1px 0 var(--color-bevel-dark),
+    inset -1px -1px 0 var(--color-bevel-light);
+}
+
+.splitter {
+  background: var(--color-splitter);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.splitter-horizontal {
+  cursor: row-resize;
+  height: 4px;
+  flex: none;
+}
+
+.splitter:hover {
+  background: var(--color-splitter-hover);
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-trigger {
+  height: var(--menubar-height);
+  padding: 0 10px;
+  background: transparent;
+  border: 0;
+  color: var(--color-header-strong-text);
+  cursor: default;
+}
+
+.menu-trigger:hover,
+.menu-trigger[aria-expanded="true"] {
+  background: var(--color-selected-bg);
+  color: var(--color-selected-text);
+}
+
+.menu-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 200px;
+  padding: 2px;
+  background: var(--color-content-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-control-border);
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 3px 8px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: default;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--color-selected-bg);
+  color: var(--color-selected-text);
+  outline: none;
+}
+
+.menu-shortcut {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.icon {
+  flex: none;
+}
+
+.toast-host {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--color-content-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-control-border);
+  border-radius: 3px;
+  box-shadow: 2px 2px 4px rgb(0 0 0 / 30%);
+}
+
+.toast-error {
+  border-color: var(--color-error-text);
+  color: var(--color-error-text);
+}
+
+.toast-message {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: default;
+  line-height: 1;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 35%);
+}
+
+.dialog {
+  min-width: 300px;
+  max-width: 480px;
+  background: var(--color-panel-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-control-border);
+  border-radius: 3px;
+  box-shadow: 3px 3px 8px rgb(0 0 0 / 40%);
+}
+
+.dialog:focus {
+  outline: none;
+}
+
+.dialog-title {
+  padding: 4px 8px;
+  background: var(--header-strong-bg);
+  color: var(--color-header-strong-text);
+  font-weight: bold;
+}
+
+.dialog-body {
+  padding: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.tabs-list {
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tabs-tab {
+  height: var(--tab-height);
+  padding: 0 10px;
+  background: var(--button-bg);
+  border: 1px solid var(--color-border);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  cursor: default;
+}
+
+.tabs-tab[aria-selected="true"] {
+  background: var(--color-tab-active-bg);
+  font-weight: bold;
+}
+
+.tabs-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-content-bg);
+}

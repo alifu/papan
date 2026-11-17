@@ -1,0 +1,8 @@
+body:
+  text: |
+    hello, papan
+  type: text
+kind: http
+method: POST
+name: Text body
+url: https://api.example.com/notes

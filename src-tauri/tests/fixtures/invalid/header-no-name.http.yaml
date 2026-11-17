@@ -1,0 +1,6 @@
+headers:
+  - value: application/json
+kind: http
+method: GET
+name: Header without name
+url: https://example.com/header

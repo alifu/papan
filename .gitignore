@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tooling output
+graphify-out/
+.claude/
+coverage/
+test-results/
+playwright-report/

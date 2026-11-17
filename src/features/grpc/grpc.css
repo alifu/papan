@@ -1,0 +1,55 @@
+.grpc-method {
+  max-width: 260px;
+}
+
+.grpc-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grpc-hint {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.grpc-protos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grpc-compile-error {
+  white-space: pre-wrap;
+}
+
+.grpc-status-line {
+  margin: 0;
+}
+
+.grpc-tone-muted {
+  color: var(--color-text-muted);
+}
+
+.grpc-tone-error {
+  color: var(--color-error, #c0392b);
+}
+
+.grpc-metadata {
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono, monospace);
+}
+
+.grpc-metadata-row {
+  display: flex;
+  gap: 8px;
+}
+
+.grpc-metadata-row dt {
+  font-weight: 600;
+}
+
+.grpc-metadata-row dd {
+  margin: 0;
+}

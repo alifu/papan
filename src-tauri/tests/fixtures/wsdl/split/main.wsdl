@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:t="http://example.test/split/types"
+  xmlns:tns="http://example.test/split/service"
+  targetNamespace="http://example.test/split/service"
+  name="CustomerService">
+  <wsdl:types>
+    <xs:schema targetNamespace="http://example.test/split/service">
+      <xs:import namespace="http://example.test/split/types" schemaLocation="types.xsd"/>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="GetCustomerIn">
+    <wsdl:part name="parameters" element="t:GetCustomer"/>
+  </wsdl:message>
+  <wsdl:message name="GetCustomerOut">
+    <wsdl:part name="parameters" element="t:GetCustomerResponse"/>
+  </wsdl:message>
+  <wsdl:portType name="CustomerPortType">
+    <wsdl:operation name="GetCustomer">
+      <wsdl:input message="tns:GetCustomerIn"/>
+      <wsdl:output message="tns:GetCustomerOut"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="CustomerBinding" type="tns:CustomerPortType">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="GetCustomer">
+      <soap:operation soapAction="http://example.test/split/GetCustomer" style="document"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="CustomerService">
+    <wsdl:port name="CustomerPort" binding="tns:CustomerBinding">
+      <soap:address location="http://example.test/split/customers.asmx"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

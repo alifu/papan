@@ -22,4 +22,91 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+# The specta family is still pre-release: pin exactly and upgrade the three together.
+specta = { version = "=2.0.0-rc.28", features = ["derive"] }
+specta-typescript = "=0.0.15"
+tauri-specta = { version = "=2.0.0-rc.28", features = ["derive", "typescript"] }
+tauri-plugin-dialog = "2.8"
+# Pinned exactly: the emitter's output is the on-disk Git format.
+serde-saphyr = "=2.1.1"
+notify = "8.2"
+notify-debouncer-mini = "0.7"
+uuid = { version = "1", features = ["v4"] }
+tempfile = "3"
+# TLS is rustls + aws-lc-rs + the OS trust store (plan 03 §2).
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "system-proxy", "cookies", "gzip", "brotli", "deflate", "zstd", "multipart", "stream"] }
+reqwest_cookie_store = "0.10"
+# reqwest's own proxy matcher, to tell which proxy a hop goes through (plan 03b §4.3).
+hyper-util = { version = "0.1.21", default-features = false, features = ["client-proxy", "client-proxy-system", "tokio"] }
+http = "1"
+cookie_store = { version = "0.22", default-features = false }
+tokio = { version = "1", features = ["rt", "macros", "fs", "io-util", "time", "sync", "net"] }
+# Connect timing through `ClientBuilder::connector_layer` (plan 03b §6.4).
+tower-layer = "0.3"
+tower-service = "0.3"
+# Digest MD5 / MD5-sess; aws-lc-rs has no MD5 (plan 03b §2).
+md-5 = "0.10"
+url = "2"
+base64 = "0.23"
+encoding_rs = "0.8"
+mime = "0.3"
+httpdate = "1"
+# Vault key in the OS keychain (plan 04 §2, §4). 3.x pinned: a stable three-call API.
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+aws-lc-rs = "1"
+zeroize = "1"
+time = { version = "0.3", features = ["formatting"] }
+# Script sandbox (plan 05 §2). Core only: no module loader, no QuickJS std/os, no bindgen
+# (bindings for macOS, Windows and Linux ship with the crate). `std` is Rust's std.
+rquickjs = { version = "0.14", default-features = false, features = ["std"] }
+# WSDL/XSD parsing (plan 06 §2): read-only, namespace-aware DOM; DTDs refused by default.
+roxmltree = "0.21"
+# WebSocket and webhook (plan 07 §2). tungstenite runs over our own stream: no second TLS stack.
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+tokio-rustls = "0.26"
+rustls-platform-verifier = "0.7"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
+futures-util = "0.3"
+axum = { version = "0.8.9", default-features = false, features = ["tokio", "http1"] }
+hyper = { version = "1", features = ["server", "http1"] }
+http-body-util = "0.1"
+# gRPC (plan 08 §2). TLS stays ours: tonic gets no tls-* feature. prost 0.14.5+ is under 14 days old.
+tonic = { version = "=0.14.9", default-features = false, features = ["channel"] }
+tonic-prost = "=0.14.9"
+tonic-reflection = { version = "=0.14.9", default-features = false }
+prost = "=0.14.4"
+prost-types = "=0.14.4"
+# Mock server (plan 11 §4): templating, rule regexes, random responses.
+handlebars = "6"
+regex = "1"
+rand = "0.9"
+rcgen = "0.14"
+prost-reflect = { version = "=0.16.5", features = ["serde"] }
+protox = "=0.10.0"
 
+[target.'cfg(windows)'.dependencies]
+# The loopback listener binds with SO_EXCLUSIVEADDRUSE (already in the tree via hyper-util).
+socket2 = "0.6"
+windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock"] }
+
+[dev-dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+axum-server = { version = "0.9", features = ["tls-rustls"] }
+flate2 = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "test-util"] }
+# GraphQL test server (plan 06 §2); 8.0 is still rc.
+async-graphql = { version = "=7.2.1", default-features = false }
+async-graphql-axum = "=7.2.1"
+# Postman export validation (plan 09 §2): newest published before 2026-11-01; no network or file resolvers.
+jsonschema = { version = "=0.60.2", default-features = false }
+# gRPC test server (plan 08 §2): resolver 2 keeps these features out of the app build.
+tonic = { version = "=0.14.9", default-features = false, features = ["channel", "server", "router"] }
+tonic-reflection = { version = "=0.14.9" }
+
+[target.'cfg(unix)'.dependencies]
+# Kill git's whole process group on timeout (plan 10 review).
+libc = "0.2"

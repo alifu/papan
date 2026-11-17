@@ -1,0 +1,13 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://example.test/zoo">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ns1:Inventory>
+      <enclosure>
+        <!-- choice: cage | pond | aviary -->
+        <cage>?</cage>
+        <!-- 1 or more repetitions: -->
+        <keeper>?</keeper>
+      </enclosure>
+    </ns1:Inventory>
+  </soapenv:Body>
+</soapenv:Envelope>

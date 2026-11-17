@@ -1,0 +1,8 @@
+body:
+  persisted: sha256
+  query: "{ viewer { id } }"
+  type: graphql
+kind: graphql
+method: POST
+name: Future GraphQL fields
+url: https://api.example.com/graphql

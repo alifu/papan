@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Papan updates</title>
+  <entry>
+    <id>urn:papan:1</id>
+    <title>First entry</title>
+    <updated>2026-11-12T09:00:00Z</updated>
+  </entry>
+  <entry>
+    <id>urn:papan:2</id>
+    <title>Second entry</title>
+    <updated>2026-11-11T09:00:00Z</updated>
+  </entry>
+</feed>

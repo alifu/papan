@@ -1,0 +1,6 @@
+---
+# hand edited
+url: ""
+name: "yes"   # quoted yes
+method: "GET"
+kind: http

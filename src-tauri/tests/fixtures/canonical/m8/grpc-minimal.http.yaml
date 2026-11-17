@@ -1,0 +1,9 @@
+grpc:
+  method: SayHello
+  protos:
+    - greeter/v1/greeter.proto
+  service: greeter.v1.Greeter
+kind: grpc
+method: POST
+name: Minimal gRPC
+url: https://greeter.example.com:443

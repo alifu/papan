@@ -1,0 +1,8 @@
+auth:
+  password: hunter2
+  type: basic
+  username: alice
+kind: http
+method: GET
+name: Basic auth
+url: https://api.example.com/me

@@ -1,0 +1,9 @@
+docs: Example request docs written by a newer Papan
+kind: http
+method: POST
+name: Future fields
+scripts:
+  post: |
+    papan.log("done");
+url: https://api.example.com/items
+x-trace-id: 7f3a

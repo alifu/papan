@@ -1,0 +1,11 @@
+auth:
+  auth_url: "{{idp}}/authorize"
+  client_id: papan-desktop
+  grant: authorization_code
+  redirect_port: 80
+  token_url: "{{idp}}/token"
+  type: oauth2
+kind: http
+method: GET
+name: Low redirect port
+url: https://api.example.com/me

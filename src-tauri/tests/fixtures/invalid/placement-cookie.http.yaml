@@ -1,0 +1,9 @@
+auth:
+  name: X-API-Key
+  placement: cookie
+  type: api_key
+  value: abc
+kind: http
+method: GET
+name: Cookie placement
+url: https://example.com/cookie

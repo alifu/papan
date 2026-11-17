@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: "Ping # health"
+url: https://api.example.com/ping

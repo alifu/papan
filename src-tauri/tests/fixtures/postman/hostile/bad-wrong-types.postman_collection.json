@@ -1,0 +1,35 @@
+{
+  "info": {
+    "_postman_id": "6f1c2a10-0000-4000-8000-000000000301",
+    "name": 5,
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Url is a number",
+      "request": { "method": "GET", "url": 5 }
+    },
+    {
+      "name": "Method is a number",
+      "request": { "method": 1, "url": "{{baseUrl}}/x" }
+    },
+    {
+      "name": "Header is a string",
+      "request": { "method": "GET", "url": "{{baseUrl}}/x", "header": "Accept: text/plain" }
+    },
+    {
+      "name": "Item is an object",
+      "item": {}
+    },
+    {
+      "name": "Auth type is a number",
+      "request": { "method": "GET", "url": "{{baseUrl}}/x", "auth": { "type": 7 } }
+    },
+    {
+      "name": "Script exec is a string",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": "not an array" } }],
+      "request": { "method": "GET", "url": "{{baseUrl}}/x" }
+    }
+  ],
+  "variable": "nope"
+}

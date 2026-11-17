@@ -1,0 +1,8 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://example.test/encoded">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ns1:echo>
+      <message>?</message>
+    </ns1:echo>
+  </soapenv:Body>
+</soapenv:Envelope>

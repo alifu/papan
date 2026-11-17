@@ -1,0 +1,22 @@
+{
+  "ref": "refs/heads/main",
+  "before": "3b1f0c2a9d4e5f60718293a4b5c6d7e8f9012345",
+  "after": "9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d",
+  "repository": {
+    "id": 123456789,
+    "name": "example-repo",
+    "full_name": "example-org/example-repo",
+    "private": false,
+    "default_branch": "main"
+  },
+  "pusher": { "name": "example-user", "email": "user@example.com" },
+  "commits": [
+    {
+      "id": "9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d",
+      "message": "Fix typo in README",
+      "added": [],
+      "removed": [],
+      "modified": ["README.md"]
+    }
+  ]
+}

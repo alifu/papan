@@ -1,0 +1,4 @@
+kind: http
+method: GET
+name: 日本語のリクエスト 🚀
+url: https://example.com/ja
