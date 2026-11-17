@@ -166,6 +166,20 @@
   outline: none;
 }
 
+/* Grows with the window (up to 1100px) and scrolls inside instead of overflowing it. */
+.dialog-wide {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+}
+
+.dialog-wide .dialog-body {
+  min-height: 0;
+  overflow: auto;
+}
+
 .dialog-title {
   padding: 4px 8px;
   background: var(--header-strong-bg);
