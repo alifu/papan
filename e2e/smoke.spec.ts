@@ -23,7 +23,7 @@ test.describe("shell", () => {
     await page.goto("/");
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(43, 43, 43)");
     await page.screenshot({ path: "test-results/shell-dark.png", fullPage: true });
 
     await page.getByRole("radio", { name: "Light" }).click();
