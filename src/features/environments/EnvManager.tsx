@@ -78,6 +78,7 @@ export function EnvManager({ collectionId, onClose }: EnvManagerProps) {
       <Dialog
         open
         title="Variables"
+        className="dialog-wide"
         onClose={() => guarded(onClose)}
         actions={<Button label="Save" disabled={!dirty || loading} onClick={() => void save()} />}
       >

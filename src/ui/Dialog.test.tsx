@@ -69,4 +69,15 @@ describe("Dialog", () => {
     await userEvent.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+  it("adds an extra class to the dialog frame and keeps the base class", () => {
+    render(
+      <Dialog open title="Wide" onClose={() => {}} className="dialog-wide">
+        <p>content</p>
+      </Dialog>,
+    );
+
+    const frame = screen.getByRole("dialog");
+
+    expect(frame).toHaveClass("dialog", "dialog-wide");
+  });
 });

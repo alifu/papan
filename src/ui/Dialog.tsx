@@ -9,6 +9,8 @@ export interface DialogProps {
   /** Extra buttons (e.g. the primary action) rendered before Cancel. */
   readonly actions?: ReactNode;
   readonly cancelLabel?: string;
+  /** Extra class on the dialog frame, e.g. `dialog-wide` for content that needs room. */
+  readonly className?: string;
 }
 
 const FOCUSABLE =
@@ -22,6 +24,7 @@ export function Dialog({
   children,
   actions,
   cancelLabel = "Cancel",
+  className,
 }: DialogProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -64,7 +67,7 @@ export function Dialog({
     <div className="dialog-backdrop">
       <div
         ref={dialogRef}
-        className="dialog"
+        className={className ? `dialog ${className}` : "dialog"}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
