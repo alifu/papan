@@ -40,6 +40,7 @@ jobs:
     name: build (${{ matrix.name }})
     needs: check
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +54,7 @@ jobs:
             args: --bundles nsis,msi
           - name: linux
             os: ubuntu-22.04
-            args: --bundles appimage,deb,rpm
+            args: --bundles appimage,deb
     env:
       # An ad-hoc signature ("-"): there is no Apple Developer account, so the app is not notarized.
       APPLE_SIGNING_IDENTITY: "-"
@@ -85,7 +86,17 @@ jobs:
       - run: npm ci
 
       - name: Build the app and its installers
-        run: npm run tauri -- build ${{ matrix.args }}
+        shell: bash
+        run: |
+          args="${{ matrix.args }}"
+          # RPM versions cannot contain "-", so a pre-release such as 0.0.1-alpha-1 gets no .rpm.
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            case "$(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -n 1)" in
+              *-*) echo "pre-release: no .rpm" ;;
+              *) args="$args,rpm" ;;
+            esac
+          fi
+          npm run tauri -- build $args
 
       - name: Collect the files (macOS)
         if: runner.os == 'macOS'
@@ -112,7 +123,8 @@ jobs:
           mkdir -p dist
           cp src-tauri/target/release/bundle/appimage/*.AppImage dist/
           cp src-tauri/target/release/bundle/deb/*.deb dist/
-          cp src-tauri/target/release/bundle/rpm/*.rpm dist/
+          # The .rpm exists for stable versions only.
+          cp src-tauri/target/release/bundle/rpm/*.rpm dist/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -161,7 +173,7 @@ jobs:
             echo "Windows: run the \`.exe\` (or \`.msi\`). The installer is unsigned: on the SmartScreen warning choose"
             echo "More info > Run anyway."
             echo
-            echo "Linux: use the \`.AppImage\`, \`.deb\` or \`.rpm\`."
+            echo "Linux: use the \`.AppImage\` or \`.deb\` (and the \`.rpm\` on stable releases)."
             echo
             echo "SHA-256 of \`Papan.zip\`: \`$zip_sha\` (all checksums are in \`SHA256SUMS\`)"
           } > notes.md

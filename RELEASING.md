@@ -29,7 +29,7 @@ Windows and Linux users download the installers from the same release.
    | `Papan.zip` | `Papan.app` (universal, ad-hoc signed); the cask installs from it |
    | `Papan_*.dmg` | macOS disk image |
    | `Papan_*-setup.exe`, `Papan_*.msi` | Windows installers (unsigned) |
-   | `Papan_*.AppImage`, `.deb`, `.rpm` | Linux |
+   | `Papan_*.AppImage`, `.deb`, `.rpm` | Linux (no `.rpm` for a pre-release: RPM versions cannot contain `-`) |
    | `SHA256SUMS` | checksums of all of the above |
    | `papan.rb` | the finished cask |
 
