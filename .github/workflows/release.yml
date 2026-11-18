@@ -101,35 +101,35 @@ jobs:
       - name: Collect the files (macOS)
         if: runner.os == 'macOS'
         run: |
-          mkdir -p dist
+          mkdir -p release-files
           bundle=src-tauri/target/universal-apple-darwin/release/bundle
           # Papan.zip holds Papan.app at its top level: the cask installs it from there.
           mkdir stage && cp -R "$bundle/macos/Papan.app" stage/
-          ditto -c -k --keepParent stage/Papan.app dist/Papan.zip
-          cp "$bundle"/dmg/*.dmg dist/
+          ditto -c -k --keepParent stage/Papan.app release-files/Papan.zip
+          cp "$bundle"/dmg/*.dmg release-files/
           codesign --verify --deep --strict stage/Papan.app
 
       - name: Collect the files (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          mkdir -p dist
-          cp src-tauri/target/release/bundle/nsis/*.exe dist/
-          cp src-tauri/target/release/bundle/msi/*.msi dist/
+          mkdir -p release-files
+          cp src-tauri/target/release/bundle/nsis/*.exe release-files/
+          cp src-tauri/target/release/bundle/msi/*.msi release-files/
 
       - name: Collect the files (Linux)
         if: runner.os == 'Linux'
         run: |
-          mkdir -p dist
-          cp src-tauri/target/release/bundle/appimage/*.AppImage dist/
-          cp src-tauri/target/release/bundle/deb/*.deb dist/
+          mkdir -p release-files
+          cp src-tauri/target/release/bundle/appimage/*.AppImage release-files/
+          cp src-tauri/target/release/bundle/deb/*.deb release-files/
           # The .rpm exists for stable versions only.
-          cp src-tauri/target/release/bundle/rpm/*.rpm dist/ 2>/dev/null || true
+          cp src-tauri/target/release/bundle/rpm/*.rpm release-files/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
           name: papan-${{ matrix.name }}
-          path: dist/*
+          path: release-files/*
           if-no-files-found: error
           retention-days: 7
 
