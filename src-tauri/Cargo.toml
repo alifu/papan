@@ -1,6 +1,6 @@
 [package]
 name = "Papan"
-version = "0.1.0"
+version = "0.0.1-alpha-1"
 description = "An App for API Client"
 authors = ["alifu"]
 edition = "2021"

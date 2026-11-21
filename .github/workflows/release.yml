@@ -1,0 +1,204 @@
+name: Release
+
+# Push a tag such as v0.0.1-alpha-1 (the version in tauri.conf.json, Cargo.toml and package.json, with a "v").
+# A tag with a "-" in it (alpha, beta, rc) is published as a pre-release.
+# A pull request that touches the release setup, or a manual start, builds everything without publishing: a dry run.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/release/**"
+      - "src-tauri/tauri.conf.json"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Versions agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag, app config, crate and package name the same version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            sh scripts/release/check-version.sh "${GITHUB_REF_NAME#v}"
+          else
+            sh scripts/release/check-version.sh
+          fi
+      - name: Release scripts
+        run: sh scripts/release/test-release.sh
+
+  build:
+    name: build (${{ matrix.name }})
+    needs: check
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos
+            os: macos-latest
+            args: --target universal-apple-darwin --bundles app,dmg
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: windows
+            os: windows-latest
+            args: --bundles nsis,msi
+          - name: linux
+            os: ubuntu-22.04
+            args: --bundles appimage,deb
+    env:
+      # An ad-hoc signature ("-"): there is no Apple Developer account, so the app is not notarized.
+      APPLE_SIGNING_IDENTITY: "-"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev build-essential curl wget file \
+            libxdo-dev libsecret-1-dev libdbus-1-dev pkg-config rpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: release-${{ matrix.name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the app and its installers
+        shell: bash
+        run: |
+          args="${{ matrix.args }}"
+          # RPM versions cannot contain "-", so a pre-release such as 0.0.1-alpha-1 gets no .rpm.
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            case "$(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -n 1)" in
+              *-*) echo "pre-release: no .rpm" ;;
+              *) args="$args,rpm" ;;
+            esac
+          fi
+          npm run tauri -- build $args
+
+      - name: Collect the files (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p release-files
+          bundle=src-tauri/target/universal-apple-darwin/release/bundle
+          # Papan.zip holds Papan.app at its top level: the cask installs it from there.
+          mkdir stage && cp -R "$bundle/macos/Papan.app" stage/
+          ditto -c -k --keepParent stage/Papan.app release-files/Papan.zip
+          cp "$bundle"/dmg/*.dmg release-files/
+          codesign --verify --deep --strict stage/Papan.app
+
+      - name: Collect the files (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p release-files
+          cp src-tauri/target/release/bundle/nsis/*.exe release-files/
+          cp src-tauri/target/release/bundle/msi/*.msi release-files/
+
+      - name: Collect the files (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release-files
+          cp src-tauri/target/release/bundle/appimage/*.AppImage release-files/
+          cp src-tauri/target/release/bundle/deb/*.deb release-files/
+          # The .rpm exists for stable versions only.
+          cp src-tauri/target/release/bundle/rpm/*.rpm release-files/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: papan-${{ matrix.name }}
+          path: release-files/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish the release
+    needs: build
+    # A dry run (manual start) stops after the builds.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: papan-*
+          merge-multiple: true
+
+      - name: Checksums and the Homebrew cask
+        id: files
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cd artifacts
+          sha256sum * > SHA256SUMS
+          cd ..
+          zip_sha="$(sha256sum artifacts/Papan.zip | cut -d ' ' -f 1)"
+          sh scripts/release/make-cask.sh "$version" "$zip_sha" > artifacts/papan.rb
+          {
+            echo "Install on macOS (prebuilt app):"
+            echo
+            echo '```'
+            echo "brew install --cask alifu/tap/papan"
+            echo '```'
+            echo
+            echo "Or download \`Papan.zip\` or the \`.dmg\` and drag \`Papan.app\` into \`/Applications\`."
+            echo "Papan is not notarized: allow it once under System Settings > Privacy & Security > Open Anyway,"
+            echo "or run \`xattr -dr com.apple.quarantine /Applications/Papan.app\`."
+            echo
+            echo "Windows: run the \`.exe\` (or \`.msi\`). The installer is unsigned: on the SmartScreen warning choose"
+            echo "More info > Run anyway."
+            echo
+            echo "Linux: use the \`.AppImage\` or \`.deb\` (and the \`.rpm\` on stable releases)."
+            echo
+            echo "SHA-256 of \`Papan.zip\`: \`$zip_sha\` (all checksums are in \`SHA256SUMS\`)"
+          } > notes.md
+          case "$version" in *-*) echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=" >> "$GITHUB_OUTPUT" ;; esac
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --title "Papan ${GITHUB_REF_NAME#v}" --notes-file notes.md ${{ steps.files.outputs.prerelease }}
+
+      # Optional: with a TAP_TOKEN secret (a token that can push to alifu/homebrew-tap) the cask is updated by itself.
+      # Without it, copy papan.rb (attached to the release) to Casks/papan.rb in the tap.
+      - name: Update the Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        if: ${{ env.TAP_TOKEN != '' }}
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/alifu/homebrew-tap.git" tap
+          mkdir -p tap/Casks
+          cp artifacts/papan.rb tap/Casks/papan.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/papan.rb
+          git commit -m "papan ${GITHUB_REF_NAME#v}" || exit 0
+          git push

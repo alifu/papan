@@ -1,10 +1,45 @@
-# Tauri + React + Typescript
+# Papan
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Papan (Indonesian for "board") is a desktop API client, mock server and journey runner for macOS, Windows and Linux. It is built with Tauri 2 (Rust) and React.
 
-## Recommended IDE Setup
+- **Requests:** REST, GraphQL, SOAP, gRPC, WebSocket, and webhooks you receive.
+- **Collections:** saved in plain files that work well with Git, with a Scratch area for one-off requests. Import from and export to Postman.
+- **Environments and scripts:** variables with secrets kept out of Git, and JavaScript scripts before and after a request.
+- **Mock server:** Mockoon-style mocks with rules, templating, data buckets and CRUD routes.
+- **Journeys:** draw API calls as connected nodes on a canvas and run them end to end.
+- **Themes:** classic XP look, light and dark.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Current version: **0.0.1-alpha-1** (pre-release).
+
+## Install
+
+**macOS (Homebrew):**
+
+```sh
+brew install --cask alifu/tap/papan
+```
+
+Papan is not notarized by Apple, so macOS blocks it the first time. Open **System Settings > Privacy & Security** and choose **Open Anyway**, or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Papan.app
+```
+
+**Windows:** download the `.exe` (or `.msi`) from the [latest release](https://github.com/alifu/papan/releases). The installer is not signed, so on the SmartScreen warning choose **More info > Run anyway**.
+
+**Linux:** download the `.AppImage`, `.deb` or `.rpm` from the [latest release](https://github.com/alifu/papan/releases).
+
+Checksums are in `SHA256SUMS` on each release. To publish a release, see [RELEASING.md](RELEASING.md).
+
+## Develop
+
+```sh
+npm ci
+make dev      # run the app
+make check    # lint, type check and tests
+```
+
+A map of which file backs each screen is in [docs/CODE-MAP.md](docs/CODE-MAP.md).
 
 ## Webhooks
 
